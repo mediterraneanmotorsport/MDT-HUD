@@ -1,0 +1,11 @@
+================================================================================
+MDT-HUD · ESTRUCTURA DE AUDIOS DEL SPOTTER (MEDITERRANEAN MOTORSPORT)
+================================================================================
+
+Coloca tus archivos .wav (también admite .mp3 y .ogg) dentro de la carpeta del
+perfil de voz ("Sara", "Antonio" o cualquier nueva carpeta que crees en Perfil/).
+
+Ejemplos de nombres válidos dentro de cada carpeta:
+  - Audio1.wav, Audio2.wav, Audio3.wav ...
+  - 1.wav, 2.wav, 3.wav ...
+  - Cualquier nombre terminado en .wav (el sistema escanea la carpeta automáticamente)

@@ -1,0 +1,54 @@
+================================================================================
+MDT-HUD · ESTRUCTURA DE AUDIOS DEL SPOTTER (MEDITERRANEAN MOTORSPORT)
+================================================================================
+
+Coloca tus archivos .wav (también admite .mp3 y .ogg) dentro de la carpeta del
+perfil de voz ("Sara", "Antonio" o cualquier nueva carpeta que crees en Perfil/).
+
+Ejemplos de nombres válidos dentro de cada carpeta:
+  - Audio1.wav, Audio2.wav, Audio3.wav ...
+  - 1.wav, 2.wav, 3.wav ...
+  - Cualquier nombre terminado en .wav (el sistema escanea la carpeta automáticamente)
+
+¿CÓMO FUNCIONA LA SELECCIÓN ALEATORIA Y LA PRIORIDAD?
+--------------------------------------------------------------------------------
+1. Aleatorio sin repetición: Si una carpeta tiene varios audios (ej. Audio1.wav,
+   2.wav, 3.wav), MDT-HUD elige uno al azar asegurándose de NO repetir el mismo
+   audio dos veces seguidas.
+2. Cola de Prioridades (P1 a P5) y Anti-Bucle:
+   - Un aviso de Prioridad 1 (Tráfico en paralelo) corta inmediatamente cualquier
+     mensaje informativo de menor prioridad (P3, P4 o P5).
+   - Un aviso de menor prioridad NUNCA interrumpe ni pisa a uno de mayor prioridad.
+   - Histéresis y Cooldowns: El spotter utiliza márgenes de distancia (entrada 2.9m,
+     salida 3.4m) y tiempos de enfriamiento por categoría para no entrar nunca
+     en bucle.
+
+LISTADO DE CARPETAS Y ORDEN DE PRIORIDAD
+--------------------------------------------------------------------------------
+
+[PRIORIDAD 1 — TRÁFICO Y COCHES EN PARALELO (Inmediato, máxima prioridad)]
+  • Coche Izquierda      -> Coche en paralelo por el lado izquierdo.
+  • Coche Derecha        -> Coche en paralelo por el lado derecho.
+  • Tres en Paralelo     -> Coches a ambos lados simultáneamente (3-wide).
+  • Libre                -> Cuando los coches laterales se despejan.
+
+[PRIORIDAD 2 — BANDERAS Y SEGURIDAD (Cooldown: 12s)]
+  • Bandera Amarilla     -> Peligro / incidente en tu sector o pista completa.
+  • Bandera Azul         -> Coche de categoría superior o líder acercándose para doblar.
+  • Bandera Negra        -> Penalización activa.
+  • Bandera Verde        -> Pista libre tras bandera amarilla o salida de carrera.
+
+[PRIORIDAD 3 — ESTRATEGIA Y BOXES (1 aviso por umbral en cada stint)]
+  • Box Esta Vuelta      -> Queda menos de 1.2 vueltas de combustible o energía.
+  • Combustible Bajo     -> Quedan menos de 2.5 vueltas de combustible o energía.
+  • Limitador Pit        -> Al activar el limitador o entrar al pit lane.
+
+[PRIORIDAD 4 — ESTADO DEL COCHE Y NEUMÁTICOS (Cooldown: 30s)]
+  • Daños Coche          -> Nuevos daños aerodinámicos/suspensión o sobrecalentamiento.
+  • Neumaticos Frios     -> Neumáticos por debajo de 55 °C fuera de boxes.
+  • Neumaticos Calientes -> Neumáticos sobrecalentados por encima de 110 °C.
+
+[PRIORIDAD 5 — RITMO Y SESIÓN (Cooldown: 20s)]
+  • Mejor Vuelta         -> Nuevo récord personal o mejor vuelta de la sesión.
+  • Ultima Vuelta        -> Comienza la última vuelta de la carrera.
+  • Final Carrera        -> Bandera a cuadros / fin de la sesión.
