@@ -3,6 +3,7 @@ import { getContext, setContext } from "svelte";
 import { api } from "./api";
 import { spotter } from "./spotter.svelte";
 import type { Snapshot, Status } from "./types";
+import { wheelControl } from "./wheelControl.svelte";
 
 class Live {
   /** Latest telemetry snapshot. `$state.raw` avoids deep-proxying ~40 KB of data at 30 Hz. */
@@ -34,9 +35,11 @@ let started = false;
 export async function startLive() {
   if (started) return;
   started = true;
+  wheelControl.startHost();
   await listen<Snapshot>("snapshot", (e) => {
     live.snap = e.payload;
     spotter.update(e.payload);
+    wheelControl.pushSnapshotToMobile(e.payload);
   });
   await listen<boolean>("edit-mode", (e) => {
     live.status = { ...live.status, editMode: e.payload };

@@ -10,6 +10,7 @@ import Inputs from "./Inputs.svelte";
 import LapTiming from "./LapTiming.svelte";
 import LiftCoast from "./LiftCoast.svelte";
 import MdtBranding from "./MdtBranding.svelte";
+import MfdWidget from "./MfdWidget.svelte";
 import PaceCatch from "./PaceCatch.svelte";
 import Radar from "./Radar.svelte";
 import Relative from "./Relative.svelte";
@@ -49,4 +50,5 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   damage: Damage,
   electronics: Electronics,
   mdtbranding: MdtBranding,
+  mfd: MfdWidget,
 };

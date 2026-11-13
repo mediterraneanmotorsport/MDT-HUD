@@ -467,6 +467,14 @@ export const WIDGETS: WidgetMeta[] = [
     optionDefaults: {},
   },
   {
+    id: "mfd",
+    name: "Pantalla Multifunción MFD (Control por Volante)",
+    description: "Panel rotativo controlado con botones de tu volante: cambia entre Relativo, Clasificación, Daños/Gomas, Combustible y Cazador.",
+    defaults: { enabled: false, x: 1220, y: 560 },
+    options: [],
+    optionDefaults: {},
+  },
+  {
     id: "mdtbranding",
     name: "Marca de agua MDT (Stream)",
     description: "Insignia oficial de Mediterranean Motorsport con logo del toro y etiqueta personalizable.",

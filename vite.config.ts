@@ -2,12 +2,34 @@ import { defineConfig, type Plugin } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const host = process.env.TAURI_DEV_HOST;
 
+function getLanIps(): string[] {
+  const nets = os.networkInterfaces();
+  const ips: string[] = [];
+  for (const list of Object.values(nets)) {
+    if (!list) continue;
+    for (const net of list) {
+      if (net.family === "IPv4" && !net.internal) {
+        ips.push(net.address);
+      }
+    }
+  }
+  // Prefer 192.168.x.x or 10.x.x.x first
+  ips.sort((a, b) => (a.startsWith("192.168.") ? -1 : b.startsWith("192.168.") ? 1 : 0));
+  return ips.length ? ips : ["localhost"];
+}
+
 function spotterAudioPlugin(): Plugin {
   const roots = [path.resolve("Perfil"), path.resolve("public", "Perfil")];
+  let mobileState: { page: number; pageSeq: number; snap: unknown } = {
+    page: 0,
+    pageSeq: 0,
+    snap: null,
+  };
 
   function scanManifest() {
     const manifest: Record<string, Record<string, string[]>> = {};
@@ -48,6 +70,45 @@ function spotterAudioPlugin(): Plugin {
           res.end(JSON.stringify(scanManifest()));
           return;
         }
+        if (cleanUrl === "/__mobile_info") {
+          const ips = getLanIps();
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.end(
+            JSON.stringify({
+              ips,
+              port: 1420,
+              url: `http://${ips[0]}:1420/#mobile`,
+            }),
+          );
+          return;
+        }
+        if (cleanUrl === "/__mobile_state") {
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          if (req.method === "POST") {
+            let body = "";
+            req.on("data", (chunk) => (body += chunk));
+            req.on("end", () => {
+              try {
+                const parsed = JSON.parse(body);
+                if (typeof parsed.page === "number") {
+                  mobileState.page = parsed.page;
+                  mobileState.pageSeq += 1;
+                }
+                if (parsed.snap !== undefined) {
+                  mobileState.snap = parsed.snap;
+                }
+              } catch {
+                // ignore malformed JSON
+              }
+              res.end(JSON.stringify({ page: mobileState.page, pageSeq: mobileState.pageSeq }));
+            });
+            return;
+          }
+          res.end(JSON.stringify(mobileState));
+          return;
+        }
         if (cleanUrl.startsWith("/Perfil/")) {
           const rel = decodeURIComponent(cleanUrl.slice("/Perfil/".length));
           for (const root of roots) {
@@ -81,7 +142,7 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: host || true,
     hmr: host
       ? {
           protocol: "ws",

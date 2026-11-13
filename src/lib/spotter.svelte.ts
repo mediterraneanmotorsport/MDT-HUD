@@ -20,6 +20,7 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   { folder: "Libre", label: "Pista libre (costados despejados)", priority: 1, cooldownMs: 1800, category: "traffic", ttsDefault: "Libre" },
 
   // PRIORIDAD 2: Banderas y Seguridad
+  { folder: "Full Course Yellow", label: "Full Course Yellow (FCY)", priority: 2, cooldownMs: 18000, category: "flags", ttsDefault: "Atención, Full Course Yellow en pista" },
   { folder: "Bandera Amarilla", label: "Bandera amarilla", priority: 2, cooldownMs: 14000, category: "flags", ttsDefault: "Atención, bandera amarilla" },
   { folder: "Bandera Azul", label: "Bandera azul", priority: 2, cooldownMs: 16000, category: "flags", ttsDefault: "Bandera azul, coche rápido detrás" },
   { folder: "Bandera Negra", label: "Bandera negra / Penalización", priority: 2, cooldownMs: 25000, category: "flags", ttsDefault: "Atención, tenemos una penalización" },
@@ -28,6 +29,8 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   // PRIORIDAD 3: Estrategia y Boxes
   { folder: "Box Esta Vuelta", label: "Box en esta vuelta (<1.2 vueltas)", priority: 3, cooldownMs: 35000, category: "strategy", ttsDefault: "Box en esta vuelta, combustible crítico" },
   { folder: "Combustible Bajo", label: "Combustible bajo (<2.5 vueltas)", priority: 3, cooldownMs: 45000, category: "strategy", ttsDefault: "Atención, quedan dos vueltas de combustible" },
+  { folder: "Entrada Boxes", label: "Entrada a calle de boxes", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Entrando a calle de boxes, vigila la velocidad" },
+  { folder: "Salida Boxes", label: "Salida de boxes a pista", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Saliendo de boxes, cuidado con la línea blanca" },
   { folder: "Limitador Pit", label: "Limitador de boxes activado", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Limitador activado" },
 
   // PRIORIDAD 4: Estado del Coche y Neumáticos
@@ -142,10 +145,12 @@ class SpotterEngine {
   private lateralState: "clear" | "left" | "right" | "three" = "clear";
   private lateralSince = 0;
   private clearCandidateSince = 0;
+  private hadFcy = false;
   private hadYellow = false;
   private hadBlue = false;
   private lastPenalties = 0;
   private lastSpeedLimiter = false;
+  private lastInPits: boolean | null = null;
   private warnedFuelLow = false;
   private warnedBoxNow = false;
   private lastDentsMax = 0;
@@ -455,9 +460,14 @@ class SpotterEngine {
     // -------------------------------------------------------------------------
     // 2. PRIORITY 2: Flags & Track Safety
     // -------------------------------------------------------------------------
-    const anyYellow =
-      s.phase === 6 || s.yellowFlagState > 0 || Boolean(me && !me.inPits && s.sectorYellow[me.sector - 1]);
-    if (anyYellow && !this.hadYellow) {
+    const isFcy = s.phase === 6 || s.yellowFlagState > 0;
+    if (isFcy && !this.hadFcy) {
+      this.trigger("Full Course Yellow");
+    }
+    this.hadFcy = isFcy;
+
+    const anyYellow = isFcy || Boolean(me && !me.inPits && s.sectorYellow[me.sector - 1]);
+    if (anyYellow && !this.hadYellow && !isFcy) {
       this.trigger("Bandera Amarilla");
     } else if (!anyYellow && this.hadYellow && s.phase === 5) {
       this.trigger("Bandera Verde");
@@ -477,8 +487,14 @@ class SpotterEngine {
     this.lastPenalties = curPenalties;
 
     // -------------------------------------------------------------------------
-    // 3. PRIORITY 3: Fuel / Energy & Pit Limiter
+    // 3. PRIORITY 3: Fuel / Energy, Pit Entry/Exit & Pit Limiter
     // -------------------------------------------------------------------------
+    if (this.lastInPits !== null && p.inPits !== this.lastInPits) {
+      if (p.inPits) this.trigger("Entrada Boxes");
+      else this.trigger("Salida Boxes");
+    }
+    this.lastInPits = p.inPits;
+
     if (p.speedLimiter && !this.lastSpeedLimiter) {
       this.trigger("Limitador Pit");
     }
