@@ -159,6 +159,11 @@ export interface WheelButtonBind {
 
 const STORAGE_KEY = "mdt_wheel_mfd_v3";
 
+export const MOBILE_SERVER_BASE =
+  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && location.port !== "1420"
+    ? "http://localhost:1420"
+    : "";
+
 class WheelController {
   pageIndex = $state(0);
   enabledPageIds = $state<MfdPageId[]>([...DEFAULT_MOBILE_PAGE_IDS]);
@@ -176,9 +181,17 @@ class WheelController {
     label: "Tecla RePág (o asigna botón del volante)",
   });
   connectedGamepads = $state<string[]>([]);
-  mobileUrl = $state("http://localhost:1420/#mobile");
-  pitwallUrl = $state("http://localhost:1420/#pitwall");
-  lanIps = $state<string[]>([]);
+  mobileUrl = $state(
+    typeof window !== "undefined" && location.hostname && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"
+      ? `http://${location.hostname}:1420/#mobile`
+      : "http://192.168.1.112:1420/#mobile",
+  );
+  pitwallUrl = $state(
+    typeof window !== "undefined" && location.hostname && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"
+      ? `http://${location.hostname}:1420/#pitwall`
+      : "http://192.168.1.112:1420/#pitwall",
+  );
+  lanIps = $state<string[]>(["192.168.1.112"]);
   lastPressedInfo = $state<string>("");
 
   private channel: BroadcastChannel | null = null;
@@ -280,7 +293,7 @@ class WheelController {
       mobileTheme: this.mobileTheme,
       autoPopups: this.autoPopups,
     });
-    void fetch("/__mobile_state", {
+    void fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -349,8 +362,18 @@ class WheelController {
     this.started = true;
 
     void this.fetchMobileInfo();
-    // Push initial mobile pages & theme to the server relay
-    this.syncConfigToServer();
+    const isClientView =
+      location.hash.startsWith("#mobile") ||
+      location.hash.startsWith("#dash") ||
+      location.hash.startsWith("#pitwall") ||
+      location.pathname === "/mobile" ||
+      location.pathname === "/dash" ||
+      /android|iphone|ipod/i.test(navigator.userAgent);
+
+    if (!isClientView) {
+      // Only the PC Companion/Overlay pushes initial config on startup
+      this.syncConfigToServer();
+    }
 
     if ("BroadcastChannel" in window) {
       this.channel = new BroadcastChannel("mdt_mfd_channel");
@@ -463,7 +486,7 @@ class WheelController {
 
     setInterval(async () => {
       try {
-        const res = await fetch("/__mobile_state", { cache: "no-store" });
+        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         if (typeof data.configSeq === "number" && data.configSeq > this.lastKnownConfigSeq) {
@@ -495,7 +518,7 @@ class WheelController {
 
   async fetchMobileInfo() {
     try {
-      const res = await fetch("/__mobile_info", { cache: "no-store" });
+      const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_info`, { cache: "no-store" });
       if (res.ok && res.headers.get("content-type")?.includes("json")) {
         const info = await res.json();
         if (info.url) {
@@ -539,7 +562,7 @@ class WheelController {
     this.pageIndex = idx;
     this.saveStored();
     this.channel?.postMessage({ page: idx });
-    void fetch("/__mobile_state", {
+    void fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ page: idx }),
@@ -564,7 +587,7 @@ class WheelController {
     const now = performance.now();
     if (now - this.lastSyncSent < 65) return;
     this.lastSyncSent = now;
-    void fetch("/__mobile_state", {
+    void fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ snap }),

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.0...v1.0.1) (2026-11-13)
+
+### Features
+
+* **Servidor HTTP Nativo en Rust para DDU Móvil (`#mobile`) y Muro de Ingenieros (`#pitwall`)**: ahora el ejecutable de escritorio `MDT-HUD.exe` incluye su propio servidor integrado en el puerto `1420` sin depender de servidores externos, sirviendo la telemetría a 30 Hz y datos demo en toda la red Wi-Fi (`http://<IP_LOCAL>:1420`)
+* **5 Temas Completos de Overlay (`MDT-AURA`, `MDT-F1`, `MDT-HY`, `MDT-GT3`, `MDT-LMP2`)** seleccionables en vivo tanto en el PC como en el móvil
+* **DDU Móvil Individual a Pantalla Completa con Auto-Escalado**: 1 único dashboard por pestaña adaptado automáticamente al 100% de la pantalla del teléfono, con soporte para **Swipe táctil**, botones del volante (60 FPS), **Código QR Wi-Fi** y editor para **ordenar (`↑`/`↓`), eliminar (`✕`) o añadir (`+`) pantallas**
+* **Borde Periférico Delta (Verde/Rojo) y Destello Estroboscópico de Batería al 100%**: el borde del Delta y del HUD se ilumina en verde al mejorar tiempo y en rojo al perder, y parpadea con destello verde neón cuando la batería híbrida ERS alcanza el 100%
+* **Calculadora de Estrategia y Stints WEC (`StintPlanner`)**, **Semáforo Térmico de Neumáticos (`FRÍO / ÓPT / CAL`) + Balance de Desgaste (`BAL D/T`)**, **Pop-ups Automáticos Inteligentes Opcionales** y **Muro de Ingenieros de 4 columnas (`#pitwall`)**
+
 ## [1.0.0](https://github.com/mediterraneanmotorsport/MDT-HUD/releases/tag/v1.0.0) (2026-11-13)
 
 ### Features

@@ -9,7 +9,7 @@
   } from "../lib/config.svelte";
   import { live, provideLive, startLive } from "../lib/live.svelte";
   import type { Snapshot } from "../lib/types";
-  import { wheelControl } from "../lib/wheelControl.svelte";
+  import { MOBILE_SERVER_BASE, wheelControl } from "../lib/wheelControl.svelte";
   import Damage from "../overlay/widgets/Damage.svelte";
   import Dashboard from "../overlay/widgets/Dashboard.svelte";
   import Delta from "../overlay/widgets/Delta.svelte";
@@ -53,7 +53,7 @@
 
     const timer = setInterval(async () => {
       try {
-        const res = await fetch("/__mobile_state", { cache: "no-store" });
+        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         if (data.snap) remoteSnap = data.snap;

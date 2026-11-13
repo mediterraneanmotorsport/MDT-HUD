@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../../lib/api";
   import {
@@ -38,6 +39,15 @@
     navigator.clipboard.writeText(activeQrUrl);
     copiedMobileUrl = true;
     setTimeout(() => (copiedMobileUrl = false), 2500);
+  }
+
+  function openMobilePreview(hashTarget: "#mobile" | "#pitwall") {
+    const url = `http://localhost:1420/${hashTarget}`;
+    if ("__TAURI_INTERNALS__" in window && location.port !== "1420") {
+      openUrl(url).catch(() => window.open(url, "_blank"));
+    } else {
+      window.open(`/${hashTarget}`, "_blank");
+    }
   }
 
   function setSpotterVoice(v: "Sara" | "Antonio") {
@@ -211,16 +221,16 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <a
-          href="/#mobile"
-          target="_blank"
+        <button
+          type="button"
+          onclick={() => openMobilePreview("#mobile")}
           class="btn border border-[#2287EC]/40 bg-[#2287EC]/15 text-xs font-semibold text-[#62b0ff] hover:bg-[#2287EC]/25"
-        >📱 Vista previa DDU Móvil</a>
-        <a
-          href="/#pitwall"
-          target="_blank"
+        >📱 Vista previa DDU Móvil</button>
+        <button
+          type="button"
+          onclick={() => openMobilePreview("#pitwall")}
           class="btn border border-emerald-500/40 bg-emerald-500/15 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-        >📡 Muro de Ingenieros (#pitwall)</a>
+        >📡 Muro de Ingenieros (#pitwall)</button>
       </div>
     </div>
 
@@ -272,6 +282,11 @@
               <button class="btn btn-primary text-xs" onclick={copyMobileUrl}>
                 {copiedMobileUrl ? "✓ Copiado" : "Copiar"}
               </button>
+            </div>
+            <div class="mt-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11px] leading-snug text-warn">
+              ⚠️ <b>En tu móvil NO escribas <code class="font-mono">localhost</code></b>: escribe exactamente
+              <b class="font-mono text-white underline">{wheelControl.lanIps[0] ? `http://${wheelControl.lanIps[0]}:1420` : activeQrUrl}</b>
+              en Chrome/Safari de tu teléfono (conectado al mismo Wi-Fi).
             </div>
             {#if wheelControl.lanIps.length > 1}
               <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">

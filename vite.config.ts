@@ -82,10 +82,19 @@ function spotterAudioPlugin(): Plugin {
           res.end(JSON.stringify(scanManifest()));
           return;
         }
+        if (cleanUrl === "/__mobile_info" || cleanUrl === "/__mobile_state") {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+          if (req.method === "OPTIONS") {
+            res.statusCode = 204;
+            res.end();
+            return;
+          }
+        }
         if (cleanUrl === "/__mobile_info") {
           const ips = getLanIps();
           res.setHeader("Content-Type", "application/json");
-          res.setHeader("Access-Control-Allow-Origin", "*");
           res.end(
             JSON.stringify({
               ips,
@@ -97,7 +106,6 @@ function spotterAudioPlugin(): Plugin {
         }
         if (cleanUrl === "/__mobile_state") {
           res.setHeader("Content-Type", "application/json");
-          res.setHeader("Access-Control-Allow-Origin", "*");
           if (req.method === "POST") {
             let body = "";
             req.on("data", (chunk) => (body += chunk));

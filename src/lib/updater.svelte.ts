@@ -39,7 +39,12 @@ async function checkLatestRelease() {
 }
 
 export async function checkForUpdate() {
-  if (!inTauri() || updater.phase === "checking" || updater.phase === "downloading") return;
+  if (updater.phase === "checking" || updater.phase === "downloading") return;
+  if (!inTauri()) {
+    updater.version ||= "1.0.1";
+    updater.phase = "upToDate";
+    return;
+  }
   updater.version ||= await getVersion();
   updater.phase = "checking";
   updater.error = "";
@@ -57,8 +62,12 @@ export async function checkForUpdate() {
       updater.phase = "upToDate";
     }
   } catch (e) {
-    updater.error = String(e);
-    updater.phase = "error";
+    try {
+      await checkLatestRelease();
+    } catch {
+      updater.error = String(e);
+      updater.phase = "error";
+    }
   }
 }
 

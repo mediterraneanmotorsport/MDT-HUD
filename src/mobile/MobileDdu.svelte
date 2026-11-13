@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { api } from "../lib/api";
   import {
     applyThemeToElement,
     config,
@@ -9,7 +10,7 @@
   } from "../lib/config.svelte";
   import { live, provideLive, startLive } from "../lib/live.svelte";
   import type { Snapshot } from "../lib/types";
-  import { wheelControl, type MfdPageId } from "../lib/wheelControl.svelte";
+  import { MOBILE_SERVER_BASE, wheelControl, type MfdPageId } from "../lib/wheelControl.svelte";
   import Damage from "../overlay/widgets/Damage.svelte";
   import Dashboard from "../overlay/widgets/Dashboard.svelte";
   import Electronics from "../overlay/widgets/Electronics.svelte";
@@ -27,6 +28,7 @@
   import Tyres from "../overlay/widgets/Tyres.svelte";
 
   let remoteSnap = $state.raw<Snapshot | null>(null);
+  let fallbackDemoSnap = $state.raw<Snapshot | null>(null);
   let showHudBadge = $state(true);
   let showSettingsModal = $state(false);
   let badgeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -59,7 +61,9 @@
   let contentEl = $state<HTMLDivElement | null>(null);
   let autoScale = $state(1);
 
-  const activeSnap = $derived(remoteSnap ?? live.snap);
+  const activeSnap = $derived(
+    remoteSnap?.player ? remoteSnap : live.snap?.player ? live.snap : (remoteSnap ?? live.snap ?? fallbackDemoSnap),
+  );
 
   provideLive({
     get snap() {
@@ -182,11 +186,14 @@
 
     const timer = setInterval(async () => {
       try {
-        const res = await fetch("/__mobile_state", { cache: "no-store" });
+        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         if (data.snap) {
           remoteSnap = data.snap;
+        } else if (!live.snap?.player) {
+          const demo = await api.getPreviewSnapshot().catch(() => null);
+          if (demo) fallbackDemoSnap = demo;
         }
         if (typeof data.configSeq === "number" && data.configSeq !== lastConfigSeq) {
           lastConfigSeq = data.configSeq;
@@ -421,23 +428,56 @@
     {/if}
   </div>
 
-  <!-- Indicador flotante temporal + botón de Configuración del Móvil -->
-  {#if showHudBadge && !showSettingsModal && !batteryFull}
+  <!-- Barra superior permanente (se atenúa suavemente tras 2.4 s para no estorbar pero sigue siempre accesible) -->
+  {#if !showSettingsModal && !batteryFull}
     <div
-      class="fixed top-2.5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-accent/60 bg-black/85 px-3.5 py-1 text-xs shadow-xl backdrop-blur-md"
+      class={[
+        "fixed top-2 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-accent/60 bg-black/85 px-3 py-1 text-xs shadow-xl backdrop-blur-md transition-opacity duration-300",
+        showHudBadge ? "opacity-100" : "opacity-40 hover:opacity-100",
+      ]}
+      onclick={(e) => e.stopPropagation()}
     >
+      <button
+        type="button"
+        class="pointer-events-auto rounded-full bg-white/10 px-2 py-0.5 font-bold text-white hover:bg-accent"
+        title="Pantalla anterior"
+        onclick={() => {
+          overridePageId = null;
+          wheelControl.prevPage();
+        }}
+      >◀</button>
       <img src="/mdt-logo.png" alt="MDT" class="h-4 w-4 object-contain" />
-      <span class="font-display font-bold tracking-wider text-accent-hi uppercase">
+      <span class="font-display font-bold tracking-wider whitespace-nowrap text-accent-hi uppercase">
         {(wheelControl.pageIndex % activePages.length) + 1}/{activePages.length} · {basePage.shortTitle}
-      </span>
-      <span class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
-        {activeThemeMeta.label}
       </span>
       <button
         type="button"
-        class="pointer-events-auto ml-1 rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-white shadow hover:bg-accent-hi"
-        onclick={(e) => {
-          e.stopPropagation();
+        class="pointer-events-auto rounded-full bg-white/10 px-2 py-0.5 font-bold text-white hover:bg-accent"
+        title="Siguiente pantalla"
+        onclick={() => {
+          overridePageId = null;
+          wheelControl.nextPage();
+        }}
+      >▶</button>
+      {#if effectivePageId !== "dashboard"}
+        <button
+          type="button"
+          class="pointer-events-auto rounded-full border border-accent/60 bg-accent/25 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-accent"
+          onclick={() => {
+            overridePageId = null;
+            if (!wheelControl.enabledPageIds.includes("dashboard")) {
+              wheelControl.addPage("dashboard");
+            }
+            wheelControl.setPage("dashboard");
+          }}
+        >
+          🏎️ Ir al Dash
+        </button>
+      {/if}
+      <button
+        type="button"
+        class="pointer-events-auto rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-white shadow hover:bg-accent-hi"
+        onclick={() => {
           showSettingsModal = true;
         }}
       >

@@ -35,11 +35,21 @@ let started = false;
 export async function startLive() {
   if (started) return;
   started = true;
+  const isRemoteView =
+    typeof window !== "undefined" &&
+    (location.hash.startsWith("#mobile") ||
+      location.hash.startsWith("#dash") ||
+      location.hash.startsWith("#pitwall") ||
+      location.pathname === "/mobile" ||
+      location.pathname === "/dash" ||
+      /android|iphone|ipod/i.test(navigator.userAgent));
   wheelControl.startHost();
   await listen<Snapshot>("snapshot", (e) => {
     live.snap = e.payload;
-    spotter.update(e.payload);
-    wheelControl.pushSnapshotToMobile(e.payload);
+    if (!isRemoteView) {
+      spotter.update(e.payload);
+      wheelControl.pushSnapshotToMobile(e.payload);
+    }
   });
   await listen<boolean>("edit-mode", (e) => {
     live.status = { ...live.status, editMode: e.payload };

@@ -7,6 +7,7 @@ mod engine;
 #[cfg(target_os = "linux")]
 mod viewport;
 pub mod lmu;
+mod mobile_server;
 pub mod model;
 pub mod online;
 pub mod recorder;
@@ -208,6 +209,7 @@ pub fn run() {
 
             engine::spawn(app.handle().clone(), shared, db);
             online::spawn_uploader(app.handle().clone(), uploads);
+            mobile_server::spawn(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
