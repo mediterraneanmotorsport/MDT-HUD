@@ -97,4 +97,4 @@ npm run tauri build
 ## 📄 Licencia
 
 Distribuido bajo la licencia [MIT](LICENSE).  
-© 2026 **Mediterranean Motorsport**. Basado en el proyecto abierto Mulsanne.
+© 2026 **Mediterranean Motorsport**. 
