@@ -1,3 +1,4 @@
+import type { PresetThemeId } from "./config.svelte";
 import type { Snapshot } from "./types";
 
 export type MfdPageId =
@@ -10,7 +11,11 @@ export type MfdPageId =
   | "liftcoast"
   | "pacecatch"
   | "tracklimits"
-  | "electronics";
+  | "electronics"
+  | "radar"
+  | "laptiming"
+  | "trackmap"
+  | "inputs";
 
 export interface MfdPageDef {
   id: MfdPageId;
@@ -20,78 +25,120 @@ export interface MfdPageDef {
   description: string;
 }
 
-export const MFD_PAGES: MfdPageDef[] = [
+export const ALL_MOBILE_PAGES: MfdPageDef[] = [
   {
     id: "dashboard",
     short: "Dashboard DDU",
     shortTitle: "DASHBOARD DDU",
-    title: "1 · Cuadro de Mandos (Dashboard)",
+    title: "Cuadro de Mandos (Dashboard)",
     description: "Velocidad, marcha, luces LED de RPM, pedales y volante a pantalla completa.",
   },
   {
     id: "relative",
     short: "Relativo",
     shortTitle: "RELATIVO",
-    title: "2 · Relativo en Pista",
+    title: "Relativo en Pista",
     description: "Coches cercanos en pista, diferencias en vivo, doblados y energía.",
   },
   {
     id: "standings",
     short: "Clasificación",
     shortTitle: "CLASIFICACIÓN",
-    title: "3 · Clasificación (Standings)",
+    title: "Clasificación (Standings)",
     description: "Torre de tiempos de tu categoría y rivales con paradas y neumáticos.",
   },
   {
     id: "damage",
     short: "Daños",
     shortTitle: "DAÑOS DEL COCHE",
-    title: "4 · Daños del Coche",
+    title: "Daños del Coche",
     description: "Silueta detallada de daños de aerodinámica, alerones y suspensión.",
   },
   {
     id: "tyres",
     short: "Neumáticos",
     shortTitle: "NEUMÁTICOS Y FRENOS",
-    title: "5 · Neumáticos y Frenos",
+    title: "Neumáticos y Frenos",
     description: "Temperaturas, desgaste, ritmo por vuelta, vueltas restantes y frenos.",
   },
   {
     id: "fuel",
     short: "Combustible",
     shortTitle: "COMBUSTIBLE Y ENERGÍA",
-    title: "6 · Combustible y Energía",
+    title: "Combustible y Energía",
     description: "Autonomía de combustible/energía, consumo por vuelta y parada estimada.",
   },
   {
     id: "liftcoast",
     short: "Lift & Coast",
     shortTitle: "LIFT & COAST",
-    title: "7 · Ahorro Lift & Coast",
+    title: "Ahorro Lift & Coast",
     description: "Objetivo de ahorro por vuelta y regeneración híbrida ERS.",
   },
   {
     id: "pacecatch",
     short: "Cazador",
     shortTitle: "CAZADOR DE RIVALES",
-    title: "8 · Cazador de Rivales",
+    title: "Cazador de Rivales",
     description: "Vueltas estimadas para dar caza al coche de delante o ser alcanzado.",
   },
   {
     id: "tracklimits",
     short: "Límites",
     shortTitle: "LÍMITES DE PISTA",
-    title: "9 · Límites de Pista",
+    title: "Límites de Pista",
     description: "Contador de avisos y puntos de sanción por Track Limits.",
   },
   {
     id: "electronics",
     short: "Electrónica",
     shortTitle: "ELECTRÓNICA DEL COCHE",
-    title: "10 · Electrónica (TC / ABS / Mapa)",
-    description: "Control de tracción, ABS, mapa motor, reparto de frenada y barra estabilizadora.",
+    title: "Electrónica (TC / ABS / Mapa)",
+    description: "Control de tracción, ABS, mapa motor, reparto de frenada y ARB.",
+  },
+  {
+    id: "laptiming",
+    short: "Tiempos Vuelta",
+    shortTitle: "TIEMPOS Y SECTORES",
+    title: "Tiempos por Vuelta y Sectores",
+    description: "Tiempo actual, última vuelta, mejor vuelta y parciales S1/S2/S3.",
+  },
+  {
+    id: "radar",
+    short: "Radar",
+    shortTitle: "RADAR SPOTTER",
+    title: "Radar de Proximidad",
+    description: "Vista cenital de coches en paralelo a izquierda y derecha.",
+  },
+  {
+    id: "trackmap",
+    short: "Mapa Circuito",
+    shortTitle: "MAPA DEL CIRCUITO",
+    title: "Mapa del Circuito en Vivo",
+    description: "Trazado del circuito con posición GPS de todos los rivales y compañeros MDT.",
+  },
+  {
+    id: "inputs",
+    short: "Pedales/Volante",
+    shortTitle: "TELEMETRÍA PEDALES",
+    title: "Gráfico de Pedales y Dirección",
+    description: "Traza en tiempo real de acelerador, freno, embrague y giro de volante.",
   },
 ];
+
+export const DEFAULT_MOBILE_PAGE_IDS: MfdPageId[] = [
+  "dashboard",
+  "relative",
+  "standings",
+  "damage",
+  "tyres",
+  "fuel",
+  "liftcoast",
+  "pacecatch",
+];
+
+// Backwards-compatible export for components iterating over all known definitions
+export const MFD_PAGES = ALL_MOBILE_PAGES;
 
 export interface WheelButtonBind {
   kind: "gamepad" | "key";
@@ -102,10 +149,12 @@ export interface WheelButtonBind {
   label: string;
 }
 
-const STORAGE_KEY = "mdt_wheel_mfd_v2";
+const STORAGE_KEY = "mdt_wheel_mfd_v3";
 
 class WheelController {
   pageIndex = $state(0);
+  enabledPageIds = $state<MfdPageId[]>([...DEFAULT_MOBILE_PAGE_IDS]);
+  mobileTheme = $state<PresetThemeId>("mdt-aura");
   learning = $state<"next" | "prev" | null>(null);
   nextBind = $state<WheelButtonBind | null>({
     kind: "key",
@@ -127,17 +176,31 @@ class WheelController {
   private baselinePressed = new Set<string>();
   private lastSyncSent = 0;
   private lastKnownSeq = 0;
+  private lastKnownConfigSeq = 0;
   private started = false;
 
+  get activePages(): MfdPageDef[] {
+    const list = this.enabledPageIds
+      .map((id) => ALL_MOBILE_PAGES.find((p) => p.id === id))
+      .filter((p): p is MfdPageDef => !!p);
+    return list.length > 0 ? list : [ALL_MOBILE_PAGES[0]];
+  }
+
+  get availableToAdd(): MfdPageDef[] {
+    return ALL_MOBILE_PAGES.filter((p) => !this.enabledPageIds.includes(p.id));
+  }
+
   get page(): MfdPageId {
-    return MFD_PAGES[this.pageIndex % MFD_PAGES.length]?.id ?? "dashboard";
+    const pages = this.activePages;
+    return pages[this.pageIndex % pages.length]?.id ?? "dashboard";
   }
 
   set page(val: MfdPageId | number) {
+    const pages = this.activePages;
     if (typeof val === "number") {
-      this.pageIndex = ((val % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+      this.pageIndex = ((val % pages.length) + pages.length) % pages.length;
     } else {
-      const idx = MFD_PAGES.findIndex((p) => p.id === val);
+      const idx = pages.findIndex((p) => p.id === val);
       if (idx >= 0) this.pageIndex = idx;
     }
   }
@@ -158,8 +221,18 @@ class WheelController {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.enabledPageIds) && parsed.enabledPageIds.length > 0) {
+        const valid = parsed.enabledPageIds.filter((id: string) =>
+          ALL_MOBILE_PAGES.some((p) => p.id === id),
+        ) as MfdPageId[];
+        if (valid.length > 0) this.enabledPageIds = valid;
+      }
+      if (typeof parsed.mobileTheme === "string") {
+        this.mobileTheme = parsed.mobileTheme as PresetThemeId;
+      }
       if (typeof parsed.pageIndex === "number") {
-        this.pageIndex = ((parsed.pageIndex % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+        const len = this.activePages.length;
+        this.pageIndex = ((parsed.pageIndex % len) + len) % len;
       }
       if (parsed.nextBind) this.nextBind = parsed.nextBind;
       if (parsed.prevBind) this.prevBind = parsed.prevBind;
@@ -174,6 +247,8 @@ class WheelController {
         STORAGE_KEY,
         JSON.stringify({
           pageIndex: this.pageIndex,
+          enabledPageIds: this.enabledPageIds,
+          mobileTheme: this.mobileTheme,
           nextBind: this.nextBind,
           prevBind: this.prevBind,
         }),
@@ -183,17 +258,91 @@ class WheelController {
     }
   }
 
+  private syncConfigToServer() {
+    this.saveStored();
+    this.channel?.postMessage({
+      page: this.pageIndex,
+      pages: $state.snapshot(this.enabledPageIds),
+      mobileTheme: this.mobileTheme,
+    });
+    void fetch("/__mobile_state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page: this.pageIndex,
+        pages: $state.snapshot(this.enabledPageIds),
+        mobileTheme: this.mobileTheme,
+      }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.pageSeq === "number") this.lastKnownSeq = d.pageSeq;
+        if (typeof d.configSeq === "number") this.lastKnownConfigSeq = d.configSeq;
+      })
+      .catch(() => {});
+  }
+
+  movePage(index: number, dir: -1 | 1) {
+    const target = index + dir;
+    if (target < 0 || target >= this.enabledPageIds.length) return;
+    const currentId = this.page;
+    const copy = [...this.enabledPageIds];
+    const [item] = copy.splice(index, 1);
+    copy.splice(target, 0, item);
+    this.enabledPageIds = copy;
+    const newIdx = copy.indexOf(currentId);
+    if (newIdx >= 0) this.pageIndex = newIdx;
+    this.syncConfigToServer();
+  }
+
+  removePage(id: MfdPageId) {
+    if (this.enabledPageIds.length <= 1) return; // Keep at least 1 page
+    const copy = this.enabledPageIds.filter((x) => x !== id);
+    if (copy.length === 0) return;
+    this.enabledPageIds = copy;
+    if (this.pageIndex >= copy.length) {
+      this.pageIndex = copy.length - 1;
+    }
+    this.syncConfigToServer();
+  }
+
+  addPage(id: MfdPageId) {
+    if (this.enabledPageIds.includes(id)) return;
+    this.enabledPageIds = [...this.enabledPageIds, id];
+    this.syncConfigToServer();
+  }
+
+  resetPages() {
+    this.enabledPageIds = [...DEFAULT_MOBILE_PAGE_IDS];
+    this.pageIndex = 0;
+    this.syncConfigToServer();
+  }
+
+  setMobileTheme(theme: PresetThemeId) {
+    this.mobileTheme = theme;
+    this.syncConfigToServer();
+  }
+
   startHost() {
     if (this.started || typeof window === "undefined") return;
     this.started = true;
 
     void this.fetchMobileInfo();
+    // Push initial mobile pages & theme to the server relay
+    this.syncConfigToServer();
 
     if ("BroadcastChannel" in window) {
       this.channel = new BroadcastChannel("mdt_mfd_channel");
       this.channel.onmessage = (ev) => {
+        if (Array.isArray(ev.data?.pages) && ev.data.pages.length > 0) {
+          this.enabledPageIds = ev.data.pages;
+        }
+        if (typeof ev.data?.mobileTheme === "string") {
+          this.mobileTheme = ev.data.mobileTheme;
+        }
         if (typeof ev.data?.page === "number") {
-          this.pageIndex = ((ev.data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+          const len = this.activePages.length;
+          this.pageIndex = ((ev.data.page % len) + len) % len;
         }
       };
     }
@@ -296,10 +445,21 @@ class WheelController {
         const res = await fetch("/__mobile_state", { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
+        if (typeof data.configSeq === "number" && data.configSeq > this.lastKnownConfigSeq) {
+          this.lastKnownConfigSeq = data.configSeq;
+          if (Array.isArray(data.pages) && data.pages.length > 0) {
+            this.enabledPageIds = data.pages;
+          }
+          if (typeof data.mobileTheme === "string") {
+            this.mobileTheme = data.mobileTheme;
+          }
+          this.saveStored();
+        }
         if (typeof data.pageSeq === "number" && data.pageSeq > this.lastKnownSeq) {
           this.lastKnownSeq = data.pageSeq;
+          const len = this.activePages.length;
           if (typeof data.page === "number" && data.page !== this.pageIndex) {
-            this.pageIndex = ((data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+            this.pageIndex = ((data.page % len) + len) % len;
             this.channel?.postMessage({ page: this.pageIndex });
           }
         }
@@ -344,10 +504,11 @@ class WheelController {
   }
 
   setPage(target: number | MfdPageId) {
+    const pages = this.activePages;
     const idx =
       typeof target === "number"
-        ? ((target % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length
-        : Math.max(0, MFD_PAGES.findIndex((p) => p.id === target));
+        ? ((target % pages.length) + pages.length) % pages.length
+        : Math.max(0, pages.findIndex((p) => p.id === target));
     this.pageIndex = idx;
     this.saveStored();
     this.channel?.postMessage({ page: idx });

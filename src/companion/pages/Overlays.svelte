@@ -1,7 +1,17 @@
 <script lang="ts">
   import { api } from "../../lib/api";
-  import { config, HUD_THEMES, resetLayout, saveConfig, WIDGETS, type HudTheme } from "../../lib/config.svelte";
+  import {
+    applyCompleteOverlayTheme,
+    config,
+    HUD_THEMES,
+    resetLayout,
+    saveConfig,
+    WIDGETS,
+    type HudTheme,
+    type PresetThemeId,
+  } from "../../lib/config.svelte";
   import { live } from "../../lib/live.svelte";
+  import { wheelControl } from "../../lib/wheelControl.svelte";
   import ProfileBar from "../components/ProfileBar.svelte";
   import Toggle from "../components/Toggle.svelte";
   import WidgetPreview from "../components/WidgetPreview.svelte";
@@ -12,14 +22,12 @@
   const g = $derived(config.value.general);
 
   function selectTheme(t: HudTheme) {
-    g.theme = t;
-    if (t !== "custom") {
-      const p = HUD_THEMES[t];
-      g.accentColor = p.accent;
-      g.hudBgColor = p.bg;
-      g.hudBorderOpacity = p.borderOpacity;
+    if (t === "custom") {
+      g.theme = "custom";
+      saveConfig();
+    } else {
+      applyCompleteOverlayTheme(t, true);
     }
-    saveConfig();
   }
 </script>
 
@@ -42,58 +50,73 @@
 
   <ProfileBar />
 
-  <div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 card px-5 py-3 text-sm">
-    <span class="text-xs font-semibold tracking-wider text-muted uppercase">Tema del HUD</span>
-    <div class="flex flex-wrap gap-1.5">
+  <div class="mb-4 card p-4 text-sm">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <span class="text-xs font-semibold tracking-wider text-muted uppercase">
+          Temas Predefinidos Completos del Overlay (Diseño + Dashboard + Colores)
+        </span>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          class={[
+            "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+            g.theme === "custom" ? "border-accent bg-surface-3 text-fg" : "border-line text-muted hover:text-fg",
+          ]}
+          onclick={() => selectTheme("custom")}
+        >
+          Personalizado
+        </button>
+        <label class="flex items-center gap-1.5 text-xs text-muted">
+          Acento
+          <input
+            type="color"
+            value={g.accentColor}
+            oninput={(e) => {
+              g.theme = "custom";
+              g.accentColor = e.currentTarget.value;
+              saveConfig();
+            }}
+            class="h-6 w-7 cursor-pointer rounded border border-line bg-transparent"
+          />
+        </label>
+        <label class="flex items-center gap-1.5 text-xs text-muted">
+          Fondo
+          <input
+            type="color"
+            value={g.hudBgColor}
+            oninput={(e) => {
+              g.theme = "custom";
+              g.hudBgColor = e.currentTarget.value;
+              saveConfig();
+            }}
+            class="h-6 w-7 cursor-pointer rounded border border-line bg-transparent"
+          />
+        </label>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-5">
       {#each Object.entries(HUD_THEMES) as [id, t] (id)}
         <button
           class={[
-            "flex items-center gap-2 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-            g.theme === id ? "border-accent bg-surface-3 text-fg" : "border-line text-muted hover:text-fg",
+            "flex flex-col items-start justify-between rounded-xl border p-3 text-left transition-all",
+            g.theme === id
+              ? "border-accent bg-surface-3 text-fg shadow-[0_0_16px_rgb(34_135_236/0.25)]"
+              : "border-line bg-surface-2/60 text-muted hover:border-white/25 hover:text-fg",
           ]}
           onclick={() => selectTheme(id as HudTheme)}
         >
-          <span class="h-2.5 w-2.5 rounded-full" style:background={t.accent}></span>
-          {t.label}
+          <div class="flex w-full items-center justify-between">
+            <span class="font-display text-sm font-extrabold tracking-wider text-fg">{t.label}</span>
+            <div class="flex items-center gap-1">
+              <span class="h-3 w-3 rounded-full border border-white/20" style:background={t.accent}></span>
+              <span class="h-3 w-3 rounded-full border border-white/20" style:background={t.secondary}></span>
+            </div>
+          </div>
+          <div class="mt-1.5 line-clamp-2 text-[11px] leading-snug text-muted">{t.subtitle}</div>
         </button>
       {/each}
-      <button
-        class={[
-          "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-          g.theme === "custom" ? "border-accent bg-surface-3 text-fg" : "border-line text-muted hover:text-fg",
-        ]}
-        onclick={() => selectTheme("custom")}
-      >
-        Personalizado
-      </button>
-    </div>
-    <div class="flex flex-wrap items-center gap-4 border-l border-line pl-4">
-      <label class="flex items-center gap-2 text-xs text-muted">
-        Color acento / borde
-        <input
-          type="color"
-          value={g.accentColor}
-          oninput={(e) => {
-            g.theme = "custom";
-            g.accentColor = e.currentTarget.value;
-            saveConfig();
-          }}
-          class="h-6 w-8 cursor-pointer rounded border border-line bg-transparent"
-        />
-      </label>
-      <label class="flex items-center gap-2 text-xs text-muted">
-        Fondo panel
-        <input
-          type="color"
-          value={g.hudBgColor}
-          oninput={(e) => {
-            g.theme = "custom";
-            g.hudBgColor = e.currentTarget.value;
-            saveConfig();
-          }}
-          class="h-6 w-8 cursor-pointer rounded border border-line bg-transparent"
-        />
-      </label>
     </div>
   </div>
 
@@ -204,6 +227,101 @@
           {/if}
         {/each}
       </div>
+
+      {#if selectedId === "mfd"}
+        <div class="mt-6 border-t border-line pt-5 text-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-fg">Configuración del Widget Móvil y MFD</h3>
+              <p class="text-xs text-muted">
+                Elige el tema del móvil y modifica el orden, elimina o añade dashboards a la rotación del volante.
+              </p>
+            </div>
+            <button class="btn text-xs" onclick={() => wheelControl.resetPages()}>
+              Restablecer orden
+            </button>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Tema del Móvil</div>
+            <div class="flex flex-wrap gap-2">
+              {#each Object.entries(HUD_THEMES) as [id, t] (id)}
+                <button
+                  class={[
+                    "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold transition",
+                    wheelControl.mobileTheme === id
+                      ? "border-accent bg-accent text-white"
+                      : "border-line bg-surface-2 text-muted hover:text-fg",
+                  ]}
+                  onclick={() => wheelControl.setMobileTheme(id as PresetThemeId)}
+                >
+                  <span class="h-2.5 w-2.5 rounded-full" style:background={t.accent}></span>
+                  {t.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <div class="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
+                Orden de Dashboards Activos ({wheelControl.activePages.length})
+              </div>
+              <div class="space-y-1.5">
+                {#each wheelControl.activePages as pg, idx (pg.id)}
+                  <div class="flex items-center justify-between rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs">
+                    <span class="font-semibold text-fg">
+                      <span class="mr-1.5 font-mono text-accent">{idx + 1}.</span>{pg.title}
+                    </span>
+                    <div class="flex items-center gap-1">
+                      <button
+                        class="rounded bg-surface-3 px-2 py-0.5 font-bold hover:bg-line disabled:opacity-30"
+                        disabled={idx === 0}
+                        title="Subir"
+                        onclick={() => wheelControl.movePage(idx, -1)}
+                      >↑</button>
+                      <button
+                        class="rounded bg-surface-3 px-2 py-0.5 font-bold hover:bg-line disabled:opacity-30"
+                        disabled={idx === wheelControl.activePages.length - 1}
+                        title="Bajar"
+                        onclick={() => wheelControl.movePage(idx, 1)}
+                      >↓</button>
+                      <button
+                        class="ml-1 rounded bg-bad/20 px-2 py-0.5 font-bold text-bad hover:bg-bad hover:text-white disabled:opacity-30"
+                        disabled={wheelControl.activePages.length <= 1}
+                        title="Eliminar"
+                        onclick={() => wheelControl.removePage(pg.id)}
+                      >✕</button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+
+            <div>
+              <div class="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
+                Añadir Nuevos Dashboards al Móvil
+              </div>
+              {#if wheelControl.availableToAdd.length === 0}
+                <div class="rounded-lg border border-line bg-surface-2 p-3 text-xs text-muted">
+                  Todos los dashboards disponibles están añadidos.
+                </div>
+              {:else}
+                <div class="flex flex-wrap gap-1.5">
+                  {#each wheelControl.availableToAdd as avail (avail.id)}
+                    <button
+                      class="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-fg hover:border-accent hover:text-accent"
+                      onclick={() => wheelControl.addPage(avail.id)}
+                    >
+                      + {avail.short}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 </div>

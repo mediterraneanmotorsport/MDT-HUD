@@ -25,9 +25,19 @@ function getLanIps(): string[] {
 
 function spotterAudioPlugin(): Plugin {
   const roots = [path.resolve("Perfil"), path.resolve("public", "Perfil")];
-  let mobileState: { page: number; pageSeq: number; snap: unknown } = {
+  let mobileState: {
+    page: number;
+    pageSeq: number;
+    pages: string[] | null;
+    mobileTheme: string | null;
+    configSeq: number;
+    snap: unknown;
+  } = {
     page: 0,
     pageSeq: 0,
+    pages: null,
+    mobileTheme: null,
+    configSeq: 0,
     snap: null,
   };
 
@@ -96,13 +106,27 @@ function spotterAudioPlugin(): Plugin {
                   mobileState.page = parsed.page;
                   mobileState.pageSeq += 1;
                 }
+                if (Array.isArray(parsed.pages)) {
+                  mobileState.pages = parsed.pages;
+                  mobileState.configSeq += 1;
+                }
+                if (typeof parsed.mobileTheme === "string") {
+                  mobileState.mobileTheme = parsed.mobileTheme;
+                  mobileState.configSeq += 1;
+                }
                 if (parsed.snap !== undefined) {
                   mobileState.snap = parsed.snap;
                 }
               } catch {
                 // ignore malformed JSON
               }
-              res.end(JSON.stringify({ page: mobileState.page, pageSeq: mobileState.pageSeq }));
+              res.end(
+                JSON.stringify({
+                  page: mobileState.page,
+                  pageSeq: mobileState.pageSeq,
+                  configSeq: mobileState.configSeq,
+                }),
+              );
             });
             return;
           }

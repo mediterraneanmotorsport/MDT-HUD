@@ -96,12 +96,112 @@
 
 /* Base panel for every overlay widget: flat, dark, rounded, easy to read over any background. */
 @utility hud {
+  position: relative;
   background: var(--color-hud);
   border: 1px solid var(--color-hud-line);
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+  border-radius: var(--hud-radius, 10px);
+  box-shadow: var(--hud-shadow, 0 6px 20px rgb(0 0 0 / 0.35));
   font-variant-numeric: tabular-nums;
   overflow: hidden;
+}
+
+/* =========================================================================
+   5 TEMAS COMPLETOS DE DISEÑO DEL OVERLAY (MDT-AURA, MDT-F1, MDT-HY, MDT-GT3, MDT-LMP2)
+   ========================================================================= */
+
+/* 1. MDT-AURA: Neón Futurista / Cristal Azul & Cian */
+[data-hud-theme="mdt-aura"] .hud {
+  border-radius: 14px;
+  border: 1px solid rgb(0 229 255 / 0.55);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgb(34 135 236 / 0.24) 0%, transparent 70%),
+    linear-gradient(180deg, rgb(7 18 36 / 0.94) 0%, rgb(4 10 22 / 0.96) 100%);
+  box-shadow:
+    0 0 22px rgb(34 135 236 / 0.32),
+    inset 0 1px 0 rgb(0 240 255 / 0.45);
+}
+[data-hud-theme="mdt-aura"] .hud-title {
+  color: #62b8ff;
+  text-shadow: 0 0 10px rgb(34 135 236 / 0.55);
+  letter-spacing: 0.12em;
+}
+
+/* 2. MDT-F1: Broadcast Fórmula 1 (Corte diagonal aerodinámico, barra superior Roja F1, cursiva agresiva) */
+[data-hud-theme="mdt-f1"] .hud {
+  border-radius: 2px 14px 2px 14px;
+  border: 1px solid rgb(225 6 0 / 0.45);
+  border-top: 3px solid #e10600;
+  background:
+    linear-gradient(135deg, rgb(225 6 0 / 0.14) 0%, transparent 38%),
+    linear-gradient(180deg, rgb(14 14 19 / 0.96) 0%, rgb(8 8 12 / 0.98) 100%);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.65);
+}
+[data-hud-theme="mdt-f1"] .hud-title {
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffffff;
+}
+[data-hud-theme="mdt-f1"] .hud-tile {
+  border-radius: 2px;
+  border-left: 2px solid rgb(225 6 0 / 0.65);
+}
+
+/* 3. MDT-HY: Le Mans Hypercar WEC (Textura carbono, barra lateral roja LMH + destello dorado híbrido ERS) */
+[data-hud-theme="mdt-hy"] .hud {
+  border-radius: 6px;
+  border: 1px solid rgb(255 184 0 / 0.35);
+  border-left: 4px solid #ff1e38;
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, rgb(18 11 15 / 0.95) 0%, rgb(9 7 10 / 0.97) 100%);
+  box-shadow:
+    0 8px 24px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 184 0 / 0.28);
+}
+[data-hud-theme="mdt-hy"] .hud-title {
+  color: #ffb800;
+  letter-spacing: 0.1em;
+}
+[data-hud-theme="mdt-hy"] .hud-tile {
+  border-radius: 4px;
+  border-top: 1px solid rgb(255 30 56 / 0.35);
+}
+
+/* 4. MDT-GT3: Pantalla Industrial Bosch / MoTeC GT3 Endurance (Verde Flúor + Amarillo, chasis técnico cuadrado) */
+[data-hud-theme="mdt-gt3"] .hud {
+  border-radius: 3px;
+  border: 1.5px solid rgb(0 230 118 / 0.65);
+  outline: 1px solid rgb(255 214 0 / 0.22);
+  outline-offset: -4px;
+  background:
+    linear-gradient(180deg, rgb(9 20 15 / 0.96) 0%, rgb(6 13 10 / 0.98) 100%);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.6);
+}
+[data-hud-theme="mdt-gt3"] .hud-title {
+  color: #00e676;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+[data-hud-theme="mdt-gt3"] .hud-tile {
+  border-radius: 2px;
+  border: 1px solid rgb(0 230 118 / 0.2);
+}
+
+/* 5. MDT-LMP2: Prototipo LMP2 Gibson / Oreca (Azul Eléctrico + Naranja Competición, doble línea de cabecera) */
+[data-hud-theme="mdt-lmp2"] .hud {
+  border-radius: 8px;
+  border: 1px solid rgb(0 176 255 / 0.55);
+  border-top: 3px solid #ff6d00;
+  border-bottom: 2px solid #00b0ff;
+  background:
+    radial-gradient(100% 80% at 100% 0%, rgb(255 109 0 / 0.14) 0%, transparent 65%),
+    linear-gradient(180deg, rgb(7 19 32 / 0.95) 0%, rgb(5 12 22 / 0.97) 100%);
+  box-shadow: 0 8px 22px rgb(0 176 255 / 0.22);
+}
+[data-hud-theme="mdt-lmp2"] .hud-title {
+  color: #ff9100;
+  letter-spacing: 0.1em;
 }
 
 /* Small caption above a value. */

@@ -2,7 +2,8 @@ import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
 
 export type Units = "metric" | "imperial";
-export type HudTheme = "mdt-blue" | "stealth-dark" | "cyan-neon" | "racing-red" | "custom";
+export type HudTheme = "mdt-aura" | "mdt-f1" | "mdt-hy" | "mdt-gt3" | "mdt-lmp2" | "custom";
+export type PresetThemeId = Exclude<HudTheme, "custom">;
 
 export type OptionDef =
   | { key: string; label: string; type: "number"; min: number; max: number; step: number }
@@ -104,11 +105,68 @@ export interface Profile {
   widgets: Record<string, WidgetConfig>;
 }
 
-export const HUD_THEMES: Record<Exclude<HudTheme, "custom">, { label: string; accent: string; bg: string; borderOpacity: number }> = {
-  "mdt-blue": { label: "Azul MDT (#2287EC)", accent: "#2287ec", bg: "#091626", borderOpacity: 0.55 },
-  "stealth-dark": { label: "Stealth Oscuro", accent: "#2287ec", bg: "#0e0e11", borderOpacity: 0.14 },
-  "cyan-neon": { label: "Cian Competición", accent: "#06b6d4", bg: "#081c24", borderOpacity: 0.6 },
-  "racing-red": { label: "Rojo Racing", accent: "#e3101f", bg: "#140c0e", borderOpacity: 0.5 },
+export interface HudThemeMeta {
+  label: string;
+  subtitle: string;
+  accent: string;
+  secondary: string;
+  bg: string;
+  borderOpacity: number;
+  dashboardStyle: "wec" | "ddu" | "radial" | "compact" | "classic";
+  rpmStyle: "leds" | "center" | "bar";
+}
+
+export const HUD_THEMES: Record<PresetThemeId, HudThemeMeta> = {
+  "mdt-aura": {
+    label: "MDT-AURA",
+    subtitle: "Neón Cian & Cristal Azul · Dashboard WEC con 15 LEDs y Volante",
+    accent: "#2287ec",
+    secondary: "#00e5ff",
+    bg: "#071426",
+    borderOpacity: 0.65,
+    dashboardStyle: "wec",
+    rpmStyle: "leds",
+  },
+  "mdt-f1": {
+    label: "MDT-F1",
+    subtitle: "Broadcast Fórmula 1 · Cortes Diagonales, Barra Roja F1 y LEDs Convergentes",
+    accent: "#e10600",
+    secondary: "#ffffff",
+    bg: "#0b0b10",
+    borderOpacity: 0.6,
+    dashboardStyle: "compact",
+    rpmStyle: "center",
+  },
+  "mdt-hy": {
+    label: "MDT-HY",
+    subtitle: "Le Mans Hypercar · Carbono, Acento Lateral LMH, Híbrido ERS & Lift/Coast",
+    accent: "#ff1e38",
+    secondary: "#ffb800",
+    bg: "#100a0e",
+    borderOpacity: 0.55,
+    dashboardStyle: "ddu",
+    rpmStyle: "center",
+  },
+  "mdt-gt3": {
+    label: "MDT-GT3",
+    subtitle: "GT3 Endurance MoTeC/Bosch · Marco Industrial Verde Flúor & Tacómetro Radial",
+    accent: "#00e676",
+    secondary: "#ffd600",
+    bg: "#08140f",
+    borderOpacity: 0.65,
+    dashboardStyle: "radial",
+    rpmStyle: "leds",
+  },
+  "mdt-lmp2": {
+    label: "MDT-LMP2",
+    subtitle: "Prototipo LMP2 Oreca · Azul Eléctrico & Naranja Gulf con Doble Franja",
+    accent: "#00b0ff",
+    secondary: "#ff6d00",
+    bg: "#061320",
+    borderOpacity: 0.6,
+    dashboardStyle: "ddu",
+    rpmStyle: "leds",
+  },
 };
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -118,25 +176,38 @@ function hexToRgb(hex: string): [number, number, number] {
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
 
-export function applyTheme(g: AppConfig["general"]) {
-  if (typeof document === "undefined") return;
-  const preset = g.theme !== "custom" ? HUD_THEMES[g.theme] : null;
-  const accentHex = preset ? preset.accent : g.accentColor || "#2287ec";
-  const bgHex = preset ? preset.bg : g.hudBgColor || "#091626";
-  const borderOp = preset ? preset.borderOpacity : (g.hudBorderOpacity ?? 0.55);
+export function applyThemeToElement(
+  el: HTMLElement,
+  theme: HudTheme,
+  customAccent = "#2287ec",
+  customBg = "#091626",
+  customBorderOp = 0.55,
+) {
+  const preset = theme !== "custom" ? (HUD_THEMES[theme] ?? HUD_THEMES["mdt-aura"]) : null;
+  const effectiveTheme = preset ? theme : "custom";
+  el.setAttribute("data-hud-theme", effectiveTheme);
+
+  const accentHex = preset ? preset.accent : customAccent || "#2287ec";
+  const bgHex = preset ? preset.bg : customBg || "#091626";
+  const borderOp = preset ? preset.borderOpacity : (customBorderOp ?? 0.55);
 
   const [ar, ag, ab] = hexToRgb(accentHex);
   const [br, bg, bb] = hexToRgb(bgHex);
   const hi = `rgb(${Math.min(255, ar + 35)} ${Math.min(255, ag + 35)} ${Math.min(255, ab + 35)})`;
   const lo = `rgb(${Math.round(ar * 0.48)} ${Math.round(ag * 0.48)} ${Math.round(ab * 0.48)})`;
 
-  const root = document.documentElement.style;
-  root.setProperty("--color-accent", accentHex);
-  root.setProperty("--color-accent-hi", hi);
-  root.setProperty("--color-accent-lo", lo);
-  root.setProperty("--color-hud", `rgb(${br} ${bg} ${bb} / 0.92)`);
-  root.setProperty("--color-hud-2", `rgb(${ar} ${ag} ${ab} / 0.14)`);
-  root.setProperty("--color-hud-line", `rgb(${ar} ${ag} ${ab} / ${borderOp})`);
+  const st = el.style;
+  st.setProperty("--color-accent", accentHex);
+  st.setProperty("--color-accent-hi", hi);
+  st.setProperty("--color-accent-lo", lo);
+  st.setProperty("--color-hud", `rgb(${br} ${bg} ${bb} / 0.93)`);
+  st.setProperty("--color-hud-2", `rgb(${ar} ${ag} ${ab} / 0.15)`);
+  st.setProperty("--color-hud-line", `rgb(${ar} ${ag} ${ab} / ${borderOp})`);
+}
+
+export function applyTheme(g: AppConfig["general"]) {
+  if (typeof document === "undefined") return;
+  applyThemeToElement(document.documentElement, g.theme, g.accentColor, g.hudBgColor, g.hudBorderOpacity);
 }
 
 export const WIDGETS: WidgetMeta[] = [
@@ -523,10 +594,10 @@ function defaults(): AppConfig {
       scale: 1,
       opacity: 0.92,
       monitor: "",
-      theme: "mdt-blue",
+      theme: "mdt-aura",
       accentColor: "#2287ec",
-      hudBgColor: "#091626",
-      hudBorderOpacity: 0.55,
+      hudBgColor: "#071426",
+      hudBorderOpacity: 0.65,
       teammates: "MDT, Mediterranean",
     },
     online: { enabled: false, lapUpload: "manual", anonymous: false, uploadTraces: true },
@@ -563,6 +634,9 @@ function merge(stored: any): AppConfig {
   const base = defaults();
   if (!stored || typeof stored !== "object") return base;
   const general = { ...base.general, ...(stored.general ?? {}) };
+  if (general.theme !== "custom" && !(general.theme in HUD_THEMES)) {
+    general.theme = "mdt-aura";
+  }
   const online = { ...base.online, ...(stored.online ?? {}) };
   const spotter = { ...base.spotter, ...(stored.spotter ?? {}) };
   const widgets = mergeWidgets(stored.widgets);
@@ -746,8 +820,73 @@ export function importProfileFromObject(raw: any): string {
   return name;
 }
 
-/** Creates one of the 3 built-in MDT factory templates and activates it. */
-export function createMdtTemplateProfile(template: "competicion" | "streamer" | "minimalista") {
+/** Applies one of the 5 complete MDT overlay themes (MDT-AURA, MDT-F1, MDT-HY, MDT-GT3, MDT-LMP2). */
+export function applyCompleteOverlayTheme(themeId: PresetThemeId, applyDesignOptions = true) {
+  const c = config.value;
+  const preset = HUD_THEMES[themeId];
+  if (!preset) return;
+
+  c.general.theme = themeId;
+  c.general.accentColor = preset.accent;
+  c.general.hudBgColor = preset.bg;
+  c.general.hudBorderOpacity = preset.borderOpacity;
+
+  if (applyDesignOptions) {
+    const w = c.widgets;
+    w.dashboard.options.style = preset.dashboardStyle;
+    w.dashboard.options.rpmStyle = preset.rpmStyle;
+
+    if (themeId === "mdt-aura") {
+      w.dashboard.options.showMdtLogo = true;
+      w.dashboard.options.showSteeringWheel = true;
+      w.dashboard.options.showPedals = true;
+      w.shiftlights.enabled = false;
+      w.mdtbranding.enabled = true;
+      w.standings.options.showBranding = true;
+      w.radar.enabled = true;
+      w.pacecatch.enabled = true;
+    } else if (themeId === "mdt-f1") {
+      w.dashboard.options.style = "compact";
+      w.dashboard.options.rpmStyle = "center";
+      w.shiftlights.enabled = true;
+      w.shiftlights.options.style = "center";
+      w.delta.enabled = true;
+      w.electronics.enabled = true;
+      w.standings.options.showInterval = true;
+    } else if (themeId === "mdt-hy") {
+      w.dashboard.options.style = "ddu";
+      w.dashboard.options.rpmStyle = "center";
+      w.dashboard.options.showBattery = true;
+      w.liftcoast.enabled = true;
+      w.liftcoast.options.showRegen = true;
+      w.fuel.enabled = true;
+      w.fuel.options.showSaver = true;
+      w.electronics.enabled = true;
+    } else if (themeId === "mdt-gt3") {
+      w.dashboard.options.style = "radial";
+      w.dashboard.options.rpmStyle = "leds";
+      w.radar.enabled = true;
+      w.tracklimits.enabled = true;
+      w.tyres.enabled = true;
+      w.tyres.options.showBrakes = true;
+      w.damage.enabled = true;
+    } else if (themeId === "mdt-lmp2") {
+      w.dashboard.options.style = "ddu";
+      w.dashboard.options.rpmStyle = "leds";
+      w.laptiming.enabled = true;
+      w.laptiming.options.showSectors = true;
+      w.trackmap.enabled = true;
+      w.relative.enabled = true;
+      w.pacecatch.enabled = true;
+    }
+  }
+
+  saveConfig();
+}
+
+/** Creates one of the built-in MDT factory templates and activates it. */
+export function createMdtTemplateProfile(template: "competicion" | "streamer" | "minimalista" | "wec") {
+  if (template === "wec") template = "competicion";
   syncActiveProfile();
   const c = config.value;
   const w = defaultWidgets();
