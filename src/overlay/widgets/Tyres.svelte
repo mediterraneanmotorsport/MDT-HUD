@@ -52,11 +52,36 @@
   const compounds = $derived(p?.wheels.map((w) => w.compound) ?? []);
   const mixed = $derived(new Set(compounds).size > 1);
   const compound = $derived(compoundStyle(compounds[0] ?? ""));
+
+  function windowBadge(w: Wheel): { label: string; cls: string } {
+    const isWet = /wet|rain|inter/i.test(w.compound || "");
+    const opt = w.optimalTemp > 30 ? w.optimalTemp : isWet ? 62 : 88;
+    const zones = layer === "core" ? w.innerTemp : w.surfaceTemp;
+    const avg = (zones[0] + zones[1] + zones[2]) / 3;
+    const diff = avg - opt;
+    if (diff < -10) return { label: "FRÍO", cls: "bg-sky-500/25 text-sky-300 border-sky-400/50" };
+    if (diff > 11) return { label: "CAL", cls: "bg-bad/25 text-bad border-bad/50" };
+    return { label: "ÓPT", cls: "bg-good/25 text-good border-good/50" };
+  }
+
+  const frontWearPct = $derived(
+    p ? Math.round(((p.wheels[0].wear + p.wheels[1].wear) / 2) * 100) : 100,
+  );
+  const rearWearPct = $derived(
+    p ? Math.round(((p.wheels[2].wear + p.wheels[3].wear) / 2) * 100) : 100,
+  );
+  const wearDiff = $derived(frontWearPct - rearWearPct); // negative = front more worn (understeer), positive = rear more worn (oversteer)
 </script>
 
 {#snippet pressureLabel(w: Wheel)}
-  <div class={["text-center text-[11px] leading-none", w.flat ? "font-bold text-bad" : "text-muted"]} title="Tyre pressure">
-    {#if w.flat}FLAT{:else}{pressure(w.pressure, units).toFixed(units === "imperial" ? 1 : 0)}<span class="ml-px text-[9px]">{pressureUnit(units)}</span>{/if}
+  {@const win = windowBadge(w)}
+  <div class={["flex items-center justify-center gap-1 text-center text-[11px] leading-none", w.flat ? "font-bold text-bad" : "text-muted"]} title="Presión y ventana térmica">
+    {#if w.flat}
+      FLAT
+    {:else}
+      <span>{pressure(w.pressure, units).toFixed(units === "imperial" ? 1 : 0)}<span class="ml-px text-[9px]">{pressureUnit(units)}</span></span>
+      <span class={["rounded border px-1 py-px text-[8px] font-extrabold", win.cls]}>{win.label}</span>
+    {/if}
   </div>
 {/snippet}
 
@@ -151,6 +176,17 @@
     <div class="flex flex-col gap-3">
       {@render axle(0, 1)}
       {@render axle(2, 3)}
+    </div>
+    <!-- Equilibrio de Desgaste Delantero vs Trasero -->
+    <div class="mt-2.5 flex items-center justify-between rounded-md bg-black/30 px-2 py-1 text-[10px]">
+      <span class="font-semibold text-muted">BAL D/T: <b class="text-fg">{frontWearPct}%</b> / <b class="text-fg">{rearWearPct}%</b></span>
+      {#if wearDiff <= -4}
+        <span class="font-bold text-warn">Subviraje (Del. {wearDiff}%)</span>
+      {:else if wearDiff >= 4}
+        <span class="font-bold text-bad">Sobreviraje (Tras. −{wearDiff}%)</span>
+      {:else}
+        <span class="font-bold text-good">Equilibrado ({wearDiff >= 0 ? `+${wearDiff}` : wearDiff}%)</span>
+      {/if}
     </div>
     {#if opts.showWearRate && st && !st.tyreSamples}
       <div class="mt-1.5 text-[10px] text-faint">El desgaste aparece tras una vuelta con bandera verde.</div>

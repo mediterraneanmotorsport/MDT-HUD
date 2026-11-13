@@ -204,6 +204,44 @@
   letter-spacing: 0.1em;
 }
 
+/* =========================================================================
+   BORDE PERIFÉRICO DELTA (VERDE SI MEJORAS, ROJO SI PIERDES) & DESTELLO BATERÍA 100%
+   ========================================================================= */
+.hud-delta-good {
+  border: 2.5px solid #22c55e !important;
+  box-shadow:
+    0 0 26px rgb(34 197 94 / 0.7),
+    inset 0 0 18px rgb(34 197 94 / 0.25) !important;
+}
+
+.hud-delta-bad {
+  border: 2.5px solid #ef4444 !important;
+  box-shadow:
+    0 0 26px rgb(239 68 68 / 0.7),
+    inset 0 0 18px rgb(239 68 68 / 0.25) !important;
+}
+
+@keyframes battery-full-strobe {
+  0%,
+  100% {
+    border-color: #00ff66;
+    box-shadow:
+      0 0 34px rgb(0 255 102 / 0.95),
+      inset 0 0 24px rgb(0 255 102 / 0.5);
+  }
+  50% {
+    border-color: rgb(0 255 102 / 0.25);
+    box-shadow:
+      0 0 8px rgb(0 255 102 / 0.2),
+      inset 0 0 4px rgb(0 255 102 / 0.1);
+  }
+}
+
+.hud-battery-full {
+  border-width: 2.5px !important;
+  animation: battery-full-strobe 0.55s ease-in-out infinite !important;
+}
+
 /* Small caption above a value. */
 @utility hud-label {
   font-size: 11px;

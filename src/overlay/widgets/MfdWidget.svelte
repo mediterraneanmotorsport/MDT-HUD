@@ -12,6 +12,7 @@
   import Radar from "./Radar.svelte";
   import Relative from "./Relative.svelte";
   import Standings from "./Standings.svelte";
+  import StintPlanner from "./StintPlanner.svelte";
   import TrackLimits from "./TrackLimits.svelte";
   import TrackMap from "./TrackMap.svelte";
   import Tyres from "./Tyres.svelte";
@@ -54,5 +55,7 @@
     <TrackMap opts={wCfg.trackmap?.options ?? {}} {units} {edit} />
   {:else if currentPage.id === "inputs"}
     <Inputs opts={wCfg.inputs?.options ?? {}} {units} {edit} />
+  {:else if currentPage.id === "stintplanner"}
+    <StintPlanner opts={wCfg.stintplanner?.options ?? {}} {units} {edit} />
   {/if}
 </div>

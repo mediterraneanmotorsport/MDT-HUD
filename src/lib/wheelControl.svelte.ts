@@ -15,7 +15,8 @@ export type MfdPageId =
   | "radar"
   | "laptiming"
   | "trackmap"
-  | "inputs";
+  | "inputs"
+  | "stintplanner";
 
 export interface MfdPageDef {
   id: MfdPageId;
@@ -124,6 +125,13 @@ export const ALL_MOBILE_PAGES: MfdPageDef[] = [
     title: "Gráfico de Pedales y Dirección",
     description: "Traza en tiempo real de acelerador, freno, embrague y giro de volante.",
   },
+  {
+    id: "stintplanner",
+    short: "Estrategia WEC",
+    shortTitle: "ESTRATEGIA Y STINTS",
+    title: "Calculadora de Estrategia y Stints WEC",
+    description: "Paradas necesarias, repostaje exacto por parada, splash final y ahorro.",
+  },
 ];
 
 export const DEFAULT_MOBILE_PAGE_IDS: MfdPageId[] = [
@@ -155,6 +163,7 @@ class WheelController {
   pageIndex = $state(0);
   enabledPageIds = $state<MfdPageId[]>([...DEFAULT_MOBILE_PAGE_IDS]);
   mobileTheme = $state<PresetThemeId>("mdt-aura");
+  autoPopups = $state(false);
   learning = $state<"next" | "prev" | null>(null);
   nextBind = $state<WheelButtonBind | null>({
     kind: "key",
@@ -168,6 +177,7 @@ class WheelController {
   });
   connectedGamepads = $state<string[]>([]);
   mobileUrl = $state("http://localhost:1420/#mobile");
+  pitwallUrl = $state("http://localhost:1420/#pitwall");
   lanIps = $state<string[]>([]);
   lastPressedInfo = $state<string>("");
 
@@ -230,6 +240,9 @@ class WheelController {
       if (typeof parsed.mobileTheme === "string") {
         this.mobileTheme = parsed.mobileTheme as PresetThemeId;
       }
+      if (typeof parsed.autoPopups === "boolean") {
+        this.autoPopups = parsed.autoPopups;
+      }
       if (typeof parsed.pageIndex === "number") {
         const len = this.activePages.length;
         this.pageIndex = ((parsed.pageIndex % len) + len) % len;
@@ -249,6 +262,7 @@ class WheelController {
           pageIndex: this.pageIndex,
           enabledPageIds: this.enabledPageIds,
           mobileTheme: this.mobileTheme,
+          autoPopups: this.autoPopups,
           nextBind: this.nextBind,
           prevBind: this.prevBind,
         }),
@@ -264,6 +278,7 @@ class WheelController {
       page: this.pageIndex,
       pages: $state.snapshot(this.enabledPageIds),
       mobileTheme: this.mobileTheme,
+      autoPopups: this.autoPopups,
     });
     void fetch("/__mobile_state", {
       method: "POST",
@@ -272,6 +287,7 @@ class WheelController {
         page: this.pageIndex,
         pages: $state.snapshot(this.enabledPageIds),
         mobileTheme: this.mobileTheme,
+        autoPopups: this.autoPopups,
       }),
     })
       .then((r) => r.json())
@@ -320,6 +336,11 @@ class WheelController {
 
   setMobileTheme(theme: PresetThemeId) {
     this.mobileTheme = theme;
+    this.syncConfigToServer();
+  }
+
+  setAutoPopups(val: boolean) {
+    this.autoPopups = val;
     this.syncConfigToServer();
   }
 
@@ -453,6 +474,9 @@ class WheelController {
           if (typeof data.mobileTheme === "string") {
             this.mobileTheme = data.mobileTheme;
           }
+          if (typeof data.autoPopups === "boolean") {
+            this.autoPopups = data.autoPopups;
+          }
           this.saveStored();
         }
         if (typeof data.pageSeq === "number" && data.pageSeq > this.lastKnownSeq) {
@@ -474,7 +498,10 @@ class WheelController {
       const res = await fetch("/__mobile_info", { cache: "no-store" });
       if (res.ok && res.headers.get("content-type")?.includes("json")) {
         const info = await res.json();
-        if (info.url) this.mobileUrl = info.url;
+        if (info.url) {
+          this.mobileUrl = info.url;
+          this.pitwallUrl = info.url.replace("#mobile", "#pitwall");
+        }
         if (Array.isArray(info.ips)) this.lanIps = info.ips;
       }
     } catch {

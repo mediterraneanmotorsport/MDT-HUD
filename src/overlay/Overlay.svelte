@@ -18,9 +18,18 @@
   const trackOk = $derived(!config.value.general.onlyOnTrack || onTrack);
   const focusOk = $derived(!config.value.general.hideUnfocused || live.status.gameFocused || live.status.demo);
   const show = $derived(config.loaded && (edit || (trackOk && focusOk)));
+  const batteryFull = $derived(
+    !!live.snap?.player && live.snap.player.electricMotorState > 0 && live.snap.player.battery >= 0.975,
+  );
 </script>
 
 <SoftwareRepaint active={show} />
+
+{#if show && batteryFull}
+  <div
+    class="pointer-events-none fixed inset-0 z-10 border-[3px] border-[#00ff66] hud-battery-full"
+  ></div>
+{/if}
 
 {#if edit}
   <div

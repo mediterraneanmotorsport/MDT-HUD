@@ -30,6 +30,7 @@ function spotterAudioPlugin(): Plugin {
     pageSeq: number;
     pages: string[] | null;
     mobileTheme: string | null;
+    autoPopups: boolean;
     configSeq: number;
     snap: unknown;
   } = {
@@ -37,6 +38,7 @@ function spotterAudioPlugin(): Plugin {
     pageSeq: 0,
     pages: null,
     mobileTheme: null,
+    autoPopups: false,
     configSeq: 0,
     snap: null,
   };
@@ -112,6 +114,10 @@ function spotterAudioPlugin(): Plugin {
                 }
                 if (typeof parsed.mobileTheme === "string") {
                   mobileState.mobileTheme = parsed.mobileTheme;
+                  mobileState.configSeq += 1;
+                }
+                if (typeof parsed.autoPopups === "boolean") {
+                  mobileState.autoPopups = parsed.autoPopups;
                   mobileState.configSeq += 1;
                 }
                 if (parsed.snap !== undefined) {

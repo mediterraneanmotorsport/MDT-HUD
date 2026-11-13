@@ -17,6 +17,7 @@ import Relative from "./Relative.svelte";
 import SessionInfo from "./SessionInfo.svelte";
 import ShiftLights from "./ShiftLights.svelte";
 import Standings from "./Standings.svelte";
+import StintPlanner from "./StintPlanner.svelte";
 import TrackLimits from "./TrackLimits.svelte";
 import TrackMap from "./TrackMap.svelte";
 import Tyres from "./Tyres.svelte";
@@ -51,4 +52,5 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   electronics: Electronics,
   mdtbranding: MdtBranding,
   mfd: MfdWidget,
+  stintplanner: StintPlanner,
 };

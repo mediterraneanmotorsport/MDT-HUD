@@ -13,6 +13,7 @@
   } from "../../lib/config.svelte";
   import { delta, fuel, fuelUnit, lapTime, sessionLabel, speed, speedUnit } from "../../lib/format";
   import { live } from "../../lib/live.svelte";
+  import { generateQrMatrix } from "../../lib/qr";
   import { spotter } from "../../lib/spotter.svelte";
   import { wheelControl } from "../../lib/wheelControl.svelte";
   import type { LapRecord, LapRecordedEvent, SessionSummary } from "../../lib/types";
@@ -27,9 +28,14 @@
   const units = $derived(config.value.general.units);
   let copiedMobileUrl = $state(false);
   let showMobileOrderEditor = $state(false);
+  let qrMode = $state<"mobile" | "pitwall">("mobile");
+  const activeQrUrl = $derived(
+    qrMode === "pitwall" ? wheelControl.mobileUrl.replace("#mobile", "#pitwall") : wheelControl.mobileUrl,
+  );
+  const qrMatrix = $derived(generateQrMatrix(activeQrUrl));
 
   function copyMobileUrl() {
-    navigator.clipboard.writeText(wheelControl.mobileUrl);
+    navigator.clipboard.writeText(activeQrUrl);
     copiedMobileUrl = true;
     setTimeout(() => (copiedMobileUrl = false), 2500);
   }
@@ -204,43 +210,87 @@
           <b>Relativo</b>, <b>Clasificación</b>, <b>Daños y Neumáticos</b>, <b>Combustible</b> y <b>Cazador</b>.
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <a
           href="/#mobile"
           target="_blank"
           class="btn border border-[#2287EC]/40 bg-[#2287EC]/15 text-xs font-semibold text-[#62b0ff] hover:bg-[#2287EC]/25"
         >📱 Vista previa DDU Móvil</a>
+        <a
+          href="/#pitwall"
+          target="_blank"
+          class="btn border border-emerald-500/40 bg-emerald-500/15 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
+        >📡 Muro de Ingenieros (#pitwall)</a>
       </div>
     </div>
 
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <!-- Columna 1: URL Wi-Fi para el móvil -->
-      <div class="rounded-xl border border-line bg-surface-2 p-3.5">
-        <div class="text-xs font-semibold tracking-wider text-muted uppercase">1. Conectar Móvil o Tablet por Wi-Fi</div>
-        <div class="mt-2 flex items-center gap-2">
-          <input
-            type="text"
-            readonly
-            class="field flex-1 font-mono text-xs select-all"
-            value={wheelControl.mobileUrl}
-          />
-          <button class="btn btn-primary text-xs" onclick={copyMobileUrl}>
-            {copiedMobileUrl ? "✓ Copiado" : "Copiar enlace"}
-          </button>
-        </div>
-        {#if wheelControl.lanIps.length > 1}
-          <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-            <span>Otras IPs detectadas:</span>
-            {#each wheelControl.lanIps as ip}
-              <button
-                class="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-fg hover:text-[#62b0ff]"
-                onclick={() => (wheelControl.mobileUrl = `http://${ip}:1420/#mobile`)}
-              >http://{ip}:1420/#mobile</button>
-            {/each}
+      <!-- Columna 1: Código QR + URL Wi-Fi para el móvil o tablet -->
+      <div class="flex gap-3.5 rounded-xl border border-line bg-surface-2 p-3.5">
+        <!-- Código QR Escaneable -->
+        <div class="flex shrink-0 flex-col items-center gap-1.5">
+          <div class="rounded-lg bg-white p-2 shadow-md" title="Escanea con la cámara de tu móvil o tablet">
+            <svg
+              width="98"
+              height="98"
+              viewBox="0 0 {qrMatrix.length} {qrMatrix.length}"
+              shape-rendering="crispEdges"
+            >
+              {#each qrMatrix as row, y}
+                {#each row as dark, x}
+                  {#if dark}
+                    <rect {x} {y} width="1" height="1" fill="#000000" />
+                  {/if}
+                {/each}
+              {/each}
+            </svg>
           </div>
-        {/if}
-        <div class="mt-2.5 text-[11px] text-muted">
-          💡 En tu móvil, abre Chrome o Safari, entra en esa dirección y pulsa <b>"⛶ Pantalla Completa"</b>. La pantalla no se apagará mientras conduces.
+          <div class="flex gap-1 text-[10px]">
+            <button
+              class={["rounded px-1.5 py-0.5 font-bold", qrMode === "mobile" ? "bg-accent text-white" : "bg-surface-3 text-muted"]}
+              onclick={() => (qrMode = "mobile")}
+            >📱 Móvil</button>
+            <button
+              class={["rounded px-1.5 py-0.5 font-bold", qrMode === "pitwall" ? "bg-accent text-white" : "bg-surface-3 text-muted"]}
+              onclick={() => (qrMode = "pitwall")}
+            >📡 PitWall</button>
+          </div>
+        </div>
+
+        <div class="flex min-w-0 flex-1 flex-col justify-between">
+          <div>
+            <div class="text-xs font-semibold tracking-wider text-muted uppercase">
+              1. Escanea el QR o abre por Wi-Fi ({qrMode === "mobile" ? "DDU Móvil" : "Muro de Ingenieros"})
+            </div>
+            <div class="mt-2 flex items-center gap-2">
+              <input
+                type="text"
+                readonly
+                class="field flex-1 font-mono text-xs select-all"
+                value={activeQrUrl}
+              />
+              <button class="btn btn-primary text-xs" onclick={copyMobileUrl}>
+                {copiedMobileUrl ? "✓ Copiado" : "Copiar"}
+              </button>
+            </div>
+            {#if wheelControl.lanIps.length > 1}
+              <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+                <span>IPs:</span>
+                {#each wheelControl.lanIps as ip}
+                  <button
+                    class="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-fg hover:text-[#62b0ff]"
+                    onclick={() => {
+                      wheelControl.mobileUrl = `http://${ip}:1420/#mobile`;
+                      wheelControl.pitwallUrl = `http://${ip}:1420/#pitwall`;
+                    }}
+                  >{ip}</button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <div class="mt-2 text-[11px] text-muted">
+            💡 Desliza el dedo (<b>Swipe</b>) a izquierda/derecha en el móvil o usa los botones del volante para cambiar de pantalla.
+          </div>
         </div>
       </div>
 
@@ -325,12 +375,26 @@
         {/each}
       </div>
 
-      <button
-        class="btn border border-accent/40 bg-accent/15 text-xs font-semibold text-accent-hi"
-        onclick={() => (showMobileOrderEditor = !showMobileOrderEditor)}
-      >
-        {showMobileOrderEditor ? "▲ Ocultar editor de pantallas" : "⚙️ Ordenar / Añadir / Eliminar pantallas del móvil"}
-      </button>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs">
+          <input
+            type="checkbox"
+            class="accent-accent"
+            checked={wheelControl.autoPopups}
+            onchange={(e) => wheelControl.setAutoPopups(e.currentTarget.checked)}
+          />
+          <span class="font-semibold text-fg" title="Cambia temporalmente a Daños si recibes un golpe, a Combustible al entrar a boxes, y muestra un aviso gigante al tocar TC/ABS/Mapa">
+            Pop-ups automáticos inteligentes en móvil (Opcional)
+          </span>
+        </label>
+
+        <button
+          class="btn border border-accent/40 bg-accent/15 text-xs font-semibold text-accent-hi"
+          onclick={() => (showMobileOrderEditor = !showMobileOrderEditor)}
+        >
+          {showMobileOrderEditor ? "▲ Ocultar editor de pantallas" : "⚙️ Ordenar / Añadir / Eliminar pantallas del móvil"}
+        </button>
+      </div>
     </div>
 
     <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-3">

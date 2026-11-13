@@ -35,15 +35,38 @@
   // electricMotorState: 0 = no hybrid, 1 = idle, 2 = deploying, 3 = regenerating.
   const hybrid = $derived(!!p && p.electricMotorState > 0);
   const battery = $derived(p ? Math.max(0, Math.min(1, p.battery)) : 0);
+  const batteryFull = $derived(hybrid && battery >= 0.975);
+  const deltaVal = $derived(
+    live.snap?.timing.deltaPb ?? (live.snap?.timing.sessionBest && p ? p.deltaBest : null),
+  );
+  const hudAlertClass = $derived(
+    batteryFull
+      ? "hud-battery-full"
+      : (opts.deltaBorder ?? true) && deltaVal != null
+        ? deltaVal < -0.005
+          ? "hud-delta-good"
+          : deltaVal > 0.005
+            ? "hud-delta-bad"
+            : ""
+        : "",
+  );
   const motor = $derived(
-    p?.electricMotorState === 3
-      ? { label: "REGEN", color: "var(--color-clutch)" }
-      : p?.electricMotorState === 2
-        ? { label: "DEPLOY", color: "var(--color-good)" }
-        : { label: "IDLE", color: "var(--color-muted)" },
+    batteryFull
+      ? { label: "100% LLENA", color: "#00ff66" }
+      : p?.electricMotorState === 3
+        ? { label: "REGEN", color: "var(--color-clutch)" }
+        : p?.electricMotorState === 2
+          ? { label: "DEPLOY", color: "var(--color-good)" }
+          : { label: "IDLE", color: "var(--color-muted)" },
   );
   const batteryColor = $derived(
-    p?.electricMotorState === 3 ? "var(--color-clutch)" : battery < 0.15 ? "var(--color-bad)" : "var(--color-good)",
+    batteryFull
+      ? "#00ff66"
+      : p?.electricMotorState === 3
+        ? "var(--color-clutch)"
+        : battery < 0.15
+          ? "var(--color-bad)"
+          : "var(--color-good)",
   );
 
   const ffb = $derived(p ? Math.max(-1, Math.min(1, p.ffb)) : 0);
@@ -270,6 +293,16 @@
   {/if}
 {/snippet}
 
+{#snippet batteryFullBanner()}
+  {#if batteryFull}
+    <div
+      class="mb-2 flex animate-pulse items-center justify-center gap-1.5 rounded bg-[#00ff66] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_18px_#00ff66]"
+    >
+      <span>⚡ BATERÍA 100% LLENA · DESPLEGAR ERS</span>
+    </div>
+  {/if}
+{/snippet}
+
 <!-- =========================================================================
      MODE 1: WEC / BROADCAST MDT (Deportivo con LEDs, caja central azul MDT)
      ========================================================================= -->
@@ -277,6 +310,7 @@
   <div
     class={[
       "hud relative w-[360px] overflow-hidden p-3 transition-colors",
+      hudAlertClass,
       flash && "ring-2 ring-accent shadow-[0_0_25px_rgb(34_135_236_/_0.6)]",
     ]}
   >
@@ -287,6 +321,8 @@
         class="pointer-events-none absolute -right-3 -bottom-3 h-24 w-24 object-contain opacity-[0.07]"
       />
     {/if}
+
+    {@render batteryFullBanner()}
 
     <!-- Pit limiter banner -->
     {#if p?.speedLimiter}
@@ -350,9 +386,11 @@
   <div
     class={[
       "hud w-[380px] overflow-hidden rounded-xl border-2 border-accent/40 bg-[#070a10]/95 p-2.5 shadow-2xl",
+      hudAlertClass,
       flash && "border-sky-400 bg-sky-950/60",
     ]}
   >
+    {@render batteryFullBanner()}
     <!-- Top LED Strip -->
     {@render rpmHeader("h-3")}
 
@@ -465,7 +503,8 @@
   {@const R = 52}
   {@const CIRC = 2 * Math.PI * R}
   {@const ARC = CIRC * 0.75}
-  <div class="hud w-[340px] p-3">
+  <div class={["hud w-[340px] p-3", hudAlertClass]}>
+    {@render batteryFullBanner()}
     <div class="flex items-center justify-between gap-3">
       <!-- Left: Speed & Wheel -->
       <div class="flex flex-col items-start">
@@ -531,7 +570,12 @@
      MODE 4: BARRA HORIZONTAL COMPACTA
      ========================================================================= -->
 {:else if style === "compact"}
-  <div class="hud flex items-center gap-3 px-3.5 py-2">
+  <div class={["hud flex items-center gap-3 px-3.5 py-2", hudAlertClass]}>
+    {#if batteryFull}
+      <span class="animate-pulse rounded bg-[#00ff66] px-2 py-0.5 font-display text-[11px] font-black text-black shadow-[0_0_12px_#00ff66]">
+        ⚡ BAT 100%
+      </span>
+    {/if}
     {#if showMdtLogo}
       <img src="/mdt-logo.png" alt="MDT" class="h-7 w-7 shrink-0 object-contain" />
     {/if}
@@ -589,7 +633,8 @@
      MODE 5: CLÁSICO ESTÁNDAR
      ========================================================================= -->
 {:else}
-  <div class="hud w-[320px] p-3">
+  <div class={["hud w-[320px] p-3", hudAlertClass]}>
+    {@render batteryFullBanner()}
     {@render rpmHeader("h-2")}
 
     <div class="mt-3 grid grid-cols-[1fr_auto_1fr] items-end">

@@ -538,6 +538,17 @@ export const WIDGETS: WidgetMeta[] = [
     optionDefaults: {},
   },
   {
+    id: "stintplanner",
+    name: "Calculadora de Estrategia y Stints WEC",
+    description: "Calcula paradas en boxes necesarias, litros/energía por parada, splash final y ahorro para quitar 1 parada.",
+    defaults: { enabled: false, x: 1590, y: 540 },
+    options: [
+      { key: "safetyLaps", label: "Vueltas extra de margen de seguridad", type: "number", min: 0, max: 3, step: 0.5 },
+      { key: "customMinutes", label: "Duración manual (min, 0 = automático de la sesión)", type: "number", min: 0, max: 1440, step: 15 },
+    ],
+    optionDefaults: { safetyLaps: 1, customMinutes: 0 },
+  },
+  {
     id: "mfd",
     name: "Pantalla Multifunción MFD (Control por Volante)",
     description: "Panel rotativo controlado con botones de tu volante: cambia entre Relativo, Clasificación, Daños/Gomas, Combustible y Cazador.",
