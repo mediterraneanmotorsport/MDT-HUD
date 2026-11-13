@@ -1,7 +1,20 @@
 import type { Snapshot } from "./types";
 
+export type MfdPageId =
+  | "dashboard"
+  | "relative"
+  | "standings"
+  | "damage"
+  | "tyres"
+  | "fuel"
+  | "liftcoast"
+  | "pacecatch"
+  | "tracklimits"
+  | "electronics";
+
 export interface MfdPageDef {
-  id: "relative" | "standings" | "damage-tyres" | "fuel-lift" | "pace-limits" | "ddu-only";
+  id: MfdPageId;
+  short: string;
   shortTitle: string;
   title: string;
   description: string;
@@ -9,40 +22,74 @@ export interface MfdPageDef {
 
 export const MFD_PAGES: MfdPageDef[] = [
   {
+    id: "dashboard",
+    short: "Dashboard DDU",
+    shortTitle: "DASHBOARD DDU",
+    title: "1 · Cuadro de Mandos (Dashboard)",
+    description: "Velocidad, marcha, luces LED de RPM, pedales y volante a pantalla completa.",
+  },
+  {
     id: "relative",
+    short: "Relativo",
     shortTitle: "RELATIVO",
-    title: "1 · Relativo en Pista",
+    title: "2 · Relativo en Pista",
     description: "Coches cercanos en pista, diferencias en vivo, doblados y energía.",
   },
   {
     id: "standings",
+    short: "Clasificación",
     shortTitle: "CLASIFICACIÓN",
-    title: "2 · Clasificación (Standings)",
+    title: "3 · Clasificación (Standings)",
     description: "Torre de tiempos de tu categoría y rivales con paradas y neumáticos.",
   },
   {
-    id: "damage-tyres",
-    shortTitle: "DAÑOS / GOMAS",
-    title: "3 · Daños del Coche y Neumáticos",
-    description: "Silueta de daños de aerodinámica/suspensión + temperaturas y desgaste de gomas.",
+    id: "damage",
+    short: "Daños",
+    shortTitle: "DAÑOS DEL COCHE",
+    title: "4 · Daños del Coche",
+    description: "Silueta detallada de daños de aerodinámica, alerones y suspensión.",
   },
   {
-    id: "fuel-lift",
-    shortTitle: "COMBUSTIBLE",
-    title: "4 · Combustible, Energía y Lift & Coast",
-    description: "Autonomía de combustible/energía, calculadora de ahorro y regeneración ERS.",
+    id: "tyres",
+    short: "Neumáticos",
+    shortTitle: "NEUMÁTICOS Y FRENOS",
+    title: "5 · Neumáticos y Frenos",
+    description: "Temperaturas, desgaste, ritmo por vuelta, vueltas restantes y frenos.",
   },
   {
-    id: "pace-limits",
-    shortTitle: "CAZADOR / LÍMITES",
-    title: "5 · Cazador de Rivales y Track Limits",
-    description: "Vueltas para alcanzar al coche de delante/detrás + puntos de límites de pista.",
+    id: "fuel",
+    short: "Combustible",
+    shortTitle: "COMBUSTIBLE Y ENERGÍA",
+    title: "6 · Combustible y Energía",
+    description: "Autonomía de combustible/energía, consumo por vuelta y parada estimada.",
   },
   {
-    id: "ddu-only",
-    shortTitle: "SOLO DDU",
-    title: "6 · Solo Cuadro de Mandos DDU",
-    description: "Velocidad, marcha, luces LED de RPM, pedales y electrónica a pantalla completa.",
+    id: "liftcoast",
+    short: "Lift & Coast",
+    shortTitle: "LIFT & COAST",
+    title: "7 · Ahorro Lift & Coast",
+    description: "Objetivo de ahorro por vuelta y regeneración híbrida ERS.",
+  },
+  {
+    id: "pacecatch",
+    short: "Cazador",
+    shortTitle: "CAZADOR DE RIVALES",
+    title: "8 · Cazador de Rivales",
+    description: "Vueltas estimadas para dar caza al coche de delante o ser alcanzado.",
+  },
+  {
+    id: "tracklimits",
+    short: "Límites",
+    shortTitle: "LÍMITES DE PISTA",
+    title: "9 · Límites de Pista",
+    description: "Contador de avisos y puntos de sanción por Track Limits.",
+  },
+  {
+    id: "electronics",
+    short: "Electrónica",
+    shortTitle: "ELECTRÓNICA DEL COCHE",
+    title: "10 · Electrónica (TC / ABS / Mapa)",
+    description: "Control de tracción, ABS, mapa motor, reparto de frenada y barra estabilizadora.",
   },
 ];
 
@@ -55,10 +102,10 @@ export interface WheelButtonBind {
   label: string;
 }
 
-const STORAGE_KEY = "mdt_wheel_mfd_v1";
+const STORAGE_KEY = "mdt_wheel_mfd_v2";
 
 class WheelController {
-  page = $state(0);
+  pageIndex = $state(0);
   learning = $state<"next" | "prev" | null>(null);
   nextBind = $state<WheelButtonBind | null>({
     kind: "key",
@@ -82,10 +129,28 @@ class WheelController {
   private lastKnownSeq = 0;
   private started = false;
 
+  get page(): MfdPageId {
+    return MFD_PAGES[this.pageIndex % MFD_PAGES.length]?.id ?? "dashboard";
+  }
+
+  set page(val: MfdPageId | number) {
+    if (typeof val === "number") {
+      this.pageIndex = ((val % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+    } else {
+      const idx = MFD_PAGES.findIndex((p) => p.id === val);
+      if (idx >= 0) this.pageIndex = idx;
+    }
+  }
+
   constructor() {
     if (typeof window !== "undefined") {
       this.loadStored();
     }
+  }
+
+  formatBinding(b: WheelButtonBind | null): string {
+    if (!b) return "Sin asignar";
+    return b.label || (b.kind === "key" ? `Tecla ${b.key}` : `Botón ${(b.buttonIndex ?? 0) + 1}`);
   }
 
   private loadStored() {
@@ -93,7 +158,9 @@ class WheelController {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      if (typeof parsed.page === "number") this.page = parsed.page % MFD_PAGES.length;
+      if (typeof parsed.pageIndex === "number") {
+        this.pageIndex = ((parsed.pageIndex % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+      }
       if (parsed.nextBind) this.nextBind = parsed.nextBind;
       if (parsed.prevBind) this.prevBind = parsed.prevBind;
     } catch {
@@ -106,7 +173,7 @@ class WheelController {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          page: this.page,
+          pageIndex: this.pageIndex,
           nextBind: this.nextBind,
           prevBind: this.prevBind,
         }),
@@ -126,7 +193,7 @@ class WheelController {
       this.channel = new BroadcastChannel("mdt_mfd_channel");
       this.channel.onmessage = (ev) => {
         if (typeof ev.data?.page === "number") {
-          this.page = ((ev.data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+          this.pageIndex = ((ev.data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
         }
       };
     }
@@ -182,7 +249,6 @@ class WheelController {
             const wasDown = this.prevPressed.get(k) ?? false;
             this.prevPressed.set(k, isDown);
 
-            // Rising edge detection (ignore buttons that are permanently held down like toggle switches when starting learning)
             if (isDown && !wasDown && !this.baselinePressed.has(k)) {
               this.lastPressedInfo = `${shortPadName} · Botón ${bi + 1}`;
 
@@ -225,7 +291,6 @@ class WheelController {
     };
     requestAnimationFrame(pollGamepads);
 
-    // Periodically check if the mobile phone changed the page via touch
     setInterval(async () => {
       try {
         const res = await fetch("/__mobile_state", { cache: "no-store" });
@@ -233,9 +298,9 @@ class WheelController {
         const data = await res.json();
         if (typeof data.pageSeq === "number" && data.pageSeq > this.lastKnownSeq) {
           this.lastKnownSeq = data.pageSeq;
-          if (typeof data.page === "number" && data.page !== this.page) {
-            this.page = ((data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
-            this.channel?.postMessage({ page: this.page });
+          if (typeof data.page === "number" && data.page !== this.pageIndex) {
+            this.pageIndex = ((data.page % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
+            this.channel?.postMessage({ page: this.pageIndex });
           }
         }
       } catch {
@@ -278,15 +343,18 @@ class WheelController {
     this.learning = null;
   }
 
-  setPage(idx: number) {
-    const next = ((idx % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length;
-    this.page = next;
+  setPage(target: number | MfdPageId) {
+    const idx =
+      typeof target === "number"
+        ? ((target % MFD_PAGES.length) + MFD_PAGES.length) % MFD_PAGES.length
+        : Math.max(0, MFD_PAGES.findIndex((p) => p.id === target));
+    this.pageIndex = idx;
     this.saveStored();
-    this.channel?.postMessage({ page: next });
+    this.channel?.postMessage({ page: idx });
     void fetch("/__mobile_state", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ page: next }),
+      body: JSON.stringify({ page: idx }),
     })
       .then((r) => r.json())
       .then((d) => {
@@ -296,14 +364,13 @@ class WheelController {
   }
 
   nextPage() {
-    this.setPage(this.page + 1);
+    this.setPage(this.pageIndex + 1);
   }
 
   prevPage() {
-    this.setPage(this.page - 1);
+    this.setPage(this.pageIndex - 1);
   }
 
-  /** Pushes telemetry snapshot from the PC to the Vite mobile relay (~15 Hz max). */
   pushSnapshotToMobile(snap: Snapshot | null) {
     if (!snap) return;
     const now = performance.now();
