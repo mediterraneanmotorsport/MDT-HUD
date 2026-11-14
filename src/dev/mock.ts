@@ -404,6 +404,16 @@ export async function install() {
           config = args.config;
           emit("config-changed", config);
           return;
+        case "get_mobile_network_info":
+          return {
+            ips: ["192.168.1.100"],
+            port: 1420,
+            url: "http://192.168.1.100:1420/#mobile",
+            pitwallUrl: "http://192.168.1.100:1420/#pitwall",
+            firewallOpen: true,
+          };
+        case "open_mobile_firewall":
+          return true;
         case "set_edit_mode":
           editMode = args.enabled;
           emit("edit-mode", editMode);

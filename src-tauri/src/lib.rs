@@ -241,6 +241,8 @@ pub fn run() {
             commands::latest_release,
             commands::get_config,
             commands::save_config,
+            commands::get_mobile_network_info,
+            commands::open_mobile_firewall,
             commands::set_edit_mode,
             commands::set_overlay_visible,
             commands::set_demo_mode,

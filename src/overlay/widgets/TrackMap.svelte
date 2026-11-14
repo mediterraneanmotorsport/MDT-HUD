@@ -12,6 +12,7 @@
   let { opts }: { opts: Record<string, any>; units: Units; edit: boolean } = $props();
 
   const size = $derived(opts.size ?? 240);
+  const showFrame = $derived(opts.showFrame ?? true);
   const track = $derived(live.snap?.session.track ?? "");
   const teammates = $derived(config.value.general.teammates);
 
@@ -75,13 +76,16 @@
   );
 </script>
 
-<div class="hud p-1">
+<div class={[showFrame ? "hud p-1" : "p-1 drop-shadow-[0_2px_8px_rgb(0_0_0/0.95)]"]}>
   <svg width={size} height={size} viewBox="0 0 {size} {size}">
     {#if outline.length > 2}
-      <path d={path} fill="none" stroke="rgb(255 255 255 / 0.18)" stroke-width="7" stroke-linejoin="round" />
-      <path d={path} fill="none" stroke="rgb(255 255 255 / 0.55)" stroke-width="2" stroke-linejoin="round" />
+      {#if !showFrame}
+        <path d={path} fill="none" stroke="rgb(0 0 0 / 0.8)" stroke-width="9" stroke-linejoin="round" />
+      {/if}
+      <path d={path} fill="none" stroke="rgb(255 255 255 / 0.22)" stroke-width="7" stroke-linejoin="round" />
+      <path d={path} fill="none" stroke="rgb(255 255 255 / 0.68)" stroke-width="2" stroke-linejoin="round" />
     {:else}
-      <text x={size / 2} y={size / 2} text-anchor="middle" fill="rgb(255 255 255 / 0.4)" font-size="11"
+      <text x={size / 2} y={size / 2} text-anchor="middle" fill="rgb(255 255 255 / 0.6)" font-size="11"
         >El mapa se genera tras 1 vuelta</text
       >
     {/if}

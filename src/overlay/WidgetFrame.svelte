@@ -9,6 +9,34 @@
 
   let dragging = $state(false);
   let start = { px: 0, py: 0, x: 0, y: 0 };
+  let frameEl: HTMLDivElement | undefined = $state();
+  let vpW = $state(typeof window !== "undefined" ? window.innerWidth : 1920);
+  let vpH = $state(typeof window !== "undefined" ? window.innerHeight : 1080);
+
+  $effect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => {
+      vpW = window.innerWidth || 1920;
+      vpH = window.innerHeight || 1080;
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  });
+
+  const scaleVal = $derived(g.scale * cfg.size);
+  const clampedX = $derived.by(() => {
+    if (dragging) return cfg.x;
+    const w = (frameEl?.offsetWidth || 180) * scaleVal;
+    const maxX = Math.max(0, vpW - Math.min(w, vpW - 20));
+    return Math.max(0, Math.min(cfg.x, maxX));
+  });
+  const clampedY = $derived.by(() => {
+    if (dragging) return cfg.y;
+    const h = (frameEl?.offsetHeight || 60) * scaleVal;
+    const maxY = Math.max(0, vpH - Math.min(h, vpH - 20));
+    return Math.max(0, Math.min(cfg.y, maxY));
+  });
 
   function snap(v: number) {
     const s = config.value.general.snap || 1;
@@ -18,6 +46,8 @@
   function onPointerDown(e: PointerEvent) {
     if (!edit || e.button !== 0) return;
     dragging = true;
+    cfg.x = clampedX;
+    cfg.y = clampedY;
     start = { px: e.clientX, py: e.clientY, x: cfg.x, y: cfg.y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -48,10 +78,11 @@
 </script>
 
 <div
+  bind:this={frameEl}
   class="absolute top-0 left-0 origin-top-left"
   class:cursor-move={edit}
   class:z-10={dragging}
-  style:transform="translate({cfg.x}px, {cfg.y}px) scale({g.scale * cfg.size})"
+  style:transform="translate({clampedX}px, {clampedY}px) scale({scaleVal})"
   style:opacity={g.opacity * cfg.alpha}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}

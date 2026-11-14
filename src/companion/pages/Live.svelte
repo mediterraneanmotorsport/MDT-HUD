@@ -289,23 +289,60 @@
             </div>
             <div class="mt-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11px] leading-snug text-warn">
               ⚠️ <b>En tu móvil NO escribas <code class="font-mono">localhost</code></b>: escribe exactamente
-              <b class="font-mono text-white underline">{wheelControl.lanIps[0] ? `http://${wheelControl.lanIps[0]}:1420` : activeQrUrl}</b>
+              <b class="font-mono text-white underline">{wheelControl.selectedIp ? `http://${wheelControl.selectedIp}:1420` : activeQrUrl}</b>
               en Chrome/Safari de tu teléfono (conectado al mismo Wi-Fi).
             </div>
-            {#if wheelControl.lanIps.length > 1}
+
+            {#if wheelControl.lanIps.length > 0}
               <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                <span>IPs:</span>
+                <span>IP de tu PC:</span>
                 {#each wheelControl.lanIps as ip}
                   <button
-                    class="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[11px] text-fg hover:text-[#62b0ff]"
-                    onclick={() => {
-                      wheelControl.mobileUrl = `http://${ip}:1420/#mobile`;
-                      wheelControl.pitwallUrl = `http://${ip}:1420/#pitwall`;
-                    }}
+                    class={[
+                      "rounded px-2 py-0.5 font-mono text-[11px] font-bold transition",
+                      wheelControl.selectedIp === ip
+                        ? "bg-accent text-white shadow"
+                        : "bg-black/40 text-fg hover:text-[#62b0ff]",
+                    ]}
+                    onclick={() => wheelControl.selectIp(ip)}
+                    title="Usar esta dirección IP para el código QR y enlace móvil"
                   >{ip}</button>
                 {/each}
+                <button
+                  class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-muted hover:bg-white/10 hover:text-white"
+                  onclick={() => wheelControl.fetchMobileInfo()}
+                  title="Detectar de nuevo la IP Wi-Fi/LAN de este PC"
+                >↻ Actualizar IP</button>
               </div>
             {/if}
+
+            <!-- Estado del Firewall de Windows + Botón de Apertura en 1 Clic -->
+            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-[11px]">
+              {#if wheelControl.firewallOpen}
+                <span class="flex items-center gap-1.5 text-good font-semibold">
+                  <span>🟢 Firewall Windows: Puerto 1420 abierto</span>
+                </span>
+                <button
+                  class="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted hover:bg-white/10 hover:text-white disabled:opacity-40"
+                  disabled={wheelControl.firewallBusy}
+                  onclick={() => wheelControl.openFirewall()}
+                  title="Volver a aplicar la regla del Firewall de Windows si tu móvil no conecta"
+                >
+                  {wheelControl.firewallBusy ? "Abriendo puerto..." : "🛡️ Reparar Firewall Wi-Fi"}
+                </button>
+              {:else}
+                <span class="flex items-center gap-1.5 text-warn font-semibold">
+                  <span>🟠 Firewall de Windows bloquea la conexión del móvil</span>
+                </span>
+                <button
+                  class="rounded bg-accent px-2.5 py-1 text-[11px] font-bold text-white shadow hover:brightness-110 disabled:opacity-40"
+                  disabled={wheelControl.firewallBusy}
+                  onclick={() => wheelControl.openFirewall()}
+                >
+                  {wheelControl.firewallBusy ? "Autorizando..." : "🛡️ Permitir Wi-Fi en Firewall (1 Clic)"}
+                </button>
+              {/if}
+            </div>
           </div>
           <div class="mt-2 text-[11px] text-muted">
             💡 Desliza el dedo (<b>Swipe</b>) a izquierda/derecha en el móvil o usa los botones del volante para cambiar de pantalla.

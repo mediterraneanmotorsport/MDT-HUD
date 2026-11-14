@@ -65,8 +65,8 @@
 
 {#if show}
   {#each WIDGETS as meta (meta.id)}
-    {@const cfg = config.value.widgets[meta.id]}
-    {#if cfg?.enabled}
+    {@const cfg = config.revision >= 0 ? config.value.widgets[meta.id] : config.value.widgets[meta.id]}
+    {#if cfg && cfg.enabled}
       {@const Widget = COMPONENTS[meta.id]}
       <WidgetFrame id={meta.id} name={meta.name} {edit}>
         <Widget opts={cfg.options} units={config.value.general.units} {edit} />

@@ -26,6 +26,11 @@ export const api = {
   latestRelease: () => invoke<{ version: string; notes: string }>("latest_release"),
   getConfig: () => invoke<unknown>("get_config"),
   saveConfig: (config: unknown) => invoke<void>("save_config", { config }),
+  getMobileNetworkInfo: () =>
+    invoke<{ ips: string[]; port: number; url: string; pitwallUrl: string; firewallOpen: boolean }>(
+      "get_mobile_network_info",
+    ),
+  openMobileFirewall: () => invoke<boolean>("open_mobile_firewall"),
   setEditMode: (enabled: boolean) => invoke<void>("set_edit_mode", { enabled }),
   setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
   setDemoMode: (enabled: boolean) => invoke<void>("set_demo_mode", { enabled }),

@@ -1,4 +1,4 @@
-import { isNativeTauri } from "./api";
+import { api, isNativeTauri } from "./api";
 import { applyCompleteOverlayTheme, type PresetThemeId } from "./config.svelte";
 import type { Snapshot } from "./types";
 
@@ -185,14 +185,17 @@ class WheelController {
   mobileUrl = $state(
     typeof window !== "undefined" && location.hostname && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"
       ? `http://${location.hostname}:1420/#mobile`
-      : "http://192.168.1.112:1420/#mobile",
+      : "http://127.0.0.1:1420/#mobile",
   );
   pitwallUrl = $state(
     typeof window !== "undefined" && location.hostname && location.hostname !== "localhost" && location.hostname !== "127.0.0.1"
       ? `http://${location.hostname}:1420/#pitwall`
-      : "http://192.168.1.112:1420/#pitwall",
+      : "http://127.0.0.1:1420/#pitwall",
   );
-  lanIps = $state<string[]>(["192.168.1.112"]);
+  lanIps = $state<string[]>([]);
+  selectedIp = $state<string>("");
+  firewallOpen = $state<boolean>(true);
+  firewallBusy = $state<boolean>(false);
   lastPressedInfo = $state<string>("");
 
   private channel: BroadcastChannel | null = null;
@@ -379,6 +382,9 @@ class WheelController {
     if (!isClientView && !isOverlayWindow) {
       // Only the PC Companion pushes initial config on startup
       this.syncConfigToServer();
+      setInterval(() => {
+        void this.fetchMobileInfo();
+      }, 5000);
     }
 
     if ("BroadcastChannel" in window) {
@@ -529,16 +535,56 @@ class WheelController {
     }
   }
 
+  selectIp(ip: string) {
+    this.selectedIp = ip;
+    this.mobileUrl = `http://${ip}:1420/#mobile`;
+    this.pitwallUrl = `http://${ip}:1420/#pitwall`;
+  }
+
+  async openFirewall(): Promise<boolean> {
+    if (this.firewallBusy) return this.firewallOpen;
+    this.firewallBusy = true;
+    try {
+      if (isNativeTauri()) {
+        const ok = await api.openMobileFirewall();
+        this.firewallOpen = ok;
+      }
+      await this.fetchMobileInfo();
+      return this.firewallOpen;
+    } catch {
+      return false;
+    } finally {
+      this.firewallBusy = false;
+    }
+  }
+
   async fetchMobileInfo() {
     try {
-      const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_info`, { cache: "no-store" });
-      if (res.ok && res.headers.get("content-type")?.includes("json")) {
-        const info = await res.json();
-        if (info.url) {
+      let info: { ips?: string[]; port?: number; url?: string; pitwallUrl?: string; firewallOpen?: boolean } | null = null;
+      if (isNativeTauri()) {
+        info = await api.getMobileNetworkInfo().catch(() => null);
+      }
+      if (!info) {
+        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_info`, { cache: "no-store" });
+        if (res.ok && res.headers.get("content-type")?.includes("json")) {
+          info = await res.json();
+        }
+      }
+      if (info) {
+        if (typeof info.firewallOpen === "boolean") {
+          this.firewallOpen = info.firewallOpen;
+        }
+        if (Array.isArray(info.ips) && info.ips.length > 0) {
+          this.lanIps = info.ips;
+          const activeIp = this.selectedIp && info.ips.includes(this.selectedIp) ? this.selectedIp : info.ips[0];
+          this.selectedIp = activeIp;
+          const port = info.port || 1420;
+          this.mobileUrl = `http://${activeIp}:${port}/#mobile`;
+          this.pitwallUrl = `http://${activeIp}:${port}/#pitwall`;
+        } else if (info.url) {
           this.mobileUrl = info.url;
           this.pitwallUrl = info.url.replace("#mobile", "#pitwall");
         }
-        if (Array.isArray(info.ips)) this.lanIps = info.ips;
       }
     } catch {
       // ignore

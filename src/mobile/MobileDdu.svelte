@@ -765,6 +765,12 @@
                   <span>Medidor de fuerza FFB</span>
                   <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showFfb} onchange={saveConfig} />
                 </label>
+                {#if wCfg.trackmap}
+                  <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs sm:col-span-2">
+                    <span>Mostrar recuadro de fondo en el Mapa del circuito</span>
+                    <input type="checkbox" class="accent-accent" bind:checked={wCfg.trackmap.options.showFrame} onchange={saveConfig} />
+                  </label>
+                {/if}
               </div>
             </div>
           {/if}

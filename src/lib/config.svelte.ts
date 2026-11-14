@@ -514,10 +514,11 @@ export const WIDGETS: WidgetMeta[] = [
     description: "Trazado del circuito con posición en vivo de todos los coches y compañeros MDT.",
     defaults: { enabled: true, x: 1640, y: 790 },
     options: [
+      { key: "showFrame", label: "Mostrar recuadro de fondo", type: "boolean" },
       { key: "size", label: "Tamaño (px)", type: "number", min: 120, max: 500, step: 10 },
       { key: "classColors", label: "Colorear por categoría", type: "boolean" },
     ],
-    optionDefaults: { size: 240, classColors: true },
+    optionDefaults: { showFrame: true, size: 240, classColors: true },
   },
   {
     id: "weather",
@@ -742,7 +743,6 @@ export const config = new ConfigStore();
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let started = false;
-let lastSaved = "";
 let lastRemoteConfigStr = "";
 let lastLocalSaveAt = 0;
 
@@ -805,13 +805,13 @@ export async function loadConfig() {
   await listen<unknown>("config-changed", (e) => {
     const next = merge(e.payload);
     const s = JSON.stringify(next);
-    if (s === lastSaved) return;
     lastRemoteConfigStr = s;
     applyMergedInPlace(next);
     applyTheme(config.value.general);
   });
   const initial = merge(await api.getConfig());
-  lastRemoteConfigStr = JSON.stringify(initial);
+  const initialStr = JSON.stringify(initial);
+  lastRemoteConfigStr = initialStr;
   applyMergedInPlace(initial);
   applyTheme(config.value.general);
   config.loaded = true;
@@ -831,6 +831,7 @@ function syncActiveProfile() {
 /** Persists the current config (debounced) and broadcasts it to the other window and mobile server. */
 export function saveConfig() {
   lastLocalSaveAt = Date.now();
+  syncActiveProfile();
   config.revision += 1;
   applyTheme(config.value.general);
   clearTimeout(saveTimer);
@@ -839,24 +840,21 @@ export function saveConfig() {
     syncActiveProfile();
     const snapshot = $state.snapshot(config.value);
     const serialized = JSON.stringify(snapshot);
-    lastSaved = serialized;
     lastRemoteConfigStr = serialized;
     if (isNativeTauri()) {
       api.saveConfig(snapshot);
-    }
-    if (typeof window !== "undefined") {
-      const base = isNativeTauri() && location.port !== "1420" ? "http://127.0.0.1:1420" : "";
+    } else if (typeof window !== "undefined") {
       const body: Record<string, any> = { appConfig: snapshot };
       if (snapshot.general.theme !== "custom" && snapshot.general.theme in HUD_THEMES) {
         body.mobileTheme = snapshot.general.theme;
       }
-      void fetch(`${base}/__mobile_state`, {
+      void fetch("/__mobile_state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      }).catch(() => {});
+      }).catch(() => { });
     }
-  }, 30);
+  }, 20);
 }
 
 export function resetLayout() {

@@ -112,7 +112,23 @@ pub fn save_config(app: AppHandle, state: State<AppState>, config: Value) -> Cmd
     if moved {
         crate::place_overlay(&app, monitor).map_err(|e| e.to_string())?;
     }
+    if state.overlay_visible.load(Ordering::Acquire) {
+        if let Some(overlay) = app.get_webview_window("overlay") {
+            let _ = overlay.show();
+            let _ = overlay.set_always_on_top(true);
+        }
+    }
     app.emit("config-changed", &config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_mobile_network_info() -> crate::mobile_server::MobileNetworkInfo {
+    crate::mobile_server::get_network_info()
+}
+
+#[tauri::command]
+pub fn open_mobile_firewall() -> CmdResult<bool> {
+    crate::mobile_server::open_firewall_port()
 }
 
 pub fn apply_edit_mode(app: &AppHandle, enabled: bool) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.3...v1.0.4) (2026-11-14)
+
+### Features & Bug Fixes
+
+* **Opción de Mapa del Circuito sin Recuadro (`showFrame`)**: añadido el interruptor «Mostrar recuadro de fondo» en las opciones del complemento **Mapa del circuito** (y en el menú ⚙️ Configurar del DDU Móvil) para poder mostrar únicamente la silueta del circuito y los coches flotando con contorno de alto contraste sin caja de fondo
+* **Corrección de Complementos del Overlay al Desactivar y Volver a Activar**: solucionado el bloqueo por filtro `lastSaved` y la doble escritura asíncrona en `saveConfig()`, garantizando que cualquier complemento reaparezca al instante al reactivarlo, e incorporado auto-ajuste dentro de los bordes del monitor (`WidgetFrame`) para que ningún complemento quede fuera de pantalla en monitores 1080p o con escalado DPI
+* **Conexión Wi-Fi del Dashboard Móvil para Todos los Usuarios + Firewall en 1 Clic**: eliminada la IP por defecto estática, añadida detección multi-interfaz (`ipconfig` + rutas LAN priorizando `192.168.x.x` frente a VPNs/adaptadores virtuales), selector de IPs en vivo y apertura automática / botón de 1 clic para autorizar el puerto TCP `1420` en el **Firewall de Windows Defender**
+
 ## [1.0.3](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.2...v1.0.3) (2026-11-14)
 
 ### Features & Bug Fixes

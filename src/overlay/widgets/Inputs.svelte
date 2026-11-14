@@ -15,6 +15,12 @@
   let lastTime = NaN;
 
   $effect(() => {
+    if (canvas && width) {
+      draw(live.snap?.player?.elapsedTime ?? 0);
+    }
+  });
+
+  $effect(() => {
     const snap = live.snap;
     const p = snap?.player;
     if (!snap || !p || p.elapsedTime === lastTime) return;
