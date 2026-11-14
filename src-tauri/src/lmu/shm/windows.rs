@@ -52,6 +52,7 @@ impl OwnedEvent {
             .map(OwnedEvent)
     }
 
+    #[allow(dead_code)]
     fn wait(&self, timeout_ms: u32) -> bool {
         unsafe { WaitForSingleObject(self.0, timeout_ms) == WAIT_OBJECT_0 }
     }
@@ -190,16 +191,13 @@ impl LmuSharedMemory {
         }
     }
 
-    /// Blocks until the game publishes a new frame. Returns `false` on timeout.
-    /// Older game builds have no events; then this just sleeps ~60 Hz.
-    pub fn wait_for_frame(&self, timeout_ms: u32) -> bool {
-        match (&self.hold_event, &self.data_event) {
-            (Some(hold), Some(data)) => hold.wait(timeout_ms) && data.wait(timeout_ms),
-            _ => {
-                std::thread::sleep(std::time::Duration::from_millis(16));
-                true
-            }
-        }
+    /// Sleeps ~60 Hz between shared memory reads. `copy_into` synchronizes
+    /// with the game's spin lock (`LMU_SharedMemoryLockData`), avoiding 250ms
+    /// stalls on `LMU_Data_HoldEvent` in newer LMU builds.
+    pub fn wait_for_frame(&self, _timeout_ms: u32) -> bool {
+        let _ = (&self.hold_event, &self.data_event);
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        true
     }
 
     /// Copies the whole block into `dst` while holding the game's lock.

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import {
+    applyRemoteConfig,
     applyThemeToElement,
     config,
     HUD_THEMES,
@@ -48,8 +49,13 @@
   let prevInPits: boolean | null = null;
   let prevCutPts = -1;
   let prevTc = -1;
+  let prevTcSlip = -1;
+  let prevTcCut = -1;
   let prevAbs = -1;
   let prevMap = -1;
+  let prevMig = -1;
+  let prevFArb = -1;
+  let prevRArb = -1;
   let prevBb = "";
 
   // Touch swipe tracking (Item 1)
@@ -99,9 +105,9 @@
       return;
     }
 
-    const dentSum = p.dents.reduce((a, b) => a + b, 0) + (p.detachedParts ? 10 : 0);
+    const dentSum = p.dents.reduce((a, b) => a + b, 0) + (p.detached ? 10 : 0);
     const inPits = !!p.inPits;
-    const cutPts = s?.penalties?.cutTrackPoints ?? 0;
+    const cutPts = p.trackLimitsSteps ?? 0;
     const bbStr = (p.brakeBiasFront * 100).toFixed(1);
 
     if (wheelControl.autoPopups) {
@@ -114,10 +120,22 @@
       }
 
       if (prevTc >= 0) {
-        if (p.tc !== prevTc) triggerRotaryPopup("CONTROL TRACCIÓN (TC)", `${p.tc} / ${p.tcMax}`, "#f59e0b");
-        else if (p.abs !== prevAbs) triggerRotaryPopup("ABS", `${p.abs} / ${p.absMax}`, "#38bdf8");
-        else if (p.motorMap !== prevMap) triggerRotaryPopup("MAPA MOTOR", `${p.motorMap} / ${p.motorMapMax}`, "#22c55e");
-        else if (bbStr !== prevBb) triggerRotaryPopup("REPARTO FRENADA (BB)", `${bbStr}%`, "#ef4444");
+        if (p.tc !== prevTc)
+          triggerRotaryPopup("CONTROL TRACCIÓN (TC)", p.tcMax > 0 ? `${p.tc} / ${p.tcMax}` : `${p.tc}`, "#f59e0b");
+        else if (p.tcSlip !== prevTcSlip)
+          triggerRotaryPopup("TC SLIP", `${p.tcSlip}`, "#f59e0b");
+        else if (p.tcCut !== prevTcCut)
+          triggerRotaryPopup("TC CUT", `${p.tcCut}`, "#f59e0b");
+        else if (p.abs !== prevAbs)
+          triggerRotaryPopup("ABS", p.absMax > 0 ? `${p.abs} / ${p.absMax}` : `${p.abs}`, "#38bdf8");
+        else if (p.motorMap !== prevMap)
+          triggerRotaryPopup("MAPA MOTOR (MAP)", p.motorMapMax > 0 ? `${p.motorMap} / ${p.motorMapMax}` : `${p.motorMap}`, "#22c55e");
+        else if (bbStr !== prevBb)
+          triggerRotaryPopup("REPARTO FRENADA (BB)", `${bbStr}%`, "#ef4444");
+        else if (p.migration !== prevMig)
+          triggerRotaryPopup("MIGRACIÓN FRENADA (MIG)", `${p.migration}`, "#ef4444");
+        else if (p.frontArb !== prevFArb || p.rearArb !== prevRArb)
+          triggerRotaryPopup("BARRAS ARB DEL / TRAS", `${p.frontArb} / ${p.rearArb}`, "#38bdf8");
       }
     }
 
@@ -125,8 +143,13 @@
     prevInPits = inPits;
     prevCutPts = cutPts;
     prevTc = p.tc;
+    prevTcSlip = p.tcSlip;
+    prevTcCut = p.tcCut;
     prevAbs = p.abs;
     prevMap = p.motorMap;
+    prevMig = p.migration;
+    prevFArb = p.frontArb;
+    prevRArb = p.rearArb;
     prevBb = bbStr;
   }
 
@@ -155,9 +178,9 @@
   }
 
   $effect(() => {
-    const _page = wheelControl.pageIndex;
-    const _override = overridePageId;
-    const _pagesLen = wheelControl.enabledPageIds.length;
+    void wheelControl.pageIndex;
+    void overridePageId;
+    void wheelControl.enabledPageIds.length;
     flashBadge();
     requestAnimationFrame(() => {
       recomputeScale();
@@ -184,49 +207,68 @@
     window.addEventListener("resize", recomputeScale);
     window.addEventListener("orientationchange", recomputeScale);
 
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.snap) {
-          remoteSnap = data.snap;
-        } else if (!live.snap?.player) {
-          const demo = await api.getPreviewSnapshot().catch(() => null);
-          if (demo) fallbackDemoSnap = demo;
+    let mounted = true;
+    const pollState = async () => {
+      while (mounted) {
+        const t0 = performance.now();
+        try {
+          const ctrl = new AbortController();
+          const timeoutId = setTimeout(() => ctrl.abort(), 1200);
+          const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
+            cache: "no-store",
+            signal: ctrl.signal,
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.appConfig) {
+              applyRemoteConfig(data.appConfig);
+            }
+            if (data.snap) {
+              remoteSnap = data.snap;
+              live.snap = data.snap;
+            } else if (!live.snap?.player) {
+              const demo = await api.getPreviewSnapshot().catch(() => null);
+              if (demo) fallbackDemoSnap = demo;
+            }
+            if (typeof data.configSeq === "number" && data.configSeq !== lastConfigSeq) {
+              lastConfigSeq = data.configSeq;
+              if (Array.isArray(data.pages) && data.pages.length > 0) {
+                wheelControl.enabledPageIds = data.pages;
+              }
+              if (typeof data.mobileTheme === "string") {
+                wheelControl.mobileTheme = data.mobileTheme;
+              }
+              if (typeof data.autoPopups === "boolean") {
+                wheelControl.autoPopups = data.autoPopups;
+              }
+            }
+            if (typeof data.pageSeq === "number" && data.pageSeq !== lastSeq) {
+              lastSeq = data.pageSeq;
+              const len = wheelControl.activePages.length;
+              if (typeof data.page === "number" && data.page !== wheelControl.pageIndex) {
+                wheelControl.pageIndex = ((data.page % len) + len) % len;
+                overridePageId = null;
+              }
+            }
+            recomputeScale();
+          }
+        } catch {
+          // ignore
         }
-        if (typeof data.configSeq === "number" && data.configSeq !== lastConfigSeq) {
-          lastConfigSeq = data.configSeq;
-          if (Array.isArray(data.pages) && data.pages.length > 0) {
-            wheelControl.enabledPageIds = data.pages;
-          }
-          if (typeof data.mobileTheme === "string") {
-            wheelControl.mobileTheme = data.mobileTheme;
-          }
-          if (typeof data.autoPopups === "boolean") {
-            wheelControl.autoPopups = data.autoPopups;
-          }
-        }
-        if (typeof data.pageSeq === "number" && data.pageSeq !== lastSeq) {
-          lastSeq = data.pageSeq;
-          const len = wheelControl.activePages.length;
-          if (typeof data.page === "number" && data.page !== wheelControl.pageIndex) {
-            wheelControl.pageIndex = ((data.page % len) + len) % len;
-            overridePageId = null;
-          }
-        }
-        recomputeScale();
-      } catch {
-        // ignore
+        const elapsed = performance.now() - t0;
+        const waitMs = Math.max(16, 30 - elapsed);
+        await new Promise((r) => setTimeout(r, waitMs));
       }
-    }, 55);
+    };
+    void pollState();
 
     if ("wakeLock" in navigator) {
       (navigator as any).wakeLock?.request("screen").catch(() => {});
     }
 
     return () => {
-      clearInterval(timer);
+      mounted = false;
       ro.disconnect();
       window.removeEventListener("resize", recomputeScale);
       window.removeEventListener("orientationchange", recomputeScale);
@@ -362,69 +404,39 @@
     style="transform: scale({autoScale}); transform-origin: center center;"
   >
     {#if effectivePageId === "dashboard"}
-      <Dashboard
-        opts={{
-          ...(wCfg.dashboard?.options ?? {}),
-          style: activeThemeMeta.dashboardStyle,
-          rpmStyle: activeThemeMeta.rpmStyle,
-          showMdtLogo: true,
-          showPedals: true,
-          showSteeringWheel: true,
-          showIndicators: true,
-          showBattery: true,
-          showSettings: true,
-        }}
-        {units}
-        edit={true}
-      />
+      <Dashboard opts={wCfg.dashboard?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "relative"}
-      <Relative
-        opts={{ ...(wCfg.relative?.options ?? {}), ahead: 4, behind: 4, showPaceDiff: true, showEnergy: true }}
-        {units}
-        edit={true}
-      />
+      <Relative opts={wCfg.relative?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "standings"}
       <Standings
-        opts={{ ...(wCfg.standings?.options ?? {}), showBranding: true, maxRows: 8, maxRowsOther: 4 }}
+        opts={{ ...(wCfg.standings?.options ?? {}), maxRows: 8, maxRowsOther: 4 }}
         {units}
-        edit={true}
+        edit={false}
       />
     {:else if effectivePageId === "damage"}
-      <Damage opts={{ ...(wCfg.damage?.options ?? {}), showCar: true }} {units} edit={true} />
+      <Damage opts={{ ...(wCfg.damage?.options ?? {}), showCar: true }} {units} edit={false} />
     {:else if effectivePageId === "tyres"}
-      <Tyres
-        opts={{ ...(wCfg.tyres?.options ?? {}), showWearRate: true, showLapsLeft: true, showBrakes: true }}
-        {units}
-        edit={true}
-      />
+      <Tyres opts={wCfg.tyres?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "fuel"}
-      <Fuel
-        opts={{ ...(wCfg.fuel?.options ?? {}), showPitAlert: true, showLast: true, showSaver: true, saverResource: "auto" }}
-        {units}
-        edit={true}
-      />
+      <Fuel opts={wCfg.fuel?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "liftcoast"}
-      <LiftCoast opts={{ ...(wCfg.liftcoast?.options ?? {}), showRegen: true }} {units} edit={true} />
+      <LiftCoast opts={wCfg.liftcoast?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "pacecatch"}
-      <PaceCatch opts={{ ...(wCfg.pacecatch?.options ?? {}), sameClassOnly: true, showLastLap: true }} {units} edit={true} />
+      <PaceCatch opts={wCfg.pacecatch?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "tracklimits"}
-      <TrackLimits opts={{ ...(wCfg.tracklimits?.options ?? {}), showAlways: true }} {units} edit={true} />
+      <TrackLimits opts={{ ...(wCfg.tracklimits?.options ?? {}), showAlways: true }} {units} edit={false} />
     {:else if effectivePageId === "electronics"}
-      <Electronics opts={wCfg.electronics?.options ?? {}} {units} edit={true} />
+      <Electronics opts={wCfg.electronics?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "laptiming"}
-      <LapTiming opts={{ ...(wCfg.laptiming?.options ?? {}), showSectors: true }} {units} edit={true} />
+      <LapTiming opts={wCfg.laptiming?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "radar"}
-      <Radar opts={{ ...(wCfg.radar?.options ?? {}), range: 14, autoHide: false, showRings: true }} {units} edit={true} />
+      <Radar opts={{ ...(wCfg.radar?.options ?? {}), autoHide: false }} {units} edit={false} />
     {:else if effectivePageId === "trackmap"}
-      <TrackMap opts={{ ...(wCfg.trackmap?.options ?? {}), size: 280, classColors: true }} {units} edit={true} />
+      <TrackMap opts={wCfg.trackmap?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "inputs"}
-      <Inputs
-        opts={{ ...(wCfg.inputs?.options ?? {}), seconds: 6, showSteering: true, showPedals: true, width: 340 }}
-        {units}
-        edit={true}
-      />
+      <Inputs opts={wCfg.inputs?.options ?? {}} {units} edit={false} />
     {:else if effectivePageId === "stintplanner"}
-      <StintPlanner opts={wCfg.stintplanner?.options ?? {}} {units} edit={true} />
+      <StintPlanner opts={wCfg.stintplanner?.options ?? {}} {units} edit={false} />
     {/if}
   </div>
 

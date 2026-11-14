@@ -271,10 +271,19 @@ impl DemoSim {
             }
         }
 
-        let gear = ((speed / 88.0) * 7.0).ceil().clamp(1.0, 7.0) as i32;
-        let gear_low = (gear - 1) as f64 * 88.0 / 7.0;
-        let rpm = 4500.0 + (speed - gear_low) / (88.0 / 7.0) * 4000.0;
-        let steering = (curvature * 18.0).clamp(-1.0, 1.0);
+        // Modulate speed through braking zones so gears 2..7 shift realistically in demo mode.
+        let corner_wave = ((self.time * 0.45).sin() * 0.5 + 0.5).powi(2);
+        let eff_speed = (speed * (0.42 + 0.58 * corner_wave)).clamp(24.0, 88.0);
+        let gear = (((eff_speed - 20.0) / 68.0) * 6.0 + 1.0).round().clamp(1.0, 7.0) as i32;
+        let gear_span = 68.0 / 6.0;
+        let gear_low = 20.0 + (gear - 1) as f64 * gear_span;
+        let rpm = (4800.0 + ((eff_speed - gear_low) / gear_span).clamp(0.0, 1.0) * 3950.0).clamp(4200.0, 8750.0);
+        let steering = (curvature * 18.0 + (self.time * 0.9).sin() * 0.18).clamp(-1.0, 1.0);
+        let demo_phase = (self.time / 6.0) as u8;
+        let demo_tc = 4 + (demo_phase % 4);
+        let demo_abs = 3 + ((demo_phase / 2) % 4);
+        let demo_map = 1 + (demo_phase % 3);
+        let demo_bb = 0.555 + ((demo_phase % 5) as f64) * 0.005;
 
         let tyre = |base: f64, offset: f64, wear: f64| -> Wheel {
             let t = base + offset + (self.time * 0.3 + offset).sin() * 3.0;
@@ -304,7 +313,7 @@ impl DemoSim {
             lap_dist: self.progress,
             sector: if self.progress < len / 3.0 { 1 } else if self.progress < len * 2.0 / 3.0 { 2 } else { 3 },
             in_pits: false,
-            speed,
+            speed: eff_speed,
             gear,
             max_gears: 7,
             rpm,
@@ -336,20 +345,20 @@ impl DemoSim {
             track_limits_steps_per_penalty: 20,
             track_limits_steps_per_point: 4,
             lift_and_coast: 0.0,
-            tc: 4,
+            tc: demo_tc,
             tc_max: 11,
-            tc_slip: 3,
-            tc_cut: 2,
-            abs: 0,
-            abs_max: 0,
-            tc_active: throttle > 0.9 && speed < 40.0,
-            abs_active: false,
-            motor_map: 2,
+            tc_slip: 3 + (demo_phase % 3),
+            tc_cut: 2 + (demo_phase % 3),
+            abs: demo_abs,
+            abs_max: 12,
+            tc_active: throttle > 0.85 && eff_speed < 48.0,
+            abs_active: brake > 0.65,
+            motor_map: demo_map,
             motor_map_max: 5,
-            migration: 3,
+            migration: 2 + (demo_phase % 3),
             front_arb: 3,
             rear_arb: 2,
-            brake_bias_front: 0.565,
+            brake_bias_front: demo_bb,
             speed_limiter: false,
             headlights: false,
             wipers: 0,

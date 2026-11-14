@@ -77,7 +77,7 @@
   {@const win = windowBadge(w)}
   <div class={["flex items-center justify-center gap-1 text-center text-[11px] leading-none", w.flat ? "font-bold text-bad" : "text-muted"]} title="Presión y ventana térmica">
     {#if w.flat}
-      FLAT
+      PINCHADO
     {:else}
       <span>{pressure(w.pressure, units).toFixed(units === "imperial" ? 1 : 0)}<span class="ml-px text-[9px]">{pressureUnit(units)}</span></span>
       <span class={["rounded border px-1 py-px text-[8px] font-extrabold", win.cls]}>{win.label}</span>

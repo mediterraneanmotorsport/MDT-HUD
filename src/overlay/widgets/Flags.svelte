@@ -97,7 +97,7 @@
       {/if}
     {/each}
     {#if edit && !view.banners.length && !view.lights}
-      <div class="hud px-4 py-2 text-[17px] font-bold text-muted">Flags</div>
+      <div class="hud px-4 py-2 text-[17px] font-bold text-muted">Banderas</div>
     {/if}
   </div>
 {/if}

@@ -1,4 +1,4 @@
-import type { PresetThemeId } from "./config.svelte";
+import { applyCompleteOverlayTheme, applyRemoteConfig, config, type PresetThemeId } from "./config.svelte";
 import type { Snapshot } from "./types";
 
 export type MfdPageId =
@@ -161,7 +161,7 @@ const STORAGE_KEY = "mdt_wheel_mfd_v3";
 
 export const MOBILE_SERVER_BASE =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && location.port !== "1420"
-    ? "http://localhost:1420"
+    ? "http://127.0.0.1:1420"
     : "";
 
 class WheelController {
@@ -347,9 +347,12 @@ class WheelController {
     this.syncConfigToServer();
   }
 
-  setMobileTheme(theme: PresetThemeId) {
+  setMobileTheme(theme: PresetThemeId, syncPcTheme = true) {
     this.mobileTheme = theme;
     this.syncConfigToServer();
+    if (syncPcTheme && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      applyCompleteOverlayTheme(theme, true);
+    }
   }
 
   setAutoPopups(val: boolean) {
@@ -370,8 +373,10 @@ class WheelController {
       location.pathname === "/dash" ||
       /android|iphone|ipod/i.test(navigator.userAgent);
 
-    if (!isClientView) {
-      // Only the PC Companion/Overlay pushes initial config on startup
+    const isOverlayWindow = location.hash.startsWith("#overlay");
+
+    if (!isClientView && !isOverlayWindow) {
+      // Only the PC Companion pushes initial config on startup
       this.syncConfigToServer();
     }
 
@@ -391,111 +396,122 @@ class WheelController {
       };
     }
 
-    window.addEventListener("keydown", (e) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLSelectElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-      if (this.learning) {
-        e.preventDefault();
-        if (e.key === "Escape") {
-          this.learning = null;
+    if (!isOverlayWindow) {
+      window.addEventListener("keydown", (e) => {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLSelectElement ||
+          e.target instanceof HTMLTextAreaElement
+        ) {
           return;
         }
-        const bind: WheelButtonBind = {
-          kind: "key",
-          key: e.code || e.key,
-          label: `Tecla ${e.key.toUpperCase()}`,
-        };
-        if (this.learning === "next") this.nextBind = bind;
-        else this.prevBind = bind;
-        this.learning = null;
-        this.saveStored();
-        return;
-      }
+        if (this.learning) {
+          e.preventDefault();
+          if (e.key === "Escape") {
+            this.learning = null;
+            return;
+          }
+          const bind: WheelButtonBind = {
+            kind: "key",
+            key: e.code || e.key,
+            label: `Tecla ${e.key.toUpperCase()}`,
+          };
+          if (this.learning === "next") this.nextBind = bind;
+          else this.prevBind = bind;
+          this.learning = null;
+          this.saveStored();
+          return;
+        }
 
-      if (this.nextBind?.kind === "key" && (e.code === this.nextBind.key || e.key === this.nextBind.key)) {
-        e.preventDefault();
-        this.nextPage();
-      } else if (this.prevBind?.kind === "key" && (e.code === this.prevBind.key || e.key === this.prevBind.key)) {
-        e.preventDefault();
-        this.prevPage();
-      }
-    });
+        if (this.nextBind?.kind === "key" && (e.code === this.nextBind.key || e.key === this.nextBind.key)) {
+          e.preventDefault();
+          this.nextPage();
+        } else if (this.prevBind?.kind === "key" && (e.code === this.prevBind.key || e.key === this.prevBind.key)) {
+          e.preventDefault();
+          this.prevPage();
+        }
+      });
 
-    const pollGamepads = () => {
-      if (typeof navigator !== "undefined" && "getGamepads" in navigator) {
-        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const names: string[] = [];
-        for (let gi = 0; gi < pads.length; gi++) {
-          const pad = pads[gi];
-          if (!pad) continue;
-          const shortPadName = pad.id.replace(/\s*\([^)]*\)\s*/g, "").trim() || `Volante/Mando #${gi + 1}`;
-          names.push(shortPadName);
+      const pollGamepads = () => {
+        if (typeof navigator !== "undefined" && "getGamepads" in navigator) {
+          const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+          const names: string[] = [];
+          for (let gi = 0; gi < pads.length; gi++) {
+            const pad = pads[gi];
+            if (!pad) continue;
+            const shortPadName = pad.id.replace(/\s*\([^)]*\)\s*/g, "").trim() || `Volante/Mando #${gi + 1}`;
+            names.push(shortPadName);
 
-          for (let bi = 0; bi < pad.buttons.length; bi++) {
-            const k = `${gi}:${bi}`;
-            const isDown = pad.buttons[bi]?.pressed ?? false;
-            const wasDown = this.prevPressed.get(k) ?? false;
-            this.prevPressed.set(k, isDown);
+            for (let bi = 0; bi < pad.buttons.length; bi++) {
+              const k = `${gi}:${bi}`;
+              const isDown = pad.buttons[bi]?.pressed ?? false;
+              const wasDown = this.prevPressed.get(k) ?? false;
+              this.prevPressed.set(k, isDown);
 
-            if (isDown && !wasDown && !this.baselinePressed.has(k)) {
-              this.lastPressedInfo = `${shortPadName} · Botón ${bi + 1}`;
+              if (isDown && !wasDown && !this.baselinePressed.has(k)) {
+                this.lastPressedInfo = `${shortPadName} · Botón ${bi + 1}`;
 
-              if (this.learning) {
-                const bind: WheelButtonBind = {
-                  kind: "gamepad",
-                  gamepadIndex: gi,
-                  buttonIndex: bi,
-                  gamepadId: pad.id,
-                  label: `${shortPadName} · Botón ${bi + 1}`,
-                };
-                if (this.learning === "next") this.nextBind = bind;
-                else this.prevBind = bind;
-                this.learning = null;
-                this.saveStored();
-                continue;
+                if (this.learning) {
+                  const bind: WheelButtonBind = {
+                    kind: "gamepad",
+                    gamepadIndex: gi,
+                    buttonIndex: bi,
+                    gamepadId: pad.id,
+                    label: `${shortPadName} · Botón ${bi + 1}`,
+                  };
+                  if (this.learning === "next") this.nextBind = bind;
+                  else this.prevBind = bind;
+                  this.learning = null;
+                  this.saveStored();
+                  continue;
+                }
+
+                if (
+                  this.nextBind?.kind === "gamepad" &&
+                  this.nextBind.buttonIndex === bi &&
+                  (this.nextBind.gamepadIndex === gi || this.nextBind.gamepadId === pad.id)
+                ) {
+                  this.nextPage();
+                } else if (
+                  this.prevBind?.kind === "gamepad" &&
+                  this.prevBind.buttonIndex === bi &&
+                  (this.prevBind.gamepadIndex === gi || this.prevBind.gamepadId === pad.id)
+                ) {
+                  this.prevPage();
+                }
+              } else if (!isDown) {
+                this.baselinePressed.delete(k);
               }
-
-              if (
-                this.nextBind?.kind === "gamepad" &&
-                this.nextBind.buttonIndex === bi &&
-                (this.nextBind.gamepadIndex === gi || this.nextBind.gamepadId === pad.id)
-              ) {
-                this.nextPage();
-              } else if (
-                this.prevBind?.kind === "gamepad" &&
-                this.prevBind.buttonIndex === bi &&
-                (this.prevBind.gamepadIndex === gi || this.prevBind.gamepadId === pad.id)
-              ) {
-                this.prevPage();
-              }
-            } else if (!isDown) {
-              this.baselinePressed.delete(k);
             }
           }
+          this.connectedGamepads = names;
         }
-        this.connectedGamepads = names;
-      }
+        requestAnimationFrame(pollGamepads);
+      };
       requestAnimationFrame(pollGamepads);
-    };
-    requestAnimationFrame(pollGamepads);
+    }
 
     setInterval(async () => {
       try {
         const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
+        if (isClientView && data.appConfig) {
+          applyRemoteConfig(data.appConfig);
+        }
         if (typeof data.configSeq === "number" && data.configSeq > this.lastKnownConfigSeq) {
           this.lastKnownConfigSeq = data.configSeq;
           if (Array.isArray(data.pages) && data.pages.length > 0) {
             this.enabledPageIds = data.pages;
           }
           if (typeof data.mobileTheme === "string") {
-            this.mobileTheme = data.mobileTheme;
+            const newTheme = data.mobileTheme as PresetThemeId;
+            if (this.mobileTheme !== newTheme) {
+              this.mobileTheme = newTheme;
+              if ("__TAURI_INTERNALS__" in window && !isOverlayWindow && config.value.general.theme !== newTheme) {
+                applyCompleteOverlayTheme(newTheme, true);
+              }
+            }
           }
           if (typeof data.autoPopups === "boolean") {
             this.autoPopups = data.autoPopups;

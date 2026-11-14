@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.1...v1.0.2) (2026-11-14)
+
+### Bug Fixes & Improvements
+
+* **Sincronización 1:1 en Tiempo Real entre el Dashboard de PC y el DDU Móvil**: el servidor nativo comparte automáticamente `config.json` (`appConfig`) con el teléfono para que ambos usen exactamente el mismo diseño, opciones, unidades, tema y textos en español (`MARCHA`, `VELOCIDAD`, `LIMITADOR DE PIT ACTIVO`, `TC ACTIVO`, `ABS ACTIVO`, `HÍBRIDO`, `EMPUJE / REGEN / ESPERA`)
+* **Lectura de Memoria Compartida a 66 Hz sin Bloqueos (`LMU_Data`)**: eliminado el bloqueo de 250 ms de `LMU_Data_HoldEvent` en LMU y desactivado el bucle de prueba `mock.ts` en clientes móviles (`#mobile`, `#pitwall`), corrigiendo por completo las **marchas** y el panel en vivo de **TC (`SLIP / CUT`), ABS, MAP, BB, Migración (`MIG`) y Barras (`ARB`)** con resaltado luminoso instantáneo al cambiar cada parámetro
+
 ## [1.0.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.0...v1.0.1) (2026-11-13)
 
 ### Features

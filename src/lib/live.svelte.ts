@@ -42,13 +42,16 @@ export async function startLive() {
       location.hash.startsWith("#pitwall") ||
       location.pathname === "/mobile" ||
       location.pathname === "/dash" ||
-      /android|iphone|ipod/i.test(navigator.userAgent));
+      /android|iphone|ipod|ipad/i.test(navigator.userAgent));
+  const isOverlayWindow = typeof window !== "undefined" && location.hash.startsWith("#overlay");
   wheelControl.startHost();
   await listen<Snapshot>("snapshot", (e) => {
     live.snap = e.payload;
-    if (!isRemoteView) {
+    if (!isRemoteView && !isOverlayWindow) {
       spotter.update(e.payload);
-      wheelControl.pushSnapshotToMobile(e.payload);
+      if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+        wheelControl.pushSnapshotToMobile(e.payload);
+      }
     }
   });
   await listen<boolean>("edit-mode", (e) => {
@@ -63,7 +66,9 @@ export async function startLive() {
   await listen<boolean>("demo-mode", (e) => {
     live.status = { ...live.status, demo: e.payload };
   });
-  const [snap, status] = await Promise.all([api.getSnapshot(), api.getStatus()]);
-  live.snap ??= snap;
-  live.status = status;
+  if (!isRemoteView) {
+    const [snap, status] = await Promise.all([api.getSnapshot(), api.getStatus()]);
+    live.snap ??= snap;
+    live.status = status;
+  }
 }

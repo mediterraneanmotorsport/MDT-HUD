@@ -155,7 +155,7 @@
         </div>
         {#if showLastLap && (t.car.lastLap > 0 || t.car.bestLap > 0)}
           <span class="shrink-0 text-[11px] tabular-nums text-muted">
-            Ült: {lapTime(t.car.lastLap > 0 ? t.car.lastLap : t.car.bestLap)}
+            Últ: {lapTime(t.car.lastLap > 0 ? t.car.lastLap : t.car.bestLap)}
           </span>
         {/if}
       </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
+    applyRemoteConfig,
     applyThemeToElement,
     config,
     HUD_THEMES,
@@ -13,6 +14,7 @@
   import Damage from "../overlay/widgets/Damage.svelte";
   import Dashboard from "../overlay/widgets/Dashboard.svelte";
   import Delta from "../overlay/widgets/Delta.svelte";
+  import Electronics from "../overlay/widgets/Electronics.svelte";
   import Flags from "../overlay/widgets/Flags.svelte";
   import Fuel from "../overlay/widgets/Fuel.svelte";
   import Inputs from "../overlay/widgets/Inputs.svelte";
@@ -51,25 +53,48 @@
     startLive();
     wheelControl.startHost();
 
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.snap) remoteSnap = data.snap;
-        if (typeof data.mobileTheme === "string") {
-          wheelControl.mobileTheme = data.mobileTheme;
+    let mounted = true;
+    const pollState = async () => {
+      while (mounted) {
+        const t0 = performance.now();
+        try {
+          const ctrl = new AbortController();
+          const timeoutId = setTimeout(() => ctrl.abort(), 1200);
+          const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
+            cache: "no-store",
+            signal: ctrl.signal,
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.appConfig) {
+              applyRemoteConfig(data.appConfig);
+            }
+            if (data.snap) {
+              remoteSnap = data.snap;
+              live.snap = data.snap;
+            }
+            if (typeof data.mobileTheme === "string") {
+              wheelControl.mobileTheme = data.mobileTheme;
+            }
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+        const elapsed = performance.now() - t0;
+        const waitMs = Math.max(20, 40 - elapsed);
+        await new Promise((r) => setTimeout(r, waitMs));
       }
-    }, 65);
+    };
+    void pollState();
 
     if ("wakeLock" in navigator) {
       (navigator as any).wakeLock?.request("screen").catch(() => {});
     }
 
-    return () => clearInterval(timer);
+    return () => {
+      mounted = false;
+    };
   });
 
   function toggleFullscreen() {
@@ -162,26 +187,13 @@
       <PaceCatch opts={{ sameClassOnly: true, showLastLap: true }} {units} edit={true} />
     </div>
 
-    <!-- Columna 3: Cuadro DDU, Delta con Borde Verde/Rojo, Tiempos y Pedales -->
+    <!-- Columna 3: Cuadro DDU, Delta con Borde Verde/Rojo, Tiempos, Electrónica y Pedales -->
     <div class="flex flex-col items-center gap-2.5">
-      <Delta opts={{ reference: "pb", range: 2 }} {units} edit={true} />
-      <Dashboard
-        opts={{
-          ...(wCfg.dashboard?.options ?? {}),
-          style: activeThemeMeta.dashboardStyle,
-          rpmStyle: activeThemeMeta.rpmStyle,
-          showMdtLogo: true,
-          showPedals: true,
-          showSteeringWheel: true,
-          showIndicators: true,
-          showBattery: true,
-          showSettings: true,
-        }}
-        {units}
-        edit={true}
-      />
-      <LapTiming opts={{ showSectors: true }} {units} edit={true} />
-      <Inputs opts={{ seconds: 6, showSteering: true, showPedals: true, width: 320 }} {units} edit={true} />
+      <Delta opts={wCfg.delta?.options ?? { reference: "pb", range: 2 }} {units} edit={false} />
+      <Dashboard opts={wCfg.dashboard?.options ?? {}} {units} edit={false} />
+      <LapTiming opts={wCfg.laptiming?.options ?? { showSectors: true }} {units} edit={false} />
+      <Electronics opts={wCfg.electronics?.options ?? {}} {units} edit={false} />
+      <Inputs opts={wCfg.inputs?.options ?? { seconds: 6, showSteering: true, showPedals: true, width: 320 }} {units} edit={false} />
     </div>
 
     <!-- Columna 4: Estrategia WEC, Combustible, Lift & Coast, Neumáticos y Daños -->

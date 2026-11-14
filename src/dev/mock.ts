@@ -77,11 +77,16 @@ function buildFallbackFixtures() {
   const frames = Array.from({ length: 120 }, (_, f) => {
     const t = f * 0.25;
     const playerDist = (2500 + t * 72) % trackLength;
-    const speed = 68 + 18 * Math.sin(t * 0.6);
-    const throttle = speed > 62 ? 0.95 : 0.2;
-    const brake = speed <= 62 ? 0.75 : 0.0;
-    const gear = Math.max(2, Math.min(7, Math.round((speed / 86) * 7)));
-    const rpm = 5200 + ((speed % 12) / 12) * 3400;
+    const speed = 32 + 54 * (0.5 + 0.5 * Math.sin(t * 0.7));
+    const throttle = speed > 52 ? 0.95 : 0.15;
+    const brake = speed <= 52 ? 0.8 : 0.0;
+    const gear = speed < 36 ? 1 : speed < 44 ? 2 : speed < 54 ? 3 : speed < 64 ? 4 : speed < 72 ? 5 : speed < 80 ? 6 : 7;
+    const rpm = 5200 + ((speed % 11) / 11) * 3400;
+    const step = Math.floor(f / 20);
+    const tcVal = 4 + (step % 4);
+    const absVal = 3 + ((step + 1) % 4);
+    const mapVal = 1 + (step % 4);
+    const bbVal = 0.54 + (step % 5) * 0.005;
 
     return {
       source: "demo",
@@ -164,20 +169,20 @@ function buildFallbackFixtures() {
         trackLimitsStepsPerPenalty: 20,
         trackLimitsStepsPerPoint: 4,
         liftAndCoast: 0,
-        tc: 4,
+        tc: tcVal,
         tcMax: 11,
-        tcSlip: 3,
-        tcCut: 2,
-        abs: 3,
+        tcSlip: 3 + (step % 3),
+        tcCut: 2 + (step % 3),
+        abs: absVal,
         absMax: 12,
-        tcActive: false,
-        absActive: false,
-        motorMap: 2,
+        tcActive: throttle > 0.8 && gear <= 2,
+        absActive: brake > 0.7,
+        motorMap: mapVal,
         motorMapMax: 5,
-        migration: 3,
+        migration: 2 + (step % 3),
         frontArb: 3,
         rearArb: 2,
-        brakeBiasFront: 0.565,
+        brakeBiasFront: bbVal,
         speedLimiter: false,
         headlights: true,
         wipers: 0,
@@ -358,7 +363,14 @@ export async function install() {
     },
   };
   let editMode = location.hash.includes("edit");
-  const noLive = params.has("nolive");
+  const isRemoteMobileClient =
+    location.hash.startsWith("#mobile") ||
+    location.hash.startsWith("#dash") ||
+    location.hash.startsWith("#pitwall") ||
+    location.pathname === "/mobile" ||
+    location.pathname === "/dash" ||
+    /android|iphone|ipod|ipad/i.test(navigator.userAgent);
+  const noLive = params.has("nolive") || isRemoteMobileClient;
   if (params.has("nolaps")) Object.assign(fx, { sessions: [], laps: [], traces: {}, personalBests: [], filters: { tracks: [], cars: [] } });
   let previewFrame = 0;
   let onlineMe: { id: string; displayName: string | null; createdAt: number } | null = null;

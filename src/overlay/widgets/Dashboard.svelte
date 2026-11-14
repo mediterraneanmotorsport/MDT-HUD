@@ -56,8 +56,8 @@
       : p?.electricMotorState === 3
         ? { label: "REGEN", color: "var(--color-clutch)" }
         : p?.electricMotorState === 2
-          ? { label: "DEPLOY", color: "var(--color-good)" }
-          : { label: "IDLE", color: "var(--color-muted)" },
+          ? { label: "EMPUJE", color: "var(--color-good)" }
+          : { label: "ESPERA", color: "var(--color-muted)" },
   );
   const batteryColor = $derived(
     batteryFull
@@ -68,6 +68,76 @@
           ? "var(--color-bad)"
           : "var(--color-good)",
   );
+
+  // Formatted electronics values (identical across all Dashboard styles, PC & Mobile)
+  const tcText = $derived(!p ? "–" : p.tc > 0 ? String(p.tc) : "OFF");
+  const absText = $derived(!p ? "–" : p.abs > 0 ? String(p.abs) : "OFF");
+  const mapText = $derived(!p ? "–" : p.motorMap > 0 ? String(p.motorMap) : p.motorMapMax > 0 ? "0" : "1");
+  const bbText = $derived(!p || p.brakeBiasFront <= 0 ? "–" : `${(p.brakeBiasFront * 100).toFixed(1)}%`);
+  const hasSubElectronics = $derived(
+    !!p && (p.tcSlip > 0 || p.tcCut > 0 || p.migration > 0 || p.frontArb > 0 || p.rearArb > 0),
+  );
+
+  // Highlight chips briefly when the driver changes TC, ABS, MAP, BB, Slip, Cut, Migration or ARB
+  let changedKey = $state<string | null>(null);
+  let changedBanner = $state<string | null>(null);
+  let changedTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastElecSig = "";
+  let prevElec: {
+    tc: number;
+    tcSlip: number;
+    tcCut: number;
+    abs: number;
+    map: number;
+    bb: string;
+    mig: number;
+    fArb: number;
+    rArb: number;
+  } | null = null;
+
+  function markChanged(key: string, banner: string) {
+    changedKey = key;
+    changedBanner = banner;
+    if (changedTimer) clearTimeout(changedTimer);
+    changedTimer = setTimeout(() => {
+      changedKey = null;
+      changedBanner = null;
+    }, 1500);
+  }
+
+  $effect(() => {
+    if (!p) {
+      prevElec = null;
+      lastElecSig = "";
+      return;
+    }
+    const bb = (p.brakeBiasFront * 100).toFixed(1);
+    const sig = `${p.tc}|${p.tcSlip}|${p.tcCut}|${p.abs}|${p.motorMap}|${bb}|${p.migration}|${p.frontArb}|${p.rearArb}`;
+    if (sig === lastElecSig) return;
+    lastElecSig = sig;
+    if (prevElec) {
+      if (p.tc !== prevElec.tc) markChanged("TC", `TC ${p.tc > 0 ? p.tc : "OFF"}`);
+      else if (p.tcSlip !== prevElec.tcSlip) markChanged("TC", `TC SLIP ${p.tcSlip}`);
+      else if (p.tcCut !== prevElec.tcCut) markChanged("TC", `TC CUT ${p.tcCut}`);
+      else if (p.abs !== prevElec.abs) markChanged("ABS", `ABS ${p.abs > 0 ? p.abs : "OFF"}`);
+      else if (p.motorMap !== prevElec.map) markChanged("MAP", `MAPA ${p.motorMap}`);
+      else if (bb !== prevElec.bb) markChanged("BB", `BB ${bb}%`);
+      else if (p.migration !== prevElec.mig) markChanged("BB", `MIGRACIÓN ${p.migration}`);
+      else if (p.frontArb !== prevElec.fArb || p.rearArb !== prevElec.rArb)
+        markChanged("ARB", `ARB ${p.frontArb}/${p.rearArb}`);
+    }
+    prevElec = {
+      tc: p.tc,
+      tcSlip: p.tcSlip,
+      tcCut: p.tcCut,
+      abs: p.abs,
+      map: p.motorMap,
+      bb,
+      mig: p.migration,
+      fArb: p.frontArb,
+      rArb: p.rearArb,
+    };
+  });
 
   const ffb = $derived(p ? Math.max(-1, Math.min(1, p.ffb)) : 0);
   const clipping = $derived(Math.abs(ffb) >= 0.99);
@@ -175,14 +245,15 @@
 {/snippet}
 
 {#snippet chip(label: string, value: string | number, active: boolean, accentColor?: string)}
+  {@const isChanged = changedKey === label}
   <div
     class={[
-      "flex items-baseline justify-between rounded-md px-2 py-1 transition-colors",
-      active ? "bg-warn text-black shadow-[0_0_10px_var(--color-warn)]" : "hud-tile",
+      "flex items-baseline justify-between rounded-md px-2 py-1 transition-all duration-150",
+      active || isChanged ? "bg-warn text-black shadow-[0_0_12px_var(--color-warn)] ring-1 ring-white" : "hud-tile",
     ]}
-    style:border-left={!active && accentColor ? `2px solid ${accentColor}` : undefined}
+    style:border-left={!active && !isChanged && accentColor ? `2px solid ${accentColor}` : undefined}
   >
-    <span class={["text-[10px] font-bold tracking-wider uppercase", active ? "text-black/80" : "text-muted"]}>{label}</span>
+    <span class={["text-[10px] font-bold tracking-wider uppercase", active || isChanged ? "text-black/80" : "text-muted"]}>{label}</span>
     <span class="text-[13px] font-bold tabular-nums">{value}</span>
   </div>
 {/snippet}
@@ -285,10 +356,43 @@
 
   {#if opts.showSettings && p}
     <div class="mt-2.5 grid grid-cols-4 gap-1.5">
-      {@render chip("TC", p.tcMax > 0 ? p.tc : "–", p.tcActive, "#f59e0b")}
-      {@render chip("ABS", p.absMax > 0 ? p.abs : "–", p.absActive, "#38bdf8")}
-      {@render chip("MAP", p.motorMapMax > 0 ? p.motorMap : "–", false, "#22c55e")}
-      {@render chip("BB", (p.brakeBiasFront * 100).toFixed(1), false, "#ef4444")}
+      {@render chip("TC", tcText, p.tcActive, "#f59e0b")}
+      {@render chip("ABS", absText, p.absActive, "#38bdf8")}
+      {@render chip("MAP", mapText, false, "#22c55e")}
+      {@render chip("BB", bbText, false, "#ef4444")}
+    </div>
+    {#if hasSubElectronics}
+      <div class="mt-1 grid grid-cols-4 gap-1 text-[10px] tabular-nums">
+        <div class="flex items-center justify-between rounded bg-black/35 px-1.5 py-0.5 text-muted">
+          <span>SLIP</span>
+          <b class="text-fg">{p.tcSlip > 0 ? p.tcSlip : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/35 px-1.5 py-0.5 text-muted">
+          <span>CUT</span>
+          <b class="text-fg">{p.tcCut > 0 ? p.tcCut : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/35 px-1.5 py-0.5 text-muted">
+          <span>MIG</span>
+          <b class="text-fg">{p.migration > 0 ? p.migration : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/35 px-1.5 py-0.5 text-muted">
+          <span>ARB</span>
+          <b class="text-fg">{p.frontArb > 0 || p.rearArb > 0 ? `${p.frontArb}/${p.rearArb}` : "–"}</b>
+        </div>
+      </div>
+    {/if}
+  {/if}
+{/snippet}
+
+{#snippet pitLimiterBanner()}
+  {#if p?.speedLimiter}
+    <div class="mb-2 animate-pulse rounded bg-warn py-0.5 text-center font-display text-xs font-extrabold tracking-widest text-black uppercase">
+      LIMITADOR DE PIT ACTIVO
+    </div>
+  {/if}
+  {#if changedBanner}
+    <div class="mb-1.5 rounded bg-accent/90 py-0.5 text-center font-display text-[11px] font-black tracking-widest text-white uppercase shadow">
+      ⚙ {changedBanner}
     </div>
   {/if}
 {/snippet}
@@ -323,14 +427,7 @@
     {/if}
 
     {@render batteryFullBanner()}
-
-    <!-- Pit limiter banner -->
-    {#if p?.speedLimiter}
-      <div class="mb-2 animate-pulse rounded bg-warn py-0.5 text-center font-display text-xs font-extrabold tracking-widest text-black uppercase">
-        LIMITADOR DE PIT ACTIVO
-      </div>
-    {/if}
-
+    {@render pitLimiterBanner()}
     {@render rpmHeader("h-2.5")}
 
     <div class="mt-2.5 flex items-center justify-between gap-2.5">
@@ -343,7 +440,7 @@
           </div>
         {/if}
         <div class="hud-value text-[42px] leading-none font-extrabold">{spdText}</div>
-        <div class="hud-label mt-1">{speedUnit(units)}</div>
+        <div class="hud-label mt-1">VELOCIDAD ({speedUnit(units)})</div>
       </div>
 
       <!-- Center: Framed Gear Box -->
@@ -358,7 +455,7 @@
         ]}
       >
         <span class="hud-value text-[58px] leading-none font-black">{gear}</span>
-        <span class="absolute top-1 left-1.5 text-[8px] font-bold tracking-widest text-accent/80 uppercase">GEAR</span>
+        <span class="absolute top-1 left-1.5 text-[8px] font-bold tracking-widest text-accent/80 uppercase">MARCHA</span>
       </div>
 
       <!-- Right: RPM + Steering + Pedals -->
@@ -391,6 +488,7 @@
     ]}
   >
     {@render batteryFullBanner()}
+    {@render pitLimiterBanner()}
     <!-- Top LED Strip -->
     {@render rpmHeader("h-3")}
 
@@ -400,16 +498,16 @@
         {#if showMdtLogo}
           <img src="/mdt-logo.png" alt="MDT" class="h-3.5 w-3.5 object-contain" />
         {/if}
-        <span class="text-accent">MDT DDU-PRO</span>
+        <span class="text-accent">MDT-HUD</span>
       </div>
       {#if p?.speedLimiter}
-        <span class="animate-pulse rounded bg-warn px-1.5 py-px text-black">PIT LIMITER</span>
+        <span class="animate-pulse rounded bg-warn px-1.5 py-px text-black">LIMITADOR DE PIT</span>
       {:else if p?.tcActive}
-        <span class="rounded bg-amber-500 px-1.5 py-px text-black">TC ACTIVE</span>
+        <span class="rounded bg-amber-500 px-1.5 py-px text-black">TC ACTIVO</span>
       {:else if p?.absActive}
-        <span class="rounded bg-sky-400 px-1.5 py-px text-black">ABS ACTIVE</span>
+        <span class="rounded bg-sky-400 px-1.5 py-px text-black">ABS ACTIVO</span>
       {:else}
-        <span class="text-muted">PAGE 1 · RACE</span>
+        <span class="text-muted">PÁG 1 · CARRERA</span>
       {/if}
       <span class="tabular-nums text-white/80">{rpmText} RPM</span>
     </div>
@@ -423,13 +521,13 @@
           <div class="hud-value text-[34px] leading-none font-black">{spdText}</div>
         </div>
         <div class="grid grid-cols-2 gap-1.5">
-          <div class={["rounded border px-2 py-1", p?.tcActive ? "border-warn bg-warn text-black" : "border-amber-500/40 bg-amber-500/10"]}>
-            <div class={["text-[9px] font-bold", p?.tcActive ? "text-black" : "text-amber-400"]}>TC</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{p && p.tcMax > 0 ? p.tc : "–"}</div>
+          <div class={["rounded border px-2 py-1 transition-all", p?.tcActive || changedKey === "TC" ? "border-warn bg-warn text-black shadow-[0_0_10px_var(--color-warn)]" : "border-amber-500/40 bg-amber-500/10"]}>
+            <div class={["text-[9px] font-bold", p?.tcActive || changedKey === "TC" ? "text-black" : "text-amber-400"]}>TC</div>
+            <div class="font-display text-lg leading-tight font-bold tabular-nums">{tcText}</div>
           </div>
-          <div class={["rounded border px-2 py-1", p?.absActive ? "border-sky-400 bg-sky-400 text-black" : "border-sky-500/40 bg-sky-500/10"]}>
-            <div class={["text-[9px] font-bold", p?.absActive ? "text-black" : "text-sky-400"]}>ABS</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{p && p.absMax > 0 ? p.abs : "–"}</div>
+          <div class={["rounded border px-2 py-1 transition-all", p?.absActive || changedKey === "ABS" ? "border-sky-400 bg-sky-400 text-black shadow-[0_0_10px_#38bdf8]" : "border-sky-500/40 bg-sky-500/10"]}>
+            <div class={["text-[9px] font-bold", p?.absActive || changedKey === "ABS" ? "text-black" : "text-sky-400"]}>ABS</div>
+            <div class="font-display text-lg leading-tight font-bold tabular-nums">{absText}</div>
           </div>
         </div>
       </div>
@@ -441,7 +539,7 @@
           flash ? "border-sky-400 bg-sky-500/30 text-sky-200" : p?.speedLimiter ? "border-warn text-warn" : "border-accent text-white",
         ]}
       >
-        <span class="text-[9px] font-bold tracking-widest text-muted uppercase">GEAR</span>
+        <span class="text-[9px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
         <span class="hud-value text-[68px] leading-none font-black">{gear}</span>
       </div>
 
@@ -461,26 +559,63 @@
           {/if}
         </div>
         <div class="grid grid-cols-2 gap-1.5">
-          <div class="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1">
-            <div class="text-[9px] font-bold text-emerald-400">MAP</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{p && p.motorMapMax > 0 ? p.motorMap : "–"}</div>
+          <div class={["rounded border px-2 py-1 transition-all", changedKey === "MAP" ? "border-emerald-300 bg-emerald-400 text-black shadow-[0_0_10px_#22c55e]" : "border-emerald-500/40 bg-emerald-500/10"]}>
+            <div class={["text-[9px] font-bold", changedKey === "MAP" ? "text-black" : "text-emerald-400"]}>MAP</div>
+            <div class="font-display text-lg leading-tight font-bold tabular-nums">{mapText}</div>
           </div>
-          <div class="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1">
-            <div class="text-[9px] font-bold text-rose-400">BB</div>
-            <div class="font-display text-base leading-tight font-bold tabular-nums">{p ? (p.brakeBiasFront * 100).toFixed(1) : "–"}</div>
+          <div class={["rounded border px-2 py-1 transition-all", changedKey === "BB" ? "border-rose-300 bg-rose-400 text-black shadow-[0_0_10px_#ef4444]" : "border-rose-500/40 bg-rose-500/10"]}>
+            <div class={["text-[9px] font-bold", changedKey === "BB" ? "text-black" : "text-rose-400"]}>BB</div>
+            <div class="font-display text-base leading-tight font-bold tabular-nums">{bbText}</div>
           </div>
         </div>
       </div>
     </div>
 
+    {#if opts.showSettings && hasSubElectronics && p}
+      <div class="mt-1.5 grid grid-cols-4 gap-1 text-[10px] tabular-nums">
+        <div class="flex items-center justify-between rounded bg-black/45 px-1.5 py-0.5 text-muted">
+          <span>SLIP</span>
+          <b class="text-fg">{p.tcSlip > 0 ? p.tcSlip : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/45 px-1.5 py-0.5 text-muted">
+          <span>CUT</span>
+          <b class="text-fg">{p.tcCut > 0 ? p.tcCut : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/45 px-1.5 py-0.5 text-muted">
+          <span>MIG</span>
+          <b class="text-fg">{p.migration > 0 ? p.migration : "–"}</b>
+        </div>
+        <div class="flex items-center justify-between rounded bg-black/45 px-1.5 py-0.5 text-muted">
+          <span>ARB</span>
+          <b class="text-fg">{p.frontArb > 0 || p.rearArb > 0 ? `${p.frontArb}/${p.rearArb}` : "–"}</b>
+        </div>
+      </div>
+    {/if}
+
     {#if opts.showBattery && hybrid && p}
       <div class="mt-2 flex items-center gap-2 rounded border border-white/10 bg-black/50 px-2 py-1">
-        <span class="text-[10px] font-bold text-accent">HYBRID</span>
+        <span class="text-[10px] font-bold text-accent">HÍBRIDO</span>
         <div class="h-2 flex-1 overflow-hidden rounded-sm bg-hud-2">
           <div class="h-full transition-[width] duration-150" style:width="{battery * 100}%" style:background={batteryColor}></div>
         </div>
         <span class="text-xs font-bold tabular-nums">{Math.round(battery * 100)}%</span>
         <span class="text-[10px] font-bold uppercase" style:color={motor.color}>{motor.label}</span>
+      </div>
+    {/if}
+
+    {#if opts.showFfb && p}
+      <div class="mt-2 flex items-center gap-2">
+        <span class={["w-7 text-[10px] font-bold", clipping ? "text-bad" : "text-muted"]}>FFB</span>
+        <div class="relative h-2 flex-1 overflow-hidden rounded-full bg-hud-2">
+          <div class="absolute inset-y-0 left-1/2 w-px bg-hud-line"></div>
+          <div
+            class="absolute inset-y-0"
+            style:left="{ffb < 0 ? 50 + ffb * 50 : 50}%"
+            style:width="{Math.abs(ffb) * 50}%"
+            style:background={clipping ? "var(--color-bad)" : "var(--color-steer)"}
+          ></div>
+        </div>
+        <span class={["w-9 text-right text-[12px] font-bold tabular-nums", clipping && "text-bad"]}>{Math.round(Math.abs(ffb) * 100)}%</span>
       </div>
     {/if}
 
@@ -505,17 +640,18 @@
   {@const ARC = CIRC * 0.75}
   <div class={["hud w-[340px] p-3", hudAlertClass]}>
     {@render batteryFullBanner()}
+    {@render pitLimiterBanner()}
     <div class="flex items-center justify-between gap-3">
       <!-- Left: Speed & Wheel -->
       <div class="flex flex-col items-start">
         {#if showMdtLogo}
           <div class="mb-1 flex items-center gap-1">
             <img src="/mdt-logo.png" alt="MDT" class="h-4 w-4 object-contain" />
-            <span class="font-display text-[10px] font-extrabold tracking-wider text-accent uppercase">MDT</span>
+            <span class="font-display text-[10px] font-extrabold tracking-wider text-accent uppercase">MDT-HUD</span>
           </div>
         {/if}
         <div class="hud-value text-[38px] leading-none font-bold">{spdText}</div>
-        <div class="hud-label mt-0.5">{speedUnit(units)}</div>
+        <div class="hud-label mt-0.5">VELOCIDAD ({speedUnit(units)})</div>
         {#if showSteeringWheel}
           <div class="mt-2">
             {@render steeringWheelSvg(40)}
@@ -550,8 +686,9 @@
           />
         </svg>
         <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <span class={["hud-value text-[54px] leading-none font-black", flash && "animate-pulse text-sky-400"]}>{gear}</span>
-          <span class="mt-0.5 text-[11px] font-bold tabular-nums text-muted">{rpmText}</span>
+          <span class="text-[8px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
+          <span class={["hud-value text-[50px] leading-none font-black", flash && "animate-pulse text-sky-400"]}>{gear}</span>
+          <span class="mt-0.5 text-[10px] font-bold tabular-nums text-muted">{rpmText} RPM</span>
         </div>
       </div>
 
@@ -576,6 +713,11 @@
         ⚡ BAT 100%
       </span>
     {/if}
+    {#if p?.speedLimiter}
+      <span class="animate-pulse rounded bg-warn px-2 py-0.5 font-display text-[11px] font-black text-black">
+        LIMITADOR PIT
+      </span>
+    {/if}
     {#if showMdtLogo}
       <img src="/mdt-logo.png" alt="MDT" class="h-7 w-7 shrink-0 object-contain" />
     {/if}
@@ -583,9 +725,10 @@
     <!-- Gear pill -->
     <div
       class={[
-        "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 font-display text-3xl font-black",
+        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 font-display text-3xl font-black",
         flash ? "border-sky-400 bg-sky-500/30 text-white" : p?.speedLimiter ? "border-warn text-warn" : "border-accent bg-accent/15 text-white",
       ]}
+      title="Marcha"
     >
       {gear}
     </div>
@@ -593,7 +736,7 @@
     <!-- Speed -->
     <div class="min-w-[68px]">
       <div class="hud-value text-[28px] leading-none font-bold">{spdText}</div>
-      <div class="hud-label mt-0.5 text-[9px]">{speedUnit(units)}</div>
+      <div class="hud-label mt-0.5 text-[9px]">VELOCIDAD ({speedUnit(units)})</div>
     </div>
 
     <!-- RPM bar + value -->
@@ -622,9 +765,10 @@
 
     {#if opts.showSettings && p}
       <div class="flex gap-1 border-l border-hud-line pl-2.5">
-        {@render chip("TC", p.tcMax > 0 ? p.tc : "–", p.tcActive)}
-        {@render chip("ABS", p.absMax > 0 ? p.abs : "–", p.absActive)}
-        {@render chip("BB", (p.brakeBiasFront * 100).toFixed(1), false)}
+        {@render chip("TC", tcText, p.tcActive, "#f59e0b")}
+        {@render chip("ABS", absText, p.absActive, "#38bdf8")}
+        {@render chip("MAP", mapText, false, "#22c55e")}
+        {@render chip("BB", bbText, false, "#ef4444")}
       </div>
     {/if}
   </div>
@@ -635,17 +779,21 @@
 {:else}
   <div class={["hud w-[320px] p-3", hudAlertClass]}>
     {@render batteryFullBanner()}
+    {@render pitLimiterBanner()}
     {@render rpmHeader("h-2")}
 
     <div class="mt-3 grid grid-cols-[1fr_auto_1fr] items-end">
       <div>
         <div class="hud-value text-[40px]">{spdText}</div>
-        <div class="hud-label mt-1">{speedUnit(units)}</div>
+        <div class="hud-label mt-1">VELOCIDAD ({speedUnit(units)})</div>
       </div>
-      <div class={["hud-value px-4 text-[64px] font-bold", p?.speedLimiter && "text-warn"]}>{gear}</div>
+      <div class="flex flex-col items-center px-4">
+        <span class="text-[9px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
+        <div class={["hud-value text-[64px] leading-none font-bold", p?.speedLimiter && "text-warn"]}>{gear}</div>
+      </div>
       <div class="text-right">
         <div class="hud-value text-[24px]">{rpmText}</div>
-        <div class="hud-label mt-1">rpm</div>
+        <div class="hud-label mt-1">RPM</div>
       </div>
     </div>
 

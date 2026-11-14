@@ -684,6 +684,17 @@ export const config = new ConfigStore();
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let started = false;
 let lastSaved = "";
+let lastRemoteConfigStr = "";
+
+export function applyRemoteConfig(raw: any) {
+  if (!raw || typeof raw !== "object") return;
+  const s = JSON.stringify(raw);
+  if (s === lastRemoteConfigStr) return;
+  lastRemoteConfigStr = s;
+  config.value = merge(raw);
+  applyTheme(config.value.general);
+  config.loaded = true;
+}
 
 export async function loadConfig() {
   if (started) {
@@ -721,6 +732,19 @@ export function saveConfig() {
     const snapshot = $state.snapshot(config.value);
     lastSaved = JSON.stringify(snapshot);
     api.saveConfig(snapshot);
+    if (typeof window !== "undefined") {
+      const base =
+        "__TAURI_INTERNALS__" in window && location.port !== "1420" ? "http://127.0.0.1:1420" : "";
+      const body: Record<string, any> = { appConfig: snapshot };
+      if (snapshot.general.theme !== "custom" && snapshot.general.theme in HUD_THEMES) {
+        body.mobileTheme = snapshot.general.theme;
+      }
+      void fetch(`${base}/__mobile_state`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    }
   }, 250);
 }
 

@@ -165,18 +165,22 @@
           </div>
         </TrackHero>
         {#if p}
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-2 border-t border-line p-4 tnum">
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2 border-t border-line p-4 tnum">
             {#each [
-              [`Vuelta ${p.lapNumber + 1}`, lapTime(snap.timing.currentLapTime, 1), ""],
-              ["Velocidad", `${Math.round(speed(p.speed, units))}`, speedUnit(units)],
-              ["Marcha", p.gear < 0 ? "R" : p.gear === 0 ? "N" : String(p.gear), ""],
+              [`VUELTA ${p.lapNumber + 1}`, lapTime(snap.timing.currentLapTime, 1), ""],
+              ["VELOCIDAD", `${Math.round(speed(p.speed, units))}`, speedUnit(units)],
+              ["MARCHA", p.gear < 0 ? "R" : p.gear === 0 ? "N" : String(p.gear), ""],
+              ["RPM", `${Math.round(p.rpm)}`, ""],
+              ["TC", p.tc > 0 ? String(p.tc) : "OFF", p.tcSlip > 0 || p.tcCut > 0 ? `${p.tcSlip}/${p.tcCut}` : ""],
+              ["ABS", p.abs > 0 ? String(p.abs) : "OFF", ""],
+              ["MAP", p.motorMap > 0 ? String(p.motorMap) : "1", ""],
+              ["BB", p.brakeBiasFront > 0 ? `${(p.brakeBiasFront * 100).toFixed(1)}%` : "–", ""],
               ["Δ PB", delta(snap.timing.deltaPb), ""],
-              ["Mejor", lapTime(snap.timing.sessionBest), ""],
-              ["Comb.", fuel(p.fuel, units).toFixed(1), fuelUnit(units)],
+              ["COMB.", fuel(p.fuel, units).toFixed(1), fuelUnit(units)],
             ] as [label, value, unit]}
-              <div class="rounded-lg bg-surface-2 px-3 py-2.5">
-                <div class="text-xs text-muted">{label}</div>
-                <div class="mt-0.5 font-display text-2xl font-semibold whitespace-nowrap">{value} <span class="text-xs font-medium text-muted">{unit}</span></div>
+              <div class="rounded-lg bg-surface-2 px-3 py-2">
+                <div class="text-[10px] font-bold tracking-wider text-muted uppercase">{label}</div>
+                <div class="mt-0.5 font-display text-xl font-semibold whitespace-nowrap">{value} <span class="text-xs font-medium text-muted">{unit}</span></div>
               </div>
             {/each}
           </div>

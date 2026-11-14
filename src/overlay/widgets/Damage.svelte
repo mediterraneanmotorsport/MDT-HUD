@@ -15,10 +15,10 @@
   // LMU dent order: nose, FL body, left side, RL body, tail, RR body, right side, FR body.
   // Group the three front/rear sections into bumpers, like the game's compact indicator.
   const BODY = [
-    { label: "Front bodywork", indices: [1, 0, 7], path: "M30 29 Q30 17 56 17 Q82 17 82 29" },
-    { label: "Left bodywork", indices: [2], path: "M30 38 V112" },
-    { label: "Right bodywork", indices: [6], path: "M82 38 V112" },
-    { label: "Rear bodywork", indices: [3, 4, 5], path: "M30 121 Q30 133 56 133 Q82 133 82 121" },
+    { label: "Carrocería frontal", indices: [1, 0, 7], path: "M30 29 Q30 17 56 17 Q82 17 82 29" },
+    { label: "Carrocería izquierda", indices: [2], path: "M30 38 V112" },
+    { label: "Carrocería derecha", indices: [6], path: "M82 38 V112" },
+    { label: "Carrocería trasera", indices: [3, 4, 5], path: "M30 121 Q30 133 56 133 Q82 133 82 121" },
   ];
   const CORNERS = [
     { x: 43, y: 45, label: "FL" },

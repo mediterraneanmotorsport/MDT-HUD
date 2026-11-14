@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
@@ -18,6 +18,8 @@ struct MobileRelayState {
     auto_popups: bool,
     config_seq: u64,
     pushed_snap: Option<Value>,
+    app_config: Option<Value>,
+    app_config_mtime: Option<SystemTime>,
 }
 
 impl Default for MobileRelayState {
@@ -30,6 +32,8 @@ impl Default for MobileRelayState {
             auto_popups: false,
             config_seq: 0,
             pushed_snap: None,
+            app_config: None,
+            app_config_mtime: None,
         }
     }
 }
@@ -166,6 +170,12 @@ fn handle_client(
                     st.auto_popups = ap;
                     st.config_seq += 1;
                 }
+                if let Some(cfg) = parsed.get("appConfig") {
+                    if cfg.is_object() {
+                        st.app_config = Some(cfg.clone());
+                        st.config_seq += 1;
+                    }
+                }
                 if let Some(snap) = parsed.get("snap") {
                     if !snap.is_null() {
                         st.pushed_snap = Some(snap.clone());
@@ -185,7 +195,7 @@ fn handle_client(
         let state = app.state::<AppState>();
         let live_snap = state.shared.latest.read().ok().map(|s| s.clone());
         let snap_val = if let Some(ref s) = live_snap {
-            if s.player.is_some() {
+            if s.player.is_some() || s.connected {
                 serde_json::to_value(s).ok()
             } else {
                 None
@@ -211,7 +221,20 @@ fn handle_client(
             }
         };
 
-        let st = relay.lock().unwrap_or_else(|e| e.into_inner());
+        let mut st = relay.lock().unwrap_or_else(|e| e.into_inner());
+        if let Ok(meta) = std::fs::metadata(&state.config_path) {
+            if let Ok(mtime) = meta.modified() {
+                if st.app_config_mtime != Some(mtime) {
+                    if let Ok(text) = std::fs::read_to_string(&state.config_path) {
+                        if let Ok(val) = serde_json::from_str::<Value>(&text) {
+                            st.app_config = Some(val);
+                            st.app_config_mtime = Some(mtime);
+                            st.config_seq += 1;
+                        }
+                    }
+                }
+            }
+        }
         let body = serde_json::to_vec(&json!({
             "page": st.page,
             "pageSeq": st.page_seq,
@@ -219,6 +242,7 @@ fn handle_client(
             "mobileTheme": st.mobile_theme,
             "autoPopups": st.auto_popups,
             "configSeq": st.config_seq,
+            "appConfig": st.app_config,
             "snap": final_snap,
         }))
         .unwrap_or_default();

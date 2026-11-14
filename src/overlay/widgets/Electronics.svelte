@@ -7,26 +7,33 @@
   let {}: { opts: Record<string, any>; units: Units; edit: boolean } = $props();
 
   const p = $derived(live.snap?.player);
-  const MOTOR = ["n/a", "Idle", "Deploy", "Regen"];
-  const v = (val: number, max: number) => (max > 0 ? `${val}/${max}` : "–");
+  const MOTOR = ["N/D", "ESPERA", "EMPUJE", "REGEN"];
+  const v = (val: number, max: number) =>
+    max > 0 ? (val > 0 ? `${val}/${max}` : `OFF/${max}`) : val > 0 ? String(val) : "OFF";
 </script>
 
-<div class="hud w-[200px] p-2.5 text-[13px]">
+<div class="hud w-[210px] p-2.5 text-[13px]">
+  <div class="mb-1.5 flex items-center justify-between border-b border-hud-line pb-1">
+    <span class="hud-title">Electrónica</span>
+    {#if p}
+      <span class="font-display text-xs font-bold text-accent">MARCHA {p.gear < 0 ? "R" : p.gear === 0 ? "N" : p.gear}</span>
+    {/if}
+  </div>
   {#if p}
-    <div class="grid grid-cols-[1fr_auto] gap-y-0.5">
+    <div class="grid grid-cols-[1fr_auto] gap-y-0.5 tabular-nums">
       <span class="text-muted">TC</span>
       <span class="font-semibold" class:text-warn={p.tcActive}>{v(p.tc, p.tcMax)}</span>
-      <span class="text-muted">TC slip / cut</span>
-      <span class="font-semibold">{p.tcMax > 0 ? `${p.tcSlip} / ${p.tcCut}` : "–"}</span>
+      <span class="text-muted">TC Slip / Cut</span>
+      <span class="font-semibold">{p.tcSlip > 0 || p.tcCut > 0 || p.tcMax > 0 ? `${p.tcSlip} / ${p.tcCut}` : "–"}</span>
       <span class="text-muted">ABS</span>
       <span class="font-semibold" class:text-warn={p.absActive}>{v(p.abs, p.absMax)}</span>
-      <span class="text-muted">Mapa motor</span>
-      <span class="font-semibold">{v(p.motorMap, p.motorMapMax)}</span>
-      <span class="text-muted">Migración</span>
-      <span class="font-semibold">{p.migration || "–"}</span>
+      <span class="text-muted">Mapa motor (MAP)</span>
+      <span class="font-semibold">{p.motorMapMax > 0 ? `${p.motorMap}/${p.motorMapMax}` : p.motorMap > 0 ? p.motorMap : "1"}</span>
+      <span class="text-muted">Migración (MIG)</span>
+      <span class="font-semibold">{p.migration > 0 ? p.migration : "OFF"}</span>
       <span class="text-muted">ARB Del / Tras</span>
       <span class="font-semibold">{p.frontArb} / {p.rearArb}</span>
-      <span class="text-muted">Reparto frenos</span>
+      <span class="text-muted">Reparto frenos (BB)</span>
       <span class="font-semibold">{(p.brakeBiasFront * 100).toFixed(1)}%</span>
     </div>
     {#if p.electricMotorState > 0}

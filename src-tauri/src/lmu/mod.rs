@@ -61,13 +61,29 @@ pub fn parse(buf: &[u8]) -> Snapshot {
     }
     let player_idx: u8 = read_at(buf, layout::OFF_TELEMETRY_PLAYER_IDX);
     let has_player: u8 = read_at(buf, layout::OFF_TELEMETRY_PLAYER_HAS_VEHICLE);
+    let scoring_player = vehicles.iter().find(|v| v.is_player);
 
-    let player = if has_player != 0 && (player_idx as usize) < (active as usize).min(layout::MAX_VEHICLES) {
-        let t: TelemInfo = read_at(
-            buf,
-            layout::OFF_TELEMETRY_INFO + player_idx as usize * std::mem::size_of::<TelemInfo>(),
-        );
-        let scoring = vehicles.iter().find(|v| v.is_player).or_else(|| vehicles.iter().find(|v| v.id == t.id));
+    let player_telem: Option<TelemInfo> =
+        if has_player != 0 && (player_idx as usize) < (active as usize).min(layout::MAX_VEHICLES) {
+            let t: TelemInfo = read_at(
+                buf,
+                layout::OFF_TELEMETRY_INFO + player_idx as usize * std::mem::size_of::<TelemInfo>(),
+            );
+            if let Some(sp) = scoring_player {
+                if t.id == sp.id {
+                    Some(t)
+                } else {
+                    telemetry.get(&sp.id).copied().or(Some(t))
+                }
+            } else {
+                Some(t)
+            }
+        } else {
+            scoring_player.and_then(|sp| telemetry.get(&sp.id).copied())
+        };
+
+    let player = if let Some(t) = player_telem {
+        let scoring = scoring_player.or_else(|| vehicles.iter().find(|v| v.id == t.id));
         let mut player = parse_player(&t, scoring, &info);
         player.ffb = read_at::<f32>(buf, layout::OFF_GENERIC_FFB_TORQUE) as f64;
         Some(player)
