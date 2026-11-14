@@ -58,11 +58,13 @@
     background: var(--color-bg);
     color: var(--color-fg);
     color-scheme: dark;
+    font-family: var(--font-sans);
   }
   body.overlay {
     background: transparent;
     color: var(--color-fg);
     overflow: hidden;
+    font-family: var(--font-sans);
   }
   #app {
     height: 100%;
@@ -94,30 +96,68 @@
 
 /* ---------- Overlay ---------- */
 
-/* Base panel for every overlay widget: flat, dark, rounded, easy to read over any background. */
 @utility hud {
   position: relative;
   background: var(--color-hud);
   border: 1px solid var(--color-hud-line);
   border-radius: var(--hud-radius, 10px);
   box-shadow: var(--hud-shadow, 0 6px 20px rgb(0 0 0 / 0.35));
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
 }
 
 /* =========================================================================
-   5 TEMAS COMPLETOS DE DISEÑO DEL OVERLAY (MDT-AURA, MDT-F1, MDT-HY, MDT-GT3, MDT-LMP2)
+   5 TEMAS COMPLETOS DE DISEÑO (APP COMPANION + OVERLAY PC + MÓVIL DDU)
+   Cada tema cambia paleta completa, geometría de paneles, texturas y FUENTE DE LETRAS
    ========================================================================= */
 
-/* 1. MDT-AURA: Neón Futurista / Cristal Azul & Cian */
+/* -------------------------------------------------------------------------
+   1. MDT-AURA: Neón Futurista / Cristal Azul & Cian · Fuente Aeroespacial Barlow
+   ------------------------------------------------------------------------- */
+[data-hud-theme="mdt-aura"] {
+  --font-sans: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", sans-serif;
+  --color-bg: #040a16;
+  --color-surface: #081428;
+  --color-surface-2: #0d1f3c;
+  --color-surface-3: #142d54;
+  --color-line: rgb(0 229 255 / 0.28);
+  --color-fg: #f0f8ff;
+  --color-muted: #8ab4dc;
+}
+[data-hud-theme="mdt-aura"] body.companion {
+  background:
+    radial-gradient(90% 55% at 50% 0%, rgb(0 229 255 / 0.12) 0%, transparent 70%),
+    linear-gradient(180deg, #040b18 0%, #030710 100%);
+}
+[data-hud-theme="mdt-aura"] .card {
+  border-radius: 16px;
+  border: 1px solid rgb(0 229 255 / 0.35);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgb(34 135 236 / 0.16) 0%, transparent 70%),
+    linear-gradient(180deg, rgb(9 22 44 / 0.92) 0%, rgb(6 15 30 / 0.95) 100%);
+  box-shadow:
+    0 8px 26px rgb(0 8 24 / 0.6),
+    inset 0 1px 0 rgb(0 229 255 / 0.32);
+}
+[data-hud-theme="mdt-aura"] .page-title {
+  color: #e6f6ff;
+  text-shadow: 0 0 18px rgb(0 229 255 / 0.45);
+  letter-spacing: 0.03em;
+}
+[data-hud-theme="mdt-aura"] .btn-primary {
+  background: linear-gradient(135deg, #2287ec 0%, #00b8ff 100%);
+  box-shadow: 0 0 16px rgb(0 229 255 / 0.4);
+}
 [data-hud-theme="mdt-aura"] .hud {
   border-radius: 14px;
-  border: 1px solid rgb(0 229 255 / 0.55);
+  border: 1px solid rgb(0 229 255 / 0.6);
   background:
-    radial-gradient(120% 90% at 50% 0%, rgb(34 135 236 / 0.24) 0%, transparent 70%),
+    radial-gradient(120% 90% at 50% 0%, rgb(34 135 236 / 0.26) 0%, transparent 70%),
     linear-gradient(180deg, rgb(7 18 36 / 0.94) 0%, rgb(4 10 22 / 0.96) 100%);
   box-shadow:
-    0 0 22px rgb(34 135 236 / 0.32),
+    0 0 22px rgb(34 135 236 / 0.35),
     inset 0 1px 0 rgb(0 240 255 / 0.45);
 }
 [data-hud-theme="mdt-aura"] .hud-title {
@@ -126,57 +166,181 @@
   letter-spacing: 0.12em;
 }
 
-/* 2. MDT-F1: Broadcast Fórmula 1 (Corte diagonal aerodinámico, barra superior Roja F1, cursiva agresiva) */
-[data-hud-theme="mdt-f1"] .hud {
-  border-radius: 2px 14px 2px 14px;
-  border: 1px solid rgb(225 6 0 / 0.45);
+/* -------------------------------------------------------------------------
+   2. MDT-F1: Broadcast Fórmula 1 TV · Fuente Cursiva Impact/Racing · Cortes Diagonales
+   ------------------------------------------------------------------------- */
+[data-hud-theme="mdt-f1"] {
+  --font-sans: "Trebuchet MS", "Arial", sans-serif;
+  --font-display: "Impact", "Arial Black", "Barlow Condensed", sans-serif;
+  --color-bg: #08080c;
+  --color-surface: #111118;
+  --color-surface-2: #191923;
+  --color-surface-3: #281216;
+  --color-line: rgb(225 6 0 / 0.45);
+  --color-fg: #ffffff;
+  --color-muted: #b0b0be;
+}
+[data-hud-theme="mdt-f1"] body.companion {
+  background:
+    repeating-linear-gradient(-55deg, rgb(225 6 0 / 0.03) 0 12px, transparent 12px 48px),
+    linear-gradient(180deg, #09090e 0%, #050508 100%);
+}
+[data-hud-theme="mdt-f1"] .card {
+  border-radius: 0 16px 0 16px;
+  border: 1px solid rgb(225 6 0 / 0.38);
   border-top: 3px solid #e10600;
   background:
-    linear-gradient(135deg, rgb(225 6 0 / 0.14) 0%, transparent 38%),
+    linear-gradient(135deg, rgb(225 6 0 / 0.12) 0%, transparent 35%),
+    linear-gradient(180deg, #13131b 0%, #0c0c12 100%);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.65);
+}
+[data-hud-theme="mdt-f1"] .page-title,
+[data-hud-theme="mdt-f1"] .section-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+[data-hud-theme="mdt-f1"] .btn {
+  border-radius: 0 10px 0 10px;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+[data-hud-theme="mdt-f1"] .hud {
+  border-radius: 0 16px 0 16px;
+  border: 1px solid rgb(225 6 0 / 0.5);
+  border-top: 3.5px solid #e10600;
+  background:
+    linear-gradient(135deg, rgb(225 6 0 / 0.16) 0%, transparent 38%),
     linear-gradient(180deg, rgb(14 14 19 / 0.96) 0%, rgb(8 8 12 / 0.98) 100%);
   box-shadow: 0 10px 26px rgb(0 0 0 / 0.65);
 }
-[data-hud-theme="mdt-f1"] .hud-title {
+[data-hud-theme="mdt-f1"] .hud-title,
+[data-hud-theme="mdt-f1"] .hud-value {
   font-style: italic;
+  letter-spacing: 0.06em;
+}
+[data-hud-theme="mdt-f1"] .hud-title {
   font-weight: 800;
   letter-spacing: 0.14em;
   color: #ffffff;
 }
 [data-hud-theme="mdt-f1"] .hud-tile {
-  border-radius: 2px;
-  border-left: 2px solid rgb(225 6 0 / 0.65);
+  border-radius: 0 6px 0 6px;
+  border-left: 2.5px solid #e10600;
 }
 
-/* 3. MDT-HY: Le Mans Hypercar WEC (Textura carbono, barra lateral roja LMH + destello dorado híbrido ERS) */
-[data-hud-theme="mdt-hy"] .hud {
-  border-radius: 6px;
+/* -------------------------------------------------------------------------
+   3. MDT-HY: Le Mans Hypercar WEC · Fuente Técnica Bahnschrift · Carbono + Oro Híbrido
+   ------------------------------------------------------------------------- */
+[data-hud-theme="mdt-hy"] {
+  --font-sans: "Bahnschrift", "Consolas", "Segoe UI Semibold", sans-serif;
+  --font-display: "Bahnschrift", "Consolas", "Barlow Condensed", monospace;
+  --color-bg: #0d070a;
+  --color-surface: #160c11;
+  --color-surface-2: #211119;
+  --color-surface-3: #301723;
+  --color-line: rgb(255 184 0 / 0.35);
+  --color-fg: #fff7eb;
+  --color-muted: #c9ab9c;
+}
+[data-hud-theme="mdt-hy"] body.companion {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 2px, transparent 2px 6px),
+    radial-gradient(80% 50% at 0% 0%, rgb(255 30 56 / 0.14) 0%, transparent 65%),
+    linear-gradient(180deg, #0f070b 0%, #080406 100%);
+  letter-spacing: 0.02em;
+}
+[data-hud-theme="mdt-hy"] .card {
+  border-radius: 4px;
   border: 1px solid rgb(255 184 0 / 0.35);
   border-left: 4px solid #ff1e38;
   background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.018) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.016) 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, rgb(24 12 18 / 0.96) 0%, rgb(13 7 11 / 0.98) 100%);
+  box-shadow:
+    0 8px 24px rgb(0 0 0 / 0.6),
+    inset 0 1px 0 rgb(255 184 0 / 0.3);
+}
+[data-hud-theme="mdt-hy"] .page-title,
+[data-hud-theme="mdt-hy"] .section-title {
+  color: #ffb800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+[data-hud-theme="mdt-hy"] .btn {
+  border-radius: 3px;
+  border-left: 2px solid #ffb800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+[data-hud-theme="mdt-hy"] .hud {
+  border-radius: 5px;
+  border: 1px solid rgb(255 184 0 / 0.42);
+  border-left: 4px solid #ff1e38;
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.02) 0 2px, transparent 2px 6px),
     linear-gradient(180deg, rgb(18 11 15 / 0.95) 0%, rgb(9 7 10 / 0.97) 100%);
   box-shadow:
     0 8px 24px rgb(0 0 0 / 0.55),
-    inset 0 1px 0 rgb(255 184 0 / 0.28);
+    inset 0 1px 0 rgb(255 184 0 / 0.32);
 }
 [data-hud-theme="mdt-hy"] .hud-title {
   color: #ffb800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
 }
 [data-hud-theme="mdt-hy"] .hud-tile {
-  border-radius: 4px;
-  border-top: 1px solid rgb(255 30 56 / 0.35);
+  border-radius: 3px;
+  border-top: 1px solid rgb(255 30 56 / 0.45);
 }
 
-/* 4. MDT-GT3: Pantalla Industrial Bosch / MoTeC GT3 Endurance (Verde Flúor + Amarillo, chasis técnico cuadrado) */
-[data-hud-theme="mdt-gt3"] .hud {
-  border-radius: 3px;
-  border: 1.5px solid rgb(0 230 118 / 0.65);
-  outline: 1px solid rgb(255 214 0 / 0.22);
+/* -------------------------------------------------------------------------
+   4. MDT-GT3: Consola Industrial Bosch / MoTeC GT3 · Fuente 100% Monoespaciada Digital
+   ------------------------------------------------------------------------- */
+[data-hud-theme="mdt-gt3"] {
+  --font-sans: "Cascadia Mono", "Consolas", "Courier New", ui-monospace, monospace;
+  --font-display: "Cascadia Mono", "Consolas", "Courier New", ui-monospace, monospace;
+  --color-bg: #040d08;
+  --color-surface: #07160f;
+  --color-surface-2: #0c2317;
+  --color-surface-3: #133422;
+  --color-line: rgb(0 230 118 / 0.42);
+  --color-fg: #e8fff2;
+  --color-muted: #7bc49d;
+}
+[data-hud-theme="mdt-gt3"] body.companion {
+  background-color: #040d08;
+  background-image:
+    linear-gradient(rgb(0 230 118 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(0 230 118 / 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+[data-hud-theme="mdt-gt3"] .card {
+  border-radius: 2px;
+  border: 1.5px solid rgb(0 230 118 / 0.58);
+  outline: 1px solid rgb(255 214 0 / 0.25);
   outline-offset: -4px;
-  background:
-    linear-gradient(180deg, rgb(9 20 15 / 0.96) 0%, rgb(6 13 10 / 0.98) 100%);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 0.6);
+  background: linear-gradient(180deg, rgb(8 22 15 / 0.96) 0%, rgb(5 14 9 / 0.98) 100%);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.65);
+}
+[data-hud-theme="mdt-gt3"] .page-title,
+[data-hud-theme="mdt-gt3"] .section-title {
+  color: #00e676;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+[data-hud-theme="mdt-gt3"] .btn,
+[data-hud-theme="mdt-gt3"] .field {
+  border-radius: 2px;
+}
+[data-hud-theme="mdt-gt3"] .hud {
+  border-radius: 2px;
+  border: 1.5px solid rgb(0 230 118 / 0.7);
+  outline: 1px solid rgb(255 214 0 / 0.28);
+  outline-offset: -4px;
+  background: linear-gradient(180deg, rgb(9 20 15 / 0.96) 0%, rgb(6 13 10 / 0.98) 100%);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.65);
 }
 [data-hud-theme="mdt-gt3"] .hud-title {
   color: #00e676;
@@ -184,20 +348,62 @@
   letter-spacing: 0.08em;
 }
 [data-hud-theme="mdt-gt3"] .hud-tile {
-  border-radius: 2px;
-  border: 1px solid rgb(0 230 118 / 0.2);
+  border-radius: 1px;
+  border: 1px solid rgb(0 230 118 / 0.25);
 }
 
-/* 5. MDT-LMP2: Prototipo LMP2 Gibson / Oreca (Azul Eléctrico + Naranja Competición, doble línea de cabecera) */
-[data-hud-theme="mdt-lmp2"] .hud {
-  border-radius: 8px;
-  border: 1px solid rgb(0 176 255 / 0.55);
-  border-top: 3px solid #ff6d00;
-  border-bottom: 2px solid #00b0ff;
+/* -------------------------------------------------------------------------
+   5. MDT-LMP2: Prototipo Oreca Gulf Heritage · Fuente Clásica Endurance · Bicolor Azul/Naranja
+   ------------------------------------------------------------------------- */
+[data-hud-theme="mdt-lmp2"] {
+  --font-sans: "Franklin Gothic Medium", "Georgia", "Trebuchet MS", serif;
+  --font-display: "Franklin Gothic Medium", "Impact", "Georgia", serif;
+  --color-bg: #04101e;
+  --color-surface: #081b31;
+  --color-surface-2: #0d2746;
+  --color-surface-3: #14365e;
+  --color-line: rgb(0 176 255 / 0.45);
+  --color-fg: #f5f9ff;
+  --color-muted: #93bce2;
+}
+[data-hud-theme="mdt-lmp2"] body.companion {
   background:
-    radial-gradient(100% 80% at 100% 0%, rgb(255 109 0 / 0.14) 0%, transparent 65%),
+    radial-gradient(90% 60% at 100% 0%, rgb(255 109 0 / 0.14) 0%, transparent 60%),
+    radial-gradient(90% 60% at 0% 100%, rgb(0 176 255 / 0.14) 0%, transparent 60%),
+    linear-gradient(180deg, #051324 0%, #030b16 100%);
+}
+[data-hud-theme="mdt-lmp2"] .card {
+  border-radius: 10px;
+  border: 1px solid rgb(0 176 255 / 0.5);
+  border-top: 3.5px solid #ff6d00;
+  border-bottom: 2.5px solid #00b0ff;
+  background:
+    radial-gradient(100% 80% at 100% 0%, rgb(255 109 0 / 0.12) 0%, transparent 65%),
+    linear-gradient(180deg, rgb(8 24 44 / 0.95) 0%, rgb(5 15 28 / 0.98) 100%);
+  box-shadow: 0 8px 24px rgb(0 18 40 / 0.6);
+}
+[data-hud-theme="mdt-lmp2"] .page-title {
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #ff6d00;
+  letter-spacing: 0.04em;
+}
+[data-hud-theme="mdt-lmp2"] .section-title {
+  color: #ff9100;
+  letter-spacing: 0.05em;
+}
+[data-hud-theme="mdt-lmp2"] .btn-primary {
+  background: linear-gradient(90deg, #00b0ff 0%, #ff6d00 100%);
+  color: #fff;
+}
+[data-hud-theme="mdt-lmp2"] .hud {
+  border-radius: 10px;
+  border: 1px solid rgb(0 176 255 / 0.55);
+  border-top: 3.5px solid #ff6d00;
+  border-bottom: 2.5px solid #00b0ff;
+  background:
+    radial-gradient(100% 80% at 100% 0%, rgb(255 109 0 / 0.16) 0%, transparent 65%),
     linear-gradient(180deg, rgb(7 19 32 / 0.95) 0%, rgb(5 12 22 / 0.97) 100%);
-  box-shadow: 0 8px 22px rgb(0 176 255 / 0.22);
+  box-shadow: 0 8px 22px rgb(0 176 255 / 0.25);
 }
 [data-hud-theme="mdt-lmp2"] .hud-title {
   color: #ff9100;
@@ -282,6 +488,7 @@
 /* ---------- Companion ---------- */
 
 @utility page-title {
+  font-family: var(--font-display);
   font-size: 26px;
   line-height: 1.15;
   font-weight: 700;
@@ -289,6 +496,7 @@
 }
 
 @utility section-title {
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
 }

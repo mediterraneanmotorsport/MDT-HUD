@@ -343,6 +343,7 @@ function buildFallbackFixtures() {
 }
 
 export async function install() {
+  (window as any).__MDT_MOCK__ = true;
   let fx: any;
   try {
     const res = await fetch(new URL("./fixtures/fixtures.json", import.meta.url));

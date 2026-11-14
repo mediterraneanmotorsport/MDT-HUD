@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.2...v1.0.3) (2026-11-14)
+
+### Features & Bug Fixes
+
+* **Sincronización Reactiva Instantánea en el DDU Móvil (`#mobile`) sin cambiar de página**: corregido el conflicto por el que `loadConfig()` en navegadores móviles llamaba al mock vacío tras la primera carga y mejorada la reactividad en sitio (`applyMergedInPlace` + `config.revision`) junto con el estado compartido `AppState.mobile` en Rust (`< 30 ms`), el endpoint `/__mobile_track_map` y la cabecera `Access-Control-Allow-Private-Network: true`
+* **5 Temas Visuales Radicalmente Distintos en App + Overlays + Móvil (con Fuentes Propias)**: `MDT-AURA` (Barlow / cristal aeroespacial neón), `MDT-F1` (Impact / Arial Black Italic con cortes diagonales y franja roja `#e10600`), `MDT-HY` (Bahnschrift / Consolas con textura de fibra de carbono tejida y borde rojo/dorado WEC), `MDT-GT3` (Cascadia Mono 100% digital con cuadrícula de osciloscopio y doble filete verde/amarillo) y `MDT-LMP2` (Franklin Gothic / Georgia con doble franja Gulf naranja y azul cielo), además de selector rápido en la barra superior de la aplicación
+* **Nueva Marca de Agua MDT (Stream) con Piloto en Vivo, Bandera SVG del País y Foto Circular**: muestra automáticamente el nombre del piloto que está conduciendo en Le Mans Ultimate, detecta o permite elegir la bandera de su país en SVG nítido y permite subir una foto del piloto recortada dentro de un círculo con anillo luminoso
+
 ## [1.0.2](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.1...v1.0.2) (2026-11-14)
 
 ### Bug Fixes & Improvements

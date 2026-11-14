@@ -1,4 +1,5 @@
-import { applyCompleteOverlayTheme, applyRemoteConfig, config, type PresetThemeId } from "./config.svelte";
+import { isNativeTauri } from "./api";
+import { applyCompleteOverlayTheme, type PresetThemeId } from "./config.svelte";
 import type { Snapshot } from "./types";
 
 export type MfdPageId =
@@ -160,7 +161,7 @@ export interface WheelButtonBind {
 const STORAGE_KEY = "mdt_wheel_mfd_v3";
 
 export const MOBILE_SERVER_BASE =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && location.port !== "1420"
+  typeof window !== "undefined" && isNativeTauri() && location.port !== "1420"
     ? "http://127.0.0.1:1420"
     : "";
 
@@ -350,7 +351,7 @@ class WheelController {
   setMobileTheme(theme: PresetThemeId, syncPcTheme = true) {
     this.mobileTheme = theme;
     this.syncConfigToServer();
-    if (syncPcTheme && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    if (syncPcTheme) {
       applyCompleteOverlayTheme(theme, true);
     }
   }
@@ -491,45 +492,41 @@ class WheelController {
       requestAnimationFrame(pollGamepads);
     }
 
-    setInterval(async () => {
-      try {
-        const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isClientView && data.appConfig) {
-          applyRemoteConfig(data.appConfig);
-        }
-        if (typeof data.configSeq === "number" && data.configSeq > this.lastKnownConfigSeq) {
-          this.lastKnownConfigSeq = data.configSeq;
-          if (Array.isArray(data.pages) && data.pages.length > 0) {
-            this.enabledPageIds = data.pages;
-          }
-          if (typeof data.mobileTheme === "string") {
-            const newTheme = data.mobileTheme as PresetThemeId;
-            if (this.mobileTheme !== newTheme) {
-              this.mobileTheme = newTheme;
-              if ("__TAURI_INTERNALS__" in window && !isOverlayWindow && config.value.general.theme !== newTheme) {
-                applyCompleteOverlayTheme(newTheme, true);
+    if (!isClientView) {
+      setInterval(async () => {
+        try {
+          const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (typeof data.configSeq === "number" && data.configSeq > this.lastKnownConfigSeq) {
+            this.lastKnownConfigSeq = data.configSeq;
+            if (Array.isArray(data.pages) && data.pages.length > 0) {
+              this.enabledPageIds = data.pages;
+            }
+            if (typeof data.mobileTheme === "string") {
+              const newTheme = data.mobileTheme as PresetThemeId;
+              if (this.mobileTheme !== newTheme) {
+                this.mobileTheme = newTheme;
               }
             }
+            if (typeof data.autoPopups === "boolean") {
+              this.autoPopups = data.autoPopups;
+            }
+            this.saveStored();
           }
-          if (typeof data.autoPopups === "boolean") {
-            this.autoPopups = data.autoPopups;
+          if (typeof data.pageSeq === "number" && data.pageSeq > this.lastKnownSeq) {
+            this.lastKnownSeq = data.pageSeq;
+            const len = this.activePages.length;
+            if (typeof data.page === "number" && data.page !== this.pageIndex) {
+              this.pageIndex = ((data.page % len) + len) % len;
+              this.channel?.postMessage({ page: this.pageIndex });
+            }
           }
-          this.saveStored();
+        } catch {
+          // ignore
         }
-        if (typeof data.pageSeq === "number" && data.pageSeq > this.lastKnownSeq) {
-          this.lastKnownSeq = data.pageSeq;
-          const len = this.activePages.length;
-          if (typeof data.page === "number" && data.page !== this.pageIndex) {
-            this.pageIndex = ((data.page % len) + len) % len;
-            this.channel?.postMessage({ page: this.pageIndex });
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }, 350);
+      }, 350);
+    }
   }
 
   async fetchMobileInfo() {

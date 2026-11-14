@@ -21,14 +21,69 @@
   const cfg = $derived(config.value.widgets[selectedId]);
   const g = $derived(config.value.general);
 
+  let avatarInput = $state<HTMLInputElement | null>(null);
+  let avatarError = $state("");
+
   function selectTheme(t: HudTheme) {
     if (t === "custom") {
       g.theme = "custom";
       saveConfig();
     } else {
       applyCompleteOverlayTheme(t, true);
+      wheelControl.setMobileTheme(t);
     }
   }
+
+  function handleAvatarUpload(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    avatarError = "";
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 192;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // Center-crop square
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+
+        const dataUrl = canvas.toDataURL("image/webp", 0.88);
+        cfg.options.avatarDataUrl = dataUrl;
+        cfg.options.showAvatar = true;
+        saveConfig();
+      };
+      img.onerror = () => {
+        avatarError = "No se pudo cargar la imagen seleccionada.";
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+    input.value = "";
+  }
+
+  function clearAvatar() {
+    cfg.options.avatarDataUrl = "";
+    saveConfig();
+  }
+
+  const THEME_FONT_STYLE: Record<string, string> = {
+    "mdt-aura": "font-family: 'Barlow Condensed', 'Barlow', sans-serif; letter-spacing: 0.06em;",
+    "mdt-f1": "font-family: 'Impact', 'Arial Black', sans-serif; font-style: italic; letter-spacing: 0.08em;",
+    "mdt-hy": "font-family: 'Bahnschrift', 'Consolas', monospace; letter-spacing: 0.14em;",
+    "mdt-gt3": "font-family: 'Cascadia Mono', 'Consolas', monospace; letter-spacing: 0.04em;",
+    "mdt-lmp2": "font-family: 'Franklin Gothic Medium', 'Georgia', serif; letter-spacing: 0.09em;",
+  };
 </script>
 
 <div class="mx-auto max-w-6xl p-6">
@@ -54,7 +109,7 @@
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
       <div>
         <span class="text-xs font-semibold tracking-wider text-muted uppercase">
-          Temas Predefinidos Completos del Overlay (Diseño + Dashboard + Colores)
+          Temas Predefinidos Completos (App + Overlay + Fuentes + Móvil)
         </span>
       </div>
       <div class="flex flex-wrap items-center gap-3">
@@ -102,17 +157,20 @@
           class={[
             "flex flex-col items-start justify-between rounded-xl border p-3 text-left transition-all",
             g.theme === id
-              ? "border-accent bg-surface-3 text-fg shadow-[0_0_16px_rgb(34_135_236/0.25)]"
+              ? "border-accent bg-surface-3 text-fg shadow-[0_0_18px_var(--color-accent)]"
               : "border-line bg-surface-2/60 text-muted hover:border-white/25 hover:text-fg",
           ]}
           onclick={() => selectTheme(id as HudTheme)}
         >
           <div class="flex w-full items-center justify-between">
-            <span class="font-display text-sm font-extrabold tracking-wider text-fg">{t.label}</span>
+            <span class="text-base font-extrabold text-fg uppercase" style={THEME_FONT_STYLE[id]}>{t.label}</span>
             <div class="flex items-center gap-1">
               <span class="h-3 w-3 rounded-full border border-white/20" style:background={t.accent}></span>
               <span class="h-3 w-3 rounded-full border border-white/20" style:background={t.secondary}></span>
             </div>
+          </div>
+          <div class="mt-1 rounded bg-white/6 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-accent-hi uppercase">
+            Fuente: {t.fontName}
           </div>
           <div class="mt-1.5 line-clamp-2 text-[11px] leading-snug text-muted">{t.subtitle}</div>
         </button>
@@ -227,6 +285,83 @@
           {/if}
         {/each}
       </div>
+
+      {#if selectedId === "mdtbranding"}
+        <div class="mt-6 border-t border-line pt-5 text-sm">
+          <h3 class="font-bold text-fg">Identidad del Piloto (Nombre en Vivo, Bandera y Foto Circular)</h3>
+          <p class="mt-0.5 text-xs text-muted">
+            Por defecto muestra automáticamente el nombre del piloto detectado en Le Mans Ultimate y la bandera de su país. También puedes subir tu foto en círculo o fijar un alias personalizado.
+          </p>
+
+          <div class="mt-4 grid max-w-lg gap-4">
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-semibold tracking-wider text-muted uppercase">
+                Nombre del piloto (vacío = automático del juego)
+              </span>
+              <input
+                type="text"
+                class="field"
+                placeholder="Automático del juego (ej. M. García o [ES] M. García)"
+                value={cfg.options.customDriverName ?? ""}
+                oninput={(e) => {
+                  cfg.options.customDriverName = e.currentTarget.value;
+                  saveConfig();
+                }}
+              />
+            </label>
+
+            <div>
+              <div class="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">
+                Foto del piloto en círculo (Opcional)
+              </div>
+              <div class="flex flex-wrap items-center gap-4">
+                {#if cfg.options.avatarDataUrl}
+                  <div class="relative h-14 w-14 shrink-0 rounded-full p-0.5 shadow-[0_0_12px_var(--color-accent)]" style="background: linear-gradient(135deg, var(--color-accent), var(--color-accent-hi));">
+                    <img
+                      src={cfg.options.avatarDataUrl}
+                      alt="Foto del piloto"
+                      class="h-full w-full rounded-full bg-surface object-cover"
+                    />
+                  </div>
+                {:else}
+                  <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-dashed border-line bg-surface-2 text-xs text-muted">
+                    Sin foto
+                  </div>
+                {/if}
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    bind:this={avatarInput}
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    onchange={handleAvatarUpload}
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-primary text-xs"
+                    onclick={() => avatarInput?.click()}
+                  >
+                    Subir foto del piloto
+                  </button>
+                  {#if cfg.options.avatarDataUrl}
+                    <button
+                      type="button"
+                      class="btn text-xs text-bad hover:border-bad"
+                      onclick={clearAvatar}
+                    >
+                      Quitar foto
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              {#if avatarError}
+                <p class="mt-1.5 text-xs text-bad">{avatarError}</p>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
 
       {#if selectedId === "mfd"}
         <div class="mt-6 border-t border-line pt-5 text-sm">

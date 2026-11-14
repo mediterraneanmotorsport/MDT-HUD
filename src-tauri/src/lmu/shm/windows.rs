@@ -191,27 +191,77 @@ impl LmuSharedMemory {
         }
     }
 
-    /// Sleeps ~60 Hz between shared memory reads. `copy_into` synchronizes
-    /// with the game's spin lock (`LMU_SharedMemoryLockData`), avoiding 250ms
-    /// stalls on `LMU_Data_HoldEvent` in newer LMU builds.
-    pub fn wait_for_frame(&self, _timeout_ms: u32) -> bool {
-        let _ = (&self.hold_event, &self.data_event);
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        true
+    /// Waits briefly for the next shared memory update (~60 Hz cadence)
+    /// without stalling for 250ms if `LMU_Data_HoldEvent` is idle.
+    pub fn wait_for_frame(&self, timeout_ms: u32) -> bool {
+        let wait_ms = timeout_ms.min(16);
+        let signaled = match (&self.hold_event, &self.data_event) {
+            (Some(hold), Some(data)) => {
+                if hold.wait(wait_ms) {
+                    data.wait(wait_ms)
+                } else {
+                    data.wait(0)
+                }
+            }
+            (_, Some(data)) => data.wait(wait_ms),
+            _ => false,
+        };
+        if !signaled {
+            std::thread::sleep(std::time::Duration::from_millis(14));
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(8));
+        }
+        signaled
     }
 
-    /// Copies the whole block into `dst` while holding the game's lock.
+    /// Copies the active sections of `LMU_Data` into `dst` without setting
+    /// `busy = 1` on `LMU_SharedMemoryLockData` (so we never block the game's
+    /// non-blocking `TryLockSpin` writer).
     pub fn copy_into(&self, dst: &mut [u8]) -> bool {
         assert_eq!(dst.len(), layout::TOTAL_SIZE);
-        let _guard = match &self.lock {
-            Some(lock) => match lock.lock(100) {
-                Some(guard) => Some(guard),
-                None => return false,
-            },
-            None => None,
-        };
+        if let Some(lock) = &self.lock {
+            let mut spins = 0u32;
+            while lock.busy().load(Ordering::Acquire) != 0 {
+                std::hint::spin_loop();
+                spins += 1;
+                if spins > 8000 {
+                    break;
+                }
+            }
+        }
         unsafe {
-            std::ptr::copy_nonoverlapping(self.data.as_ptr(), dst.as_mut_ptr(), layout::TOTAL_SIZE);
+            let src = self.data.as_ptr();
+            // 1. Copy Generic + Paths + ScoringInfo header (up to OFF_SCORING_VEHICLES)
+            std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), layout::OFF_SCORING_VEHICLES);
+
+            let info: layout::ScoringInfo = layout::read_at(dst, layout::OFF_SCORING_INFO);
+            let num_veh = (info.num_vehicles.max(0) as usize).min(layout::MAX_VEHICLES);
+            let veh_bytes = num_veh * std::mem::size_of::<layout::VehicleScoring>();
+            if veh_bytes > 0 {
+                std::ptr::copy_nonoverlapping(
+                    src.add(layout::OFF_SCORING_VEHICLES),
+                    dst.as_mut_ptr().add(layout::OFF_SCORING_VEHICLES),
+                    veh_bytes,
+                );
+            }
+
+            // 2. Copy Telemetry header + active TelemInfo entries
+            let telem_hdr_len = layout::OFF_TELEMETRY_INFO - layout::OFF_TELEMETRY;
+            std::ptr::copy_nonoverlapping(
+                src.add(layout::OFF_TELEMETRY),
+                dst.as_mut_ptr().add(layout::OFF_TELEMETRY),
+                telem_hdr_len,
+            );
+            let active = (*src.add(layout::OFF_TELEMETRY_ACTIVE_VEHICLES) as usize).min(layout::MAX_VEHICLES);
+            let copy_telem_count = active.max(num_veh).min(layout::MAX_VEHICLES);
+            let telem_bytes = copy_telem_count * std::mem::size_of::<layout::TelemInfo>();
+            if telem_bytes > 0 {
+                std::ptr::copy_nonoverlapping(
+                    src.add(layout::OFF_TELEMETRY_INFO),
+                    dst.as_mut_ptr().add(layout::OFF_TELEMETRY_INFO),
+                    telem_bytes,
+                );
+            }
         }
         true
     }

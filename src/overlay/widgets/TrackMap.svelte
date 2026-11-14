@@ -1,7 +1,7 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { onDestroy } from "svelte";
-  import { api } from "../../lib/api";
+  import { api, isNativeTauri } from "../../lib/api";
   import { config, type Units } from "../../lib/config.svelte";
   import { classColor, isTeammate } from "../../lib/format";
   import { fit, pathFrom, project } from "../../lib/geometry";
@@ -23,6 +23,20 @@
     stored = null;
     trail = [];
     if (!name) return;
+    if (!isNativeTauri()) {
+      try {
+        const res = await fetch(`/__mobile_track_map?track=${encodeURIComponent(name)}`, { cache: "no-store" });
+        if (res.ok) {
+          const map = await res.json();
+          if (name === track && map?.points?.length) {
+            stored = map.points;
+            return;
+          }
+        }
+      } catch {
+        // fallback to api.getTrackMap
+      }
+    }
     const map = await api.getTrackMap(name).catch(() => null);
     if (name === track) stored = map?.points ?? null;
   }

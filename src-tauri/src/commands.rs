@@ -92,6 +92,18 @@ pub fn get_config(state: State<AppState>) -> Value {
 pub fn save_config(app: AppHandle, state: State<AppState>, config: Value) -> CmdResult<()> {
     let text = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     std::fs::write(&state.config_path, text).map_err(|e| e.to_string())?;
+    if let Ok(mut st) = state.mobile.lock() {
+        st.app_config = Some(config.clone());
+        if let Ok(meta) = std::fs::metadata(&state.config_path) {
+            st.app_config_mtime = meta.modified().ok();
+        }
+        if let Some(t) = config.pointer("/general/theme").and_then(Value::as_str) {
+            if t != "custom" {
+                st.mobile_theme = Some(t.to_string());
+            }
+        }
+        st.config_seq += 1;
+    }
     if let Some(hz) = config.pointer("/general/updateHz").and_then(Value::as_u64) {
         state.shared.emit_hz.store(hz as u32, Ordering::Relaxed);
     }

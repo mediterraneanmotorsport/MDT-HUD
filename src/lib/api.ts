@@ -1,4 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+
+export function isNativeTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window && !(window as any).__MDT_MOCK__;
+}
 import type {
   BoardSummary,
   DailySchedule,

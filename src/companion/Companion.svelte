@@ -2,12 +2,20 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onMount } from "svelte";
-  import { loadConfig } from "../lib/config.svelte";
+  import { isNativeTauri } from "../lib/api";
+  import {
+    applyCompleteOverlayTheme,
+    config,
+    HUD_THEMES,
+    loadConfig,
+    type PresetThemeId,
+  } from "../lib/config.svelte";
   import { watchUploads } from "../lib/uploads.svelte";
   import { live, startLive } from "../lib/live.svelte";
   import Logo from "../lib/Logo.svelte";
   import { initStarPrompt } from "../lib/star.svelte";
   import { initUpdater, installUpdate, updater } from "../lib/updater.svelte";
+  import { wheelControl } from "../lib/wheelControl.svelte";
   import { nav, type Page } from "./nav.svelte";
   import ChangelogDialog from "./components/ChangelogDialog.svelte";
   import StarPrompt from "./components/StarPrompt.svelte";
@@ -25,7 +33,7 @@
   const ISSUE_URL = "https://github.com/mediterraneanmotorsport/MDT-HUD/issues/new/choose";
 
   async function reportIssue(event: MouseEvent) {
-    if (!("__TAURI_INTERNALS__" in window)) return;
+    if (!isNativeTauri()) return;
     event.preventDefault();
     reportIssueError = false;
     try {
@@ -40,7 +48,7 @@
     void loadConfig().then(initUpdater).then(initStarPrompt);
     watchUploads();
 
-    if (!("__TAURI_INTERNALS__" in window)) return;
+    if (!isNativeTauri()) return;
 
     const appWindow = getCurrentWindow();
     void appWindow.isMaximized().then((value) => (maximized = value));
@@ -53,16 +61,21 @@
   });
 
   function startDragging(event: MouseEvent) {
-    if (event.button === 0 && "__TAURI_INTERNALS__" in window) {
+    if (event.button === 0 && isNativeTauri()) {
       void getCurrentWindow().startDragging();
     }
   }
 
   async function toggleMaximize() {
-    if (!("__TAURI_INTERNALS__" in window)) return;
+    if (!isNativeTauri()) return;
     const appWindow = getCurrentWindow();
     await appWindow.toggleMaximize();
     maximized = await appWindow.isMaximized();
+  }
+
+  function quickSelectTheme(id: PresetThemeId) {
+    applyCompleteOverlayTheme(id, true);
+    wheelControl.setMobileTheme(id);
   }
 
   const PAGES: { id: Page; label: string; icon: string }[] = [
@@ -99,13 +112,34 @@
     >
       <Logo size={22} tagline />
     </div>
+
+    <!-- Selector rápido de tema visual de la app y overlays -->
+    <div class="hidden items-center gap-1 px-2 sm:flex">
+      <span class="mr-1 text-[10px] font-bold tracking-wider text-muted uppercase">Tema:</span>
+      {#each Object.entries(HUD_THEMES) as [id, t] (id)}
+        <button
+          class={[
+            "flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-bold transition-all",
+            config.value.general.theme === id
+              ? "bg-accent text-white shadow-[0_0_10px_var(--color-accent)]"
+              : "bg-surface-2 text-muted hover:bg-surface-3 hover:text-fg",
+          ]}
+          title={`${t.label} — Fuente: ${t.fontName}`}
+          onclick={() => quickSelectTheme(id as PresetThemeId)}
+        >
+          <span class="h-2 w-2 rounded-full" style:background={t.accent}></span>
+          {t.label.replace("MDT-", "")}
+        </button>
+      {/each}
+    </div>
+
     <div class="flex shrink-0 items-stretch">
       <button
         class="flex w-12 items-center justify-center text-muted transition-colors hover:bg-surface-3 hover:text-fg"
         aria-label="Minimize window"
         title="Minimize"
         onclick={() => {
-          if ("__TAURI_INTERNALS__" in window) void getCurrentWindow().minimize();
+          if (isNativeTauri()) void getCurrentWindow().minimize();
         }}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7h8" stroke="currentColor" stroke-width="1.2" /></svg>
@@ -127,7 +161,7 @@
         aria-label="Close window"
         title="Close"
         onclick={() => {
-          if ("__TAURI_INTERNALS__" in window) void getCurrentWindow().close();
+          if (isNativeTauri()) void getCurrentWindow().close();
         }}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="m3.5 3.5 7 7m0-7-7 7" stroke="currentColor" stroke-width="1.2" /></svg>

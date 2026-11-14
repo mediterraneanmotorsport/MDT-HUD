@@ -4,7 +4,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import changelog from "../../CHANGELOG.md?raw";
 import { compareVersions, parseChangelog, type ChangelogRelease } from "./changelog";
 import { config, saveConfig } from "./config.svelte";
-import { api } from "./api";
+import { api, isNativeTauri } from "./api";
 
 export type UpdatePhase = "idle" | "checking" | "available" | "downloading" | "upToDate" | "error" | "outdated";
 
@@ -24,7 +24,7 @@ export const updater = $state({
 
 let pending: Update | null = null;
 
-const inTauri = () => "__TAURI_INTERNALS__" in window;
+const inTauri = () => isNativeTauri();
 
 /** Native Linux packages can't self-update; only report whether a newer release exists. */
 async function checkLatestRelease() {

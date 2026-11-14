@@ -516,20 +516,27 @@
     <div class="mt-2 grid grid-cols-[1fr_92px_1fr] gap-2">
       <!-- Left Column Cells -->
       <div class="flex flex-col justify-between gap-1.5">
-        <div class="rounded border border-white/10 bg-black/50 px-2.5 py-1.5">
-          <div class="text-[9px] font-bold tracking-wider text-muted uppercase">VELOCIDAD ({speedUnit(units)})</div>
-          <div class="hud-value text-[34px] leading-none font-black">{spdText}</div>
-        </div>
-        <div class="grid grid-cols-2 gap-1.5">
-          <div class={["rounded border px-2 py-1 transition-all", p?.tcActive || changedKey === "TC" ? "border-warn bg-warn text-black shadow-[0_0_10px_var(--color-warn)]" : "border-amber-500/40 bg-amber-500/10"]}>
-            <div class={["text-[9px] font-bold", p?.tcActive || changedKey === "TC" ? "text-black" : "text-amber-400"]}>TC</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{tcText}</div>
+        <div class="flex items-center justify-between rounded border border-white/10 bg-black/50 px-2.5 py-1.5">
+          <div>
+            <div class="text-[9px] font-bold tracking-wider text-muted uppercase">VELOCIDAD ({speedUnit(units)})</div>
+            <div class="hud-value text-[34px] leading-none font-black">{spdText}</div>
           </div>
-          <div class={["rounded border px-2 py-1 transition-all", p?.absActive || changedKey === "ABS" ? "border-sky-400 bg-sky-400 text-black shadow-[0_0_10px_#38bdf8]" : "border-sky-500/40 bg-sky-500/10"]}>
-            <div class={["text-[9px] font-bold", p?.absActive || changedKey === "ABS" ? "text-black" : "text-sky-400"]}>ABS</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{absText}</div>
-          </div>
+          {#if showSteeringWheel}
+            {@render steeringWheelSvg(30)}
+          {/if}
         </div>
+        {#if opts.showSettings ?? true}
+          <div class="grid grid-cols-2 gap-1.5">
+            <div class={["rounded border px-2 py-1 transition-all", p?.tcActive || changedKey === "TC" ? "border-warn bg-warn text-black shadow-[0_0_10px_var(--color-warn)]" : "border-amber-500/40 bg-amber-500/10"]}>
+              <div class={["text-[9px] font-bold", p?.tcActive || changedKey === "TC" ? "text-black" : "text-amber-400"]}>TC</div>
+              <div class="font-display text-lg leading-tight font-bold tabular-nums">{tcText}</div>
+            </div>
+            <div class={["rounded border px-2 py-1 transition-all", p?.absActive || changedKey === "ABS" ? "border-sky-400 bg-sky-400 text-black shadow-[0_0_10px_#38bdf8]" : "border-sky-500/40 bg-sky-500/10"]}>
+              <div class={["text-[9px] font-bold", p?.absActive || changedKey === "ABS" ? "text-black" : "text-sky-400"]}>ABS</div>
+              <div class="font-display text-lg leading-tight font-bold tabular-nums">{absText}</div>
+            </div>
+          </div>
+        {/if}
       </div>
 
       <!-- Center Giant Gear Cell -->
@@ -558,16 +565,18 @@
             {@render pedalPair("h-10")}
           {/if}
         </div>
-        <div class="grid grid-cols-2 gap-1.5">
-          <div class={["rounded border px-2 py-1 transition-all", changedKey === "MAP" ? "border-emerald-300 bg-emerald-400 text-black shadow-[0_0_10px_#22c55e]" : "border-emerald-500/40 bg-emerald-500/10"]}>
-            <div class={["text-[9px] font-bold", changedKey === "MAP" ? "text-black" : "text-emerald-400"]}>MAP</div>
-            <div class="font-display text-lg leading-tight font-bold tabular-nums">{mapText}</div>
+        {#if opts.showSettings ?? true}
+          <div class="grid grid-cols-2 gap-1.5">
+            <div class={["rounded border px-2 py-1 transition-all", changedKey === "MAP" ? "border-emerald-300 bg-emerald-400 text-black shadow-[0_0_10px_#22c55e]" : "border-emerald-500/40 bg-emerald-500/10"]}>
+              <div class={["text-[9px] font-bold", changedKey === "MAP" ? "text-black" : "text-emerald-400"]}>MAP</div>
+              <div class="font-display text-lg leading-tight font-bold tabular-nums">{mapText}</div>
+            </div>
+            <div class={["rounded border px-2 py-1 transition-all", changedKey === "BB" ? "border-rose-300 bg-rose-400 text-black shadow-[0_0_10px_#ef4444]" : "border-rose-500/40 bg-rose-500/10"]}>
+              <div class={["text-[9px] font-bold", changedKey === "BB" ? "text-black" : "text-rose-400"]}>BB</div>
+              <div class="font-display text-base leading-tight font-bold tabular-nums">{bbText}</div>
+            </div>
           </div>
-          <div class={["rounded border px-2 py-1 transition-all", changedKey === "BB" ? "border-rose-300 bg-rose-400 text-black shadow-[0_0_10px_#ef4444]" : "border-rose-500/40 bg-rose-500/10"]}>
-            <div class={["text-[9px] font-bold", changedKey === "BB" ? "text-black" : "text-rose-400"]}>BB</div>
-            <div class="font-display text-base leading-tight font-bold tabular-nums">{bbText}</div>
-          </div>
-        </div>
+        {/if}
       </div>
     </div>
 
@@ -777,23 +786,37 @@
      MODE 5: CLÁSICO ESTÁNDAR
      ========================================================================= -->
 {:else}
-  <div class={["hud w-[320px] p-3", hudAlertClass]}>
+  <div class={["hud w-[340px] p-3", hudAlertClass]}>
     {@render batteryFullBanner()}
     {@render pitLimiterBanner()}
     {@render rpmHeader("h-2")}
 
-    <div class="mt-3 grid grid-cols-[1fr_auto_1fr] items-end">
+    <div class="mt-3 flex items-end justify-between gap-2">
       <div>
+        {#if showMdtLogo}
+          <div class="mb-0.5 flex items-center gap-1">
+            <img src="/mdt-logo.png" alt="MDT" class="h-3.5 w-3.5 object-contain" />
+            <span class="font-display text-[10px] font-extrabold tracking-wider text-accent uppercase">MDT-HUD</span>
+          </div>
+        {/if}
         <div class="hud-value text-[40px]">{spdText}</div>
         <div class="hud-label mt-1">VELOCIDAD ({speedUnit(units)})</div>
       </div>
-      <div class="flex flex-col items-center px-4">
+      <div class="flex flex-col items-center px-3">
         <span class="text-[9px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
         <div class={["hud-value text-[64px] leading-none font-bold", p?.speedLimiter && "text-warn"]}>{gear}</div>
       </div>
-      <div class="text-right">
-        <div class="hud-value text-[24px]">{rpmText}</div>
-        <div class="hud-label mt-1">RPM</div>
+      <div class="flex items-end gap-2">
+        <div class="flex flex-col items-end text-right">
+          {#if showSteeringWheel}
+            {@render steeringWheelSvg(32)}
+          {/if}
+          <div class="hud-value mt-1 text-[24px]">{rpmText}</div>
+          <div class="hud-label mt-1">RPM</div>
+        </div>
+        {#if showPedals}
+          {@render pedalPair("h-14")}
+        {/if}
       </div>
     </div>
 

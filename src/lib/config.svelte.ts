@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { api } from "./api";
+import { api, isNativeTauri } from "./api";
 
 export type Units = "metric" | "imperial";
 export type HudTheme = "mdt-aura" | "mdt-f1" | "mdt-hy" | "mdt-gt3" | "mdt-lmp2" | "custom";
@@ -108,6 +108,7 @@ export interface Profile {
 export interface HudThemeMeta {
   label: string;
   subtitle: string;
+  fontName: string;
   accent: string;
   secondary: string;
   bg: string;
@@ -119,51 +120,56 @@ export interface HudThemeMeta {
 export const HUD_THEMES: Record<PresetThemeId, HudThemeMeta> = {
   "mdt-aura": {
     label: "MDT-AURA",
-    subtitle: "Neón Cian & Cristal Azul · Dashboard WEC con 15 LEDs y Volante",
+    subtitle: "Neón Cian & Cristal Azul · Fuente Geométrica Aeroespacial · Dash WEC",
+    fontName: "Barlow Aeroespacial",
     accent: "#2287ec",
     secondary: "#00e5ff",
-    bg: "#071426",
+    bg: "#050e1d",
     borderOpacity: 0.65,
     dashboardStyle: "wec",
     rpmStyle: "leds",
   },
   "mdt-f1": {
     label: "MDT-F1",
-    subtitle: "Broadcast Fórmula 1 · Cortes Diagonales, Barra Roja F1 y LEDs Convergentes",
+    subtitle: "Broadcast Fórmula 1 · Fuente Cursiva Racing Impact · Cortes Diagonales",
+    fontName: "F1 Broadcast Italic",
     accent: "#e10600",
     secondary: "#ffffff",
-    bg: "#0b0b10",
-    borderOpacity: 0.6,
+    bg: "#08080c",
+    borderOpacity: 0.65,
     dashboardStyle: "compact",
     rpmStyle: "center",
   },
   "mdt-hy": {
     label: "MDT-HY",
-    subtitle: "Le Mans Hypercar · Carbono, Acento Lateral LMH, Híbrido ERS & Lift/Coast",
+    subtitle: "Le Mans Hypercar WEC · Fuente Técnica Bahnschrift · Carbono & Oro Híbrido",
+    fontName: "WEC Hypercar Tech",
     accent: "#ff1e38",
     secondary: "#ffb800",
-    bg: "#100a0e",
-    borderOpacity: 0.55,
+    bg: "#11080c",
+    borderOpacity: 0.6,
     dashboardStyle: "ddu",
     rpmStyle: "center",
   },
   "mdt-gt3": {
     label: "MDT-GT3",
-    subtitle: "GT3 Endurance MoTeC/Bosch · Marco Industrial Verde Flúor & Tacómetro Radial",
+    subtitle: "Consola MoTeC / Bosch GT3 · Fuente Monoespaciada Digital · Marco Industrial",
+    fontName: "MoTeC Digital Mono",
     accent: "#00e676",
     secondary: "#ffd600",
-    bg: "#08140f",
-    borderOpacity: 0.65,
+    bg: "#05100a",
+    borderOpacity: 0.7,
     dashboardStyle: "radial",
     rpmStyle: "leds",
   },
   "mdt-lmp2": {
     label: "MDT-LMP2",
-    subtitle: "Prototipo LMP2 Oreca · Azul Eléctrico & Naranja Gulf con Doble Franja",
+    subtitle: "Prototipo Oreca Gulf · Fuente Clásica Endurance · Doble Franja Azul/Naranja",
+    fontName: "Le Mans Classic",
     accent: "#00b0ff",
     secondary: "#ff6d00",
-    bg: "#061320",
-    borderOpacity: 0.6,
+    bg: "#051220",
+    borderOpacity: 0.65,
     dashboardStyle: "ddu",
     rpmStyle: "leds",
   },
@@ -559,21 +565,73 @@ export const WIDGETS: WidgetMeta[] = [
   {
     id: "mdtbranding",
     name: "Marca de agua MDT (Stream)",
-    description: "Insignia oficial de Mediterranean Motorsport con logo del toro y etiqueta personalizable.",
-    defaults: { enabled: false, x: 1620, y: 1015 },
+    description: "Insignia de retransmisión con nombre del piloto en vivo, bandera del país y foto circular opcional.",
+    defaults: { enabled: false, x: 1580, y: 1005 },
     options: [
+      { key: "showAvatar", label: "Mostrar foto del piloto dentro de un círculo (Opcional)", type: "boolean" },
+      { key: "showFlag", label: "Mostrar bandera del país del piloto (Opcional)", type: "boolean" },
+      {
+        key: "countryCode",
+        label: "País del piloto (Bandera)",
+        type: "select",
+        choices: [
+          { value: "auto", label: "Detectar automáticamente (Idioma / Zona horaria)" },
+          { value: "ES", label: "España (ESP)" },
+          { value: "PT", label: "Portugal (POR)" },
+          { value: "AD", label: "Andorra (AND)" },
+          { value: "FR", label: "Francia (FRA)" },
+          { value: "IT", label: "Italia (ITA)" },
+          { value: "DE", label: "Alemania (DEU)" },
+          { value: "GB", label: "Reino Unido (GBR)" },
+          { value: "NL", label: "Países Bajos (NLD)" },
+          { value: "BE", label: "Bélgica (BEL)" },
+          { value: "CH", label: "Suiza (CHE)" },
+          { value: "AT", label: "Austria (AUT)" },
+          { value: "MC", label: "Mónaco (MCO)" },
+          { value: "IE", label: "Irlanda (IRL)" },
+          { value: "PL", label: "Polonia (POL)" },
+          { value: "SE", label: "Suecia (SWE)" },
+          { value: "NO", label: "Noruega (NOR)" },
+          { value: "FI", label: "Finlandia (FIN)" },
+          { value: "DK", label: "Dinamarca (DNK)" },
+          { value: "US", label: "Estados Unidos (USA)" },
+          { value: "CA", label: "Canadá (CAN)" },
+          { value: "MX", label: "México (MEX)" },
+          { value: "AR", label: "Argentina (ARG)" },
+          { value: "BR", label: "Brasil (BRA)" },
+          { value: "CL", label: "Chile (CHL)" },
+          { value: "CO", label: "Colombia (COL)" },
+          { value: "UY", label: "Uruguay (URY)" },
+          { value: "PE", label: "Perú (PER)" },
+          { value: "VE", label: "Venezuela (VEN)" },
+          { value: "JP", label: "Japón (JPN)" },
+          { value: "AU", label: "Australia (AUS)" },
+          { value: "NZ", label: "Nueva Zelanda (NZL)" },
+          { value: "EU", label: "Internacional / Europa (INT)" },
+        ],
+      },
+      { key: "showCarNumber", label: "Mostrar dorsal del coche en pista (#)", type: "boolean" },
       { key: "showTagline", label: "Mostrar subtítulo 'Mediterranean Motorsport'", type: "boolean" },
       {
         key: "style",
         label: "Estilo visual",
         type: "select",
         choices: [
-          { value: "panel", label: "Panel HUD con borde" },
+          { value: "panel", label: "Panel HUD con borde del tema" },
           { value: "minimal", label: "Marca de agua transparente" },
         ],
       },
     ],
-    optionDefaults: { showTagline: true, style: "panel" },
+    optionDefaults: {
+      showAvatar: true,
+      avatarDataUrl: "",
+      showFlag: true,
+      countryCode: "auto",
+      customDriverName: "",
+      showCarNumber: true,
+      showTagline: true,
+      style: "panel",
+    },
   },
 ];
 
@@ -677,6 +735,7 @@ function merge(stored: any): AppConfig {
 class ConfigStore {
   value = $state<AppConfig>(defaults());
   loaded = $state(false);
+  revision = $state(0);
 }
 
 export const config = new ConfigStore();
@@ -685,13 +744,37 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let started = false;
 let lastSaved = "";
 let lastRemoteConfigStr = "";
+let lastLocalSaveAt = 0;
+
+function applyMergedInPlace(next: AppConfig) {
+  Object.assign(config.value.general, next.general);
+  Object.assign(config.value.online, next.online);
+  Object.assign(config.value.spotter, next.spotter);
+  for (const [id, wNext] of Object.entries(next.widgets)) {
+    if (config.value.widgets[id]) {
+      config.value.widgets[id].enabled = wNext.enabled;
+      config.value.widgets[id].x = wNext.x;
+      config.value.widgets[id].y = wNext.y;
+      config.value.widgets[id].size = wNext.size;
+      config.value.widgets[id].alpha = wNext.alpha;
+      Object.assign(config.value.widgets[id].options, wNext.options);
+    } else {
+      config.value.widgets[id] = wNext;
+    }
+  }
+  config.value.activeProfile = next.activeProfile;
+  config.value.profiles = next.profiles;
+  config.revision += 1;
+}
 
 export function applyRemoteConfig(raw: any) {
   if (!raw || typeof raw !== "object") return;
-  const s = JSON.stringify(raw);
-  if (s === lastRemoteConfigStr) return;
+  if (Date.now() - lastLocalSaveAt < 650) return;
+  const next = merge(raw);
+  const s = JSON.stringify(next);
+  if (s === lastRemoteConfigStr && config.loaded) return;
   lastRemoteConfigStr = s;
-  config.value = merge(raw);
+  applyMergedInPlace(next);
   applyTheme(config.value.general);
   config.loaded = true;
 }
@@ -702,12 +785,34 @@ export async function loadConfig() {
     return;
   }
   started = true;
+  if (!isNativeTauri()) {
+    try {
+      const res = await fetch("/__mobile_state", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.appConfig) {
+          applyRemoteConfig(data.appConfig);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    applyTheme(config.value.general);
+    config.loaded = true;
+    return;
+  }
   await listen<unknown>("config-changed", (e) => {
-    if (JSON.stringify(e.payload) === lastSaved) return;
-    config.value = merge(e.payload);
+    const next = merge(e.payload);
+    const s = JSON.stringify(next);
+    if (s === lastSaved) return;
+    lastRemoteConfigStr = s;
+    applyMergedInPlace(next);
     applyTheme(config.value.general);
   });
-  config.value = merge(await api.getConfig());
+  const initial = merge(await api.getConfig());
+  lastRemoteConfigStr = JSON.stringify(initial);
+  applyMergedInPlace(initial);
   applyTheme(config.value.general);
   config.loaded = true;
 }
@@ -723,18 +828,24 @@ function syncActiveProfile() {
   };
 }
 
-/** Persists the current config (debounced) and broadcasts it to the other window. */
+/** Persists the current config (debounced) and broadcasts it to the other window and mobile server. */
 export function saveConfig() {
+  lastLocalSaveAt = Date.now();
+  config.revision += 1;
   applyTheme(config.value.general);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    lastLocalSaveAt = Date.now();
     syncActiveProfile();
     const snapshot = $state.snapshot(config.value);
-    lastSaved = JSON.stringify(snapshot);
-    api.saveConfig(snapshot);
+    const serialized = JSON.stringify(snapshot);
+    lastSaved = serialized;
+    lastRemoteConfigStr = serialized;
+    if (isNativeTauri()) {
+      api.saveConfig(snapshot);
+    }
     if (typeof window !== "undefined") {
-      const base =
-        "__TAURI_INTERNALS__" in window && location.port !== "1420" ? "http://127.0.0.1:1420" : "";
+      const base = isNativeTauri() && location.port !== "1420" ? "http://127.0.0.1:1420" : "";
       const body: Record<string, any> = { appConfig: snapshot };
       if (snapshot.general.theme !== "custom" && snapshot.general.theme in HUD_THEMES) {
         body.mobileTheme = snapshot.general.theme;
@@ -745,7 +856,7 @@ export function saveConfig() {
         body: JSON.stringify(body),
       }).catch(() => {});
     }
-  }, 250);
+  }, 30);
 }
 
 export function resetLayout() {

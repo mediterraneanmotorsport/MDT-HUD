@@ -33,6 +33,8 @@ pub struct AppState {
     pub uploads: Arc<tokio::sync::Notify>,
     /// Monitor the overlay currently covers, as stored in `general.monitor` ("" = primary).
     pub overlay_monitor: Mutex<String>,
+    /// Shared state for the mobile/tablet LAN server.
+    pub mobile: Arc<Mutex<mobile_server::MobileRelayState>>,
 }
 
 /// Detect the non-composited GTK path before constructing the overlay. Keep
@@ -186,6 +188,18 @@ pub fn run() {
             }
             let monitor = general("monitor").and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
 
+            let mobile = Arc::new(Mutex::new(mobile_server::MobileRelayState::default()));
+            if let Some(ref cfg) = stored {
+                if let Ok(mut st) = mobile.lock() {
+                    st.app_config = Some(cfg.clone());
+                    if let Some(t) = cfg.pointer("/general/theme").and_then(|v| v.as_str()) {
+                        if t != "custom" {
+                            st.mobile_theme = Some(t.to_string());
+                        }
+                    }
+                }
+            }
+
             app.manage(AppState {
                 shared: shared.clone(),
                 db: db.clone(),
@@ -196,6 +210,7 @@ pub fn run() {
                 preview: Mutex::new(None),
                 uploads: uploads.clone(),
                 overlay_monitor: Mutex::new(String::new()),
+                mobile: mobile.clone(),
             });
 
             create_overlay(app, &monitor)?;
@@ -209,7 +224,7 @@ pub fn run() {
 
             engine::spawn(app.handle().clone(), shared, db);
             online::spawn_uploader(app.handle().clone(), uploads);
-            mobile_server::spawn(app.handle().clone());
+            mobile_server::spawn(app.handle().clone(), mobile);
             Ok(())
         })
         .on_window_event(|window, event| {

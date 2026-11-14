@@ -1,6 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { getContext, setContext } from "svelte";
-import { api } from "./api";
+import { api, isNativeTauri } from "./api";
 import { spotter } from "./spotter.svelte";
 import type { Snapshot, Status } from "./types";
 import { wheelControl } from "./wheelControl.svelte";
@@ -49,7 +49,7 @@ export async function startLive() {
     live.snap = e.payload;
     if (!isRemoteView && !isOverlayWindow) {
       spotter.update(e.payload);
-      if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) {
+      if (!isNativeTauri()) {
         wheelControl.pushSnapshotToMobile(e.payload);
       }
     }

@@ -7,6 +7,7 @@
     config,
     HUD_THEMES,
     loadConfig,
+    saveConfig,
     type PresetThemeId,
   } from "../lib/config.svelte";
   import { live, provideLive, startLive } from "../lib/live.svelte";
@@ -181,6 +182,8 @@
     void wheelControl.pageIndex;
     void overridePageId;
     void wheelControl.enabledPageIds.length;
+    void config.revision;
+    void wheelControl.mobileTheme;
     flashBadge();
     requestAnimationFrame(() => {
       recomputeScale();
@@ -196,8 +199,8 @@
   });
 
   onMount(() => {
-    loadConfig();
-    startLive();
+    void loadConfig();
+    void startLive();
     wheelControl.startHost();
     flashBadge();
 
@@ -236,12 +239,13 @@
               if (Array.isArray(data.pages) && data.pages.length > 0) {
                 wheelControl.enabledPageIds = data.pages;
               }
-              if (typeof data.mobileTheme === "string") {
+              if (typeof data.mobileTheme === "string" && wheelControl.mobileTheme !== data.mobileTheme) {
                 wheelControl.mobileTheme = data.mobileTheme;
               }
               if (typeof data.autoPopups === "boolean") {
                 wheelControl.autoPopups = data.autoPopups;
               }
+              recomputeScale();
             }
             if (typeof data.pageSeq === "number" && data.pageSeq !== lastSeq) {
               lastSeq = data.pageSeq;
@@ -251,13 +255,12 @@
                 overridePageId = null;
               }
             }
-            recomputeScale();
           }
         } catch {
           // ignore
         }
         const elapsed = performance.now() - t0;
-        const waitMs = Math.max(16, 30 - elapsed);
+        const waitMs = Math.max(18, 32 - elapsed);
         await new Promise((r) => setTimeout(r, waitMs));
       }
     };
@@ -329,6 +332,66 @@
   const activeThemeMeta = $derived(HUD_THEMES[wheelControl.mobileTheme] ?? HUD_THEMES["mdt-aura"]);
   const units = $derived(config.value.general.units);
   const wCfg = $derived(config.value.widgets);
+  const dashOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.dashboard?.options ?? {}) };
+  });
+  const relOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.relative?.options ?? {}) };
+  });
+  const standOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.standings?.options ?? {}), maxRows: 8, maxRowsOther: 4 };
+  });
+  const dmgOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.damage?.options ?? {}), showCar: true };
+  });
+  const tyreOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.tyres?.options ?? {}) };
+  });
+  const fuelOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.fuel?.options ?? {}) };
+  });
+  const lcOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.liftcoast?.options ?? {}) };
+  });
+  const pcOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.pacecatch?.options ?? {}) };
+  });
+  const tlOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.tracklimits?.options ?? {}), showAlways: true };
+  });
+  const elecOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.electronics?.options ?? {}) };
+  });
+  const lapOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.laptiming?.options ?? {}) };
+  });
+  const radarOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.radar?.options ?? {}), autoHide: false };
+  });
+  const mapOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.trackmap?.options ?? {}) };
+  });
+  const inputOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.inputs?.options ?? {}) };
+  });
+  const stintOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.stintplanner?.options ?? {}) };
+  });
 
   // Peripheral border state: Battery 100% green flash OR Delta green/red border
   const p = $derived(activeSnap?.player);
@@ -404,39 +467,35 @@
     style="transform: scale({autoScale}); transform-origin: center center;"
   >
     {#if effectivePageId === "dashboard"}
-      <Dashboard opts={wCfg.dashboard?.options ?? {}} {units} edit={false} />
+      <Dashboard opts={dashOpts} {units} edit={false} />
     {:else if effectivePageId === "relative"}
-      <Relative opts={wCfg.relative?.options ?? {}} {units} edit={false} />
+      <Relative opts={relOpts} {units} edit={false} />
     {:else if effectivePageId === "standings"}
-      <Standings
-        opts={{ ...(wCfg.standings?.options ?? {}), maxRows: 8, maxRowsOther: 4 }}
-        {units}
-        edit={false}
-      />
+      <Standings opts={standOpts} {units} edit={false} />
     {:else if effectivePageId === "damage"}
-      <Damage opts={{ ...(wCfg.damage?.options ?? {}), showCar: true }} {units} edit={false} />
+      <Damage opts={dmgOpts} {units} edit={false} />
     {:else if effectivePageId === "tyres"}
-      <Tyres opts={wCfg.tyres?.options ?? {}} {units} edit={false} />
+      <Tyres opts={tyreOpts} {units} edit={false} />
     {:else if effectivePageId === "fuel"}
-      <Fuel opts={wCfg.fuel?.options ?? {}} {units} edit={false} />
+      <Fuel opts={fuelOpts} {units} edit={false} />
     {:else if effectivePageId === "liftcoast"}
-      <LiftCoast opts={wCfg.liftcoast?.options ?? {}} {units} edit={false} />
+      <LiftCoast opts={lcOpts} {units} edit={false} />
     {:else if effectivePageId === "pacecatch"}
-      <PaceCatch opts={wCfg.pacecatch?.options ?? {}} {units} edit={false} />
+      <PaceCatch opts={pcOpts} {units} edit={false} />
     {:else if effectivePageId === "tracklimits"}
-      <TrackLimits opts={{ ...(wCfg.tracklimits?.options ?? {}), showAlways: true }} {units} edit={false} />
+      <TrackLimits opts={tlOpts} {units} edit={false} />
     {:else if effectivePageId === "electronics"}
-      <Electronics opts={wCfg.electronics?.options ?? {}} {units} edit={false} />
+      <Electronics opts={elecOpts} {units} edit={false} />
     {:else if effectivePageId === "laptiming"}
-      <LapTiming opts={wCfg.laptiming?.options ?? {}} {units} edit={false} />
+      <LapTiming opts={lapOpts} {units} edit={false} />
     {:else if effectivePageId === "radar"}
-      <Radar opts={{ ...(wCfg.radar?.options ?? {}), autoHide: false }} {units} edit={false} />
+      <Radar opts={radarOpts} {units} edit={false} />
     {:else if effectivePageId === "trackmap"}
-      <TrackMap opts={wCfg.trackmap?.options ?? {}} {units} edit={false} />
+      <TrackMap opts={mapOpts} {units} edit={false} />
     {:else if effectivePageId === "inputs"}
-      <Inputs opts={wCfg.inputs?.options ?? {}} {units} edit={false} />
+      <Inputs opts={inputOpts} {units} edit={false} />
     {:else if effectivePageId === "stintplanner"}
-      <StintPlanner opts={wCfg.stintplanner?.options ?? {}} {units} edit={false} />
+      <StintPlanner opts={stintOpts} {units} edit={false} />
     {/if}
   </div>
 
@@ -645,6 +704,67 @@
                     + {avail.short}
                   </button>
                 {/each}
+              </div>
+            </div>
+          {/if}
+
+          <!-- 4. Ajustes del Dashboard sincronizados en Tiempo Real (PC <-> Móvil) -->
+          {#if wCfg.dashboard}
+            <div class="border-t border-white/10 pt-3">
+              <div class="mb-2 text-xs font-bold tracking-wider text-muted uppercase">
+                4. Ajustes del Dashboard (Sincronizados en Vivo con PC)
+              </div>
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label class="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/35 p-2 text-xs">
+                  <span class="text-muted">Diseño del Dashboard</span>
+                  <select
+                    class="rounded border border-white/15 bg-black/60 px-2 py-1 text-white"
+                    bind:value={wCfg.dashboard.options.style}
+                    onchange={saveConfig}
+                  >
+                    <option value="wec">WEC / Broadcast MDT</option>
+                    <option value="ddu">Cosworth / MoTeC DDU</option>
+                    <option value="radial">Tacómetro Circular Radial</option>
+                    <option value="compact">Barra Horizontal Compacta</option>
+                    <option value="classic">Clásico Estándar</option>
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/35 p-2 text-xs">
+                  <span class="text-muted">Luces de RPM</span>
+                  <select
+                    class="rounded border border-white/15 bg-black/60 px-2 py-1 text-white"
+                    bind:value={wCfg.dashboard.options.rpmStyle}
+                    onchange={saveConfig}
+                  >
+                    <option value="leds">15 LEDs individuales</option>
+                    <option value="center">Doble barra convergente</option>
+                    <option value="bar">Barra continua</option>
+                  </select>
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Mostrar pedales (Acel / Freno)</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showPedals} onchange={saveConfig} />
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Volante en vivo</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showSteeringWheel} onchange={saveConfig} />
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Fila TC / ABS / MAP / BB</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showSettings} onchange={saveConfig} />
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Batería Híbrida (ERS)</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showBattery} onchange={saveConfig} />
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Testigos luminosos</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showIndicators} onchange={saveConfig} />
+                </label>
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-xs">
+                  <span>Medidor de fuerza FFB</span>
+                  <input type="checkbox" class="accent-accent" bind:checked={wCfg.dashboard.options.showFfb} onchange={saveConfig} />
+                </label>
               </div>
             </div>
           {/if}
