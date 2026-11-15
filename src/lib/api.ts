@@ -31,9 +31,101 @@ export const api = {
       "get_mobile_network_info",
     ),
   openMobileFirewall: () => invoke<boolean>("open_mobile_firewall"),
+  openSpotterFolder: () => invoke<void>("open_spotter_folder"),
+  getSpotterManifest: async (): Promise<Record<string, Record<string, string[]>> | null> => {
+    if (isNativeTauri()) {
+      return invoke<Record<string, Record<string, string[]>>>("get_spotter_manifest").catch(() => null);
+    }
+    const res = await fetch("/__spotter_files", { cache: "no-store" }).catch(() => null);
+    if (res && res.ok) return res.json().catch(() => null);
+    return null;
+  },
+  focusVehicle: async (slotId: number): Promise<boolean> => {
+    console.log(`[MDT] Intentando enfocar vehículo Slot ${slotId}...`);
+    // 1. Desktop Tauri IPC
+    if (isNativeTauri()) {
+      try {
+        const ok = await invoke<boolean>("focus_vehicle", { slotId });
+        if (ok) {
+          console.log(`[MDT] ✓ Enfocado vía Tauri IPC al Slot ${slotId}`);
+          return true;
+        }
+      } catch (e) {
+        console.warn(`[MDT] Tauri IPC focus_vehicle falló:`, e);
+      }
+    }
+    // 2. Proxy local /lmu-api/rest/watch/focus/{slotId}
+    try {
+      const res = await fetch(`/lmu-api/rest/watch/focus/${slotId}`, {
+        method: "PUT",
+        headers: { accept: "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok !== false) {
+          console.log(`[MDT] ✓ Enfocado vía /lmu-api al Slot ${slotId}`);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn(`[MDT] Proxy /lmu-api falló:`, e);
+    }
+    // 3. Direct mobile server endpoint
+    try {
+      const res = await fetch(`/rest/watch/focus/${slotId}`, {
+        method: "PUT",
+        headers: { accept: "application/json" },
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok !== false) {
+          console.log(`[MDT] ✓ Enfocado vía /rest/watch/focus al Slot ${slotId}`);
+          return true;
+        }
+      }
+    } catch {}
+    // 4. Query relay /__focus_vehicle?slotId={slotId}
+    try {
+      const res = await fetch(`/__focus_vehicle?slotId=${slotId}`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.ok !== false) {
+          console.log(`[MDT] ✓ Enfocado vía /__focus_vehicle al Slot ${slotId}`);
+          return true;
+        }
+      }
+    } catch {}
+    // 5. Direct LMU REST call (only succeeds if browser doesn't block CORS)
+    try {
+      const res = await fetch(`http://127.0.0.1:6397/rest/watch/focus/${slotId}`, {
+        method: "PUT",
+        headers: { accept: "application/json" },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
   setEditMode: (enabled: boolean) => invoke<void>("set_edit_mode", { enabled }),
   setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
   setDemoMode: (enabled: boolean) => invoke<void>("set_demo_mode", { enabled }),
+  setFocusedSlot: async (slotId: number | null) => {
+    if (isNativeTauri()) {
+      return invoke<void>("set_focused_slot", { slotId }).catch(() => {});
+    }
+    return fetch("/__mobile_focus", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotId }),
+    }).catch(() => {});
+  },
+  setBroadcastMode: async (enabled: boolean) => {
+    if (isNativeTauri()) {
+      return invoke<void>("set_broadcast_mode", { enabled }).catch(() => {});
+    }
+  },
   listMonitors: () => invoke<MonitorInfo[]>("list_monitors"),
   getPreviewSnapshot: () => invoke<Snapshot>("get_preview_snapshot"),
   listSessions: (opts: { track?: string | null; car?: string | null; limit?: number; offset?: number } = {}) =>
@@ -67,3 +159,5 @@ export const api = {
   leaderboardBoards: () => invoke<BoardSummary[]>("leaderboard_boards"),
   rankedLapTrace: (remoteId: string) => invoke<LapTrace>("ranked_lap_trace", { remoteId }),
 };
+
+export const focusDriver = (slotId: number) => api.focusVehicle(slotId);

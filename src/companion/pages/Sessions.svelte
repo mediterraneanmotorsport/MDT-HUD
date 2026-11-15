@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../../lib/api";
   import { renderSessionSummaryBlob } from "../../lib/exportSessionImage";
+  import { sendSessionToDiscord } from "../../lib/discord";
   import { dateTime, lapTime } from "../../lib/format";
   import type { Filters, LapRecord, SessionSummary } from "../../lib/types";
   import { config } from "../../lib/config.svelte";
@@ -112,6 +113,29 @@
       setTimeout(() => (exportMsg = ""), 4000);
     }
   }
+
+  async function postToDiscord() {
+    if (!current || exporting) return;
+    if (!config.value.discord?.webhookUrl) {
+      exportMsg = "⚠️ Configura primero tu Webhook de Discord en la pestaña Ajustes.";
+      return;
+    }
+    exporting = true;
+    exportMsg = "Generando PNG con nombre del piloto y enviando a Discord...";
+    try {
+      const res = await sendSessionToDiscord(current, laps);
+      if (res.ok) {
+        exportMsg = "✓ ¡Sesión y gráfico PNG enviados a Discord con éxito!";
+      } else {
+        exportMsg = `⚠️ Error al enviar a Discord: ${res.error}`;
+      }
+    } catch (e) {
+      exportMsg = `⚠️ Error: ${String(e)}`;
+    } finally {
+      exporting = false;
+      setTimeout(() => (exportMsg = ""), 5000);
+    }
+  }
 </script>
 
 <div class="flex h-full">
@@ -180,6 +204,9 @@
           </button>
           <button class="btn" disabled={exporting} onclick={downloadSessionImage} title="Descargar tarjeta PNG con logos de MDT">
             ⬇ Exportar PNG MDT
+          </button>
+          <button class="btn bg-[#5865F2]/20 border border-[#5865F2]/40 text-fg hover:bg-[#5865F2]/30" disabled={exporting} onclick={postToDiscord} title="Generar PNG con nombre del piloto y enviar directamente a tu canal de Discord">
+            💬 Enviar a Discord
           </button>
           <button class="btn hover:text-bad" onclick={deleteSession}>Eliminar sesión</button>
         </div>

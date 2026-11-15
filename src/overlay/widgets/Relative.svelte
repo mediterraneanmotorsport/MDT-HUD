@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { api } from "../../lib/api";
   import { config, type Units } from "../../lib/config.svelte";
   import { relativeGap } from "../../lib/estimates";
   import { classColor, isTeammate, lapTime, penaltyBadge, penaltyTitle, shortName } from "../../lib/format";
@@ -22,14 +23,18 @@
 
   const rows = $derived.by((): Row[] => {
     const snap = live.snap;
-    const me = snap?.vehicles.find((v) => v.isPlayer);
+    const me = snap?.vehicles.find((v) =>
+      snap.focusedSlot != null
+        ? v.slotId === snap.focusedSlot || v.id === snap.focusedSlot
+        : v.isPlayer,
+    );
     if (!snap || !me) return [];
     const len = snap.session.trackLength || 1;
     const lapTime = me.estimatedLapTime > 0 ? me.estimatedLapTime : snap.strategy.avgLapTime || 100;
     const myTotal = me.totalLaps * len + me.lapDist;
 
     const others: Row[] = snap.vehicles
-      .filter((v) => !v.isPlayer && !v.inGarage)
+      .filter((v) => (snap.focusedSlot != null ? v.slotId !== snap.focusedSlot && v.id !== snap.focusedSlot : !v.isPlayer) && !v.inGarage)
       .map((v) => {
         let d = v.lapDist - me.lapDist;
         if (d > len / 2) d -= len;
@@ -112,12 +117,27 @@
     {@const mate = isTeammate(r.v, teammates)}
     <div
       class={[
-        "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5",
+        "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-colors hover:ring-1 hover:ring-accent",
         r.v.isPlayer
           ? "bg-accent text-white"
           : mate && "bg-accent/20 ring-1 ring-accent/60",
       ]}
       style:grid-template-columns={columns}
+      onclick={() => {
+        const s = r.v.slotId ?? r.v.id;
+        api.focusVehicle(s);
+        api.setFocusedSlot(s);
+      }}
+      title="Click para enfocar coche #{r.v.number} {r.v.driver} en el juego y ver su telemetría"
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          const s = r.v.slotId ?? r.v.id;
+          api.focusVehicle(s);
+          api.setFocusedSlot(s);
+        }
+      }}
     >
       <span class="text-right font-semibold">{r.v.classPlace}</span>
       <span class="rounded-[4px] text-center text-[12px] leading-[18px] font-bold text-white" style:background={classColor(r.v.class)}>{r.v.number || "–"}</span>

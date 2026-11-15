@@ -111,9 +111,10 @@ impl Tracker {
                     .is_ok()
             {
                 // GTK can reset input regions when the client is resized.
-                let editing = app.state::<crate::AppState>().edit_mode
-                    .load(std::sync::atomic::Ordering::Acquire);
-                let _ = window.set_ignore_cursor_events(!editing);
+                let state = app.state::<crate::AppState>();
+                let editing = state.edit_mode.load(std::sync::atomic::Ordering::Acquire);
+                let broadcast = state.shared.broadcast_mode.load(std::sync::atomic::Ordering::Acquire);
+                let _ = window.set_ignore_cursor_events(!editing && !broadcast);
                 self.previous = Some(bounds);
             }
         }

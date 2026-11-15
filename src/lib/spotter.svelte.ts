@@ -168,6 +168,13 @@ class SpotterEngine {
 
   async refreshManifest() {
     try {
+      const data = await api.getSpotterManifest();
+      if (data && typeof data === "object" && Object.keys(data).length > 0) {
+        this.manifest = data;
+        return;
+      }
+    } catch {}
+    try {
       const res = await fetch("/__spotter_files", { cache: "no-store" });
       if (res.ok && res.headers.get("content-type")?.includes("json")) {
         this.manifest = await res.json();
@@ -495,10 +502,17 @@ class SpotterEngine {
     }
     this.lastInPits = p.inPits;
 
-    if (p.speedLimiter && !this.lastSpeedLimiter) {
+    // Trigger pit limiter voice after limiter is active for >1 tick (filters 50ms gear cut spikes)
+    if (p.speedLimiter) {
+      this.speedLimiterTicks = (this.speedLimiterTicks ?? 0) + 1;
+    } else {
+      this.speedLimiterTicks = 0;
+    }
+    const isPitLimiter = (this.speedLimiterTicks ?? 0) >= 2;
+    if (isPitLimiter && !this.lastSpeedLimiter) {
       this.trigger("Limitador Pit");
     }
-    this.lastSpeedLimiter = p.speedLimiter;
+    this.lastSpeedLimiter = isPitLimiter;
 
     if (p.inPits) {
       this.warnedFuelLow = false;

@@ -24,7 +24,8 @@ function getLanIps(): string[] {
 }
 
 function spotterAudioPlugin(): Plugin {
-  const roots = [path.resolve("Perfil"), path.resolve("public", "Perfil")];
+  const appDataRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "MDT-HUD", "Perfil") : "";
+  const roots = [appDataRoot, path.resolve("Perfil"), path.resolve("public", "Perfil")].filter(Boolean);
   let mobileState: {
     page: number;
     pageSeq: number;
@@ -77,6 +78,36 @@ function spotterAudioPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!req.url) return next();
         const cleanUrl = req.url.split("?")[0];
+        if (cleanUrl.startsWith("/__focus_vehicle")) {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Content-Type", "application/json");
+          const urlObj = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+          const slotId = urlObj.searchParams.get("slotId") || "0";
+          import("node:http").then((http) => {
+            const proxyReq = http.request(
+              {
+                hostname: "127.0.0.1",
+                port: 6397,
+                path: `/rest/watch/focus/${slotId}`,
+                method: "PUT",
+                headers: {
+                  Accept: "application/json",
+                  "Content-Length": 0,
+                },
+              },
+              (lmuRes) => {
+                res.statusCode = lmuRes.statusCode || 200;
+                res.end(JSON.stringify({ ok: lmuRes.statusCode === 200 }));
+              }
+            );
+            proxyReq.on("error", () => {
+              res.statusCode = 502;
+              res.end(JSON.stringify({ ok: false, error: "lmu_unavailable" }));
+            });
+            proxyReq.end();
+          });
+          return;
+        }
         if (cleanUrl === "/__spotter_files") {
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(scanManifest()));
@@ -181,6 +212,13 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: host || true,
+    proxy: {
+      "/lmu-api": {
+        target: "http://127.0.0.1:6397",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/lmu-api/, ""),
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",

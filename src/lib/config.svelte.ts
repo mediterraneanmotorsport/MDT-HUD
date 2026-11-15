@@ -65,6 +65,12 @@ export interface AppConfig {
     hudBorderOpacity: number;
     /** Comma-separated driver/team tags to highlight as MDT teammates. */
     teammates: string;
+    /** Modo Broadcast: El overlay permanece activo y visible incluso como espectador o en repetición/garaje. */
+    broadcastMode?: boolean;
+    /** ID del perfil de overlay específico para retransmisiones y streaming. */
+    broadcastProfileId?: string;
+    /** ID del perfil de overlay para cuando el usuario está pilotando en pista. */
+    drivingProfileId?: string;
   };
   /** Lap rankings and car setup sharing. Off until the user opts in. */
   online: {
@@ -90,6 +96,13 @@ export interface AppConfig {
     carStatus: boolean;
     session: boolean;
   };
+  /** Discord Webhook integration for session telemetry exports */
+  discord: {
+    enabled: boolean;
+    webhookUrl: string;
+    botName: string;
+    autoExport: boolean;
+  };
   widgets: Record<string, WidgetConfig>;
   /** Id of the profile mirrored by `general.scale/opacity` and `widgets`. */
   activeProfile: string;
@@ -102,6 +115,8 @@ export interface Profile {
   name: string;
   scale: number;
   opacity: number;
+  screenWidth?: number;
+  screenHeight?: number;
   widgets: Record<string, WidgetConfig>;
 }
 
@@ -253,6 +268,7 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showBattery", label: "Barra de batería híbrida (ERS / Regen)", type: "boolean" },
       { key: "showFfb", label: "Medidor de fuerza FFB", type: "boolean" },
       { key: "showSettings", label: "Fila de TC / ABS / Mapa / Reparto de frenada (BB)", type: "boolean" },
+      { key: "transparentIcons", label: "Quitar fondo a los iconos (iconos transparentes)", type: "boolean" },
     ],
     optionDefaults: {
       style: "wec",
@@ -265,6 +281,7 @@ export const WIDGETS: WidgetMeta[] = [
       showBattery: true,
       showFfb: false,
       showSettings: true,
+      transparentIcons: false,
     },
   },
   {
@@ -277,9 +294,10 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showSteering", label: "Línea de dirección", type: "boolean" },
       { key: "showPedals", label: "Barras de acelerador / freno / embrague", type: "boolean" },
       { key: "showClutch", label: "Barra de embrague", type: "boolean" },
+      { key: "showGhostTrace", label: "Mostrar traza fantasma comparativa de frenada (Ghost Trace)", type: "boolean" },
       { key: "width", label: "Ancho (px)", type: "number", min: 200, max: 600, step: 10 },
     ],
-    optionDefaults: { seconds: 6, showSteering: true, showPedals: true, showClutch: true, width: 320 },
+    optionDefaults: { seconds: 6, showSteering: true, showPedals: true, showClutch: true, showGhostTrace: false, width: 320 },
   },
   {
     id: "delta",
@@ -337,6 +355,7 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showBest", label: "Mejor vuelta", type: "boolean" },
       { key: "colorTimes", label: "Colorear tiempos (verde = mejor personal, morado = récord de clase)", type: "boolean" },
       { key: "showInterval", label: "Intervalo con el coche de delante", type: "boolean" },
+      { key: "showPosGained", label: "Posiciones ganadas o perdidas (▲/▼)", type: "boolean" },
     ],
     optionDefaults: {
       showBranding: true,
@@ -354,6 +373,7 @@ export const WIDGETS: WidgetMeta[] = [
       showBest: false,
       colorTimes: true,
       showInterval: true,
+      showPosGained: false,
     },
   },
   {
@@ -634,6 +654,48 @@ export const WIDGETS: WidgetMeta[] = [
       style: "panel",
     },
   },
+  {
+    id: "battleforpos",
+    name: "Duelo por Posición (Battle for Pos)",
+    description: "Gráfico televisivo estilo WEC que aparece automáticamente cuando dos coches luchan en pista a menos de 1 segundo.",
+    defaults: { enabled: false, x: 730, y: 350 },
+    options: [
+      { key: "deltaThreshold", label: "Umbral de activación de batalla (segundos)", type: "number", min: 0.3, max: 3.0, step: 0.1 },
+      { key: "showTyres", label: "Mostrar compuestos de neumáticos", type: "boolean" },
+      { key: "showInterval", label: "Mostrar diferencia en décimas de segundo", type: "boolean" },
+      { key: "showSpeed", label: "Mostrar velocidad en tiempo real de ambos", type: "boolean" },
+      { key: "showClassBadge", label: "Mostrar placa de categoría (HY, P2, GT3)", type: "boolean" },
+      { key: "sameClassOnly", label: "Solo alertar batallas de la misma categoría", type: "boolean" },
+    ],
+    optionDefaults: {
+      deltaThreshold: 1.0,
+      showTyres: true,
+      showInterval: true,
+      showSpeed: true,
+      showClassBadge: true,
+      sameClassOnly: true,
+    },
+  },
+  {
+    id: "broadcastticker",
+    name: "Cinta de Tiempos WEC (Broadcast Ticker)",
+    description: "Barra continua estilo retransmisión oficial con vueltas rápidas, sectores morados/verdes, banderas y clasificación.",
+    defaults: { enabled: false, x: 160, y: 1010 },
+    options: [
+      { key: "showFastestLaps", label: "Mostrar vuelta rápida de cada categoría (Púrpura)", type: "boolean" },
+      { key: "showSessionStatus", label: "Mostrar tiempo restante y banderas activas", type: "boolean" },
+      { key: "showIntervals", label: "Mostrar diferencias e intervalos en la torre", type: "boolean" },
+      { key: "showTeammates", label: "Resaltar compañeros de equipo MDT", type: "boolean" },
+      { key: "speed", label: "Velocidad de cambio de pantalla (segundos)", type: "number", min: 3, max: 15, step: 1 },
+    ],
+    optionDefaults: {
+      showFastestLaps: true,
+      showSessionStatus: true,
+      showIntervals: true,
+      showTeammates: true,
+      speed: 5,
+    },
+  },
 ];
 
 export const widgetMeta = (id: string) => WIDGETS.find((w) => w.id === id)!;
@@ -669,6 +731,7 @@ function defaults(): AppConfig {
       hudBgColor: "#071426",
       hudBorderOpacity: 0.65,
       teammates: "MDT, Mediterranean",
+      broadcastMode: false,
     },
     online: { enabled: false, lapUpload: "manual", anonymous: false, uploadTraces: true },
     spotter: {
@@ -682,6 +745,12 @@ function defaults(): AppConfig {
       strategy: true,
       carStatus: true,
       session: true,
+    },
+    discord: {
+      enabled: true,
+      webhookUrl: "https://discord.com/api/webhooks/1571662308269232189/Y9Sv1n8yOwKUjWJbzJxxJgg-ipdOJLhAWlw0EcasB23RT97Z1WVgV2v_q6Ci6w6mgVEX",
+      botName: "Ingeniera MDT",
+      autoExport: true,
     },
     widgets,
     activeProfile: "default",
@@ -709,6 +778,15 @@ function merge(stored: any): AppConfig {
   }
   const online = { ...base.online, ...(stored.online ?? {}) };
   const spotter = { ...base.spotter, ...(stored.spotter ?? {}) };
+  const discord = { ...base.discord, ...(stored.discord ?? {}) };
+  if (!discord.webhookUrl || !discord.webhookUrl.startsWith("http")) {
+    discord.webhookUrl = base.discord.webhookUrl;
+  }
+  if (!discord.botName || discord.botName === "MDT-HUD Telemetría") {
+    discord.botName = "Ingeniera MDT";
+  }
+  if (discord.enabled === undefined) discord.enabled = true;
+  if (discord.autoExport === undefined) discord.autoExport = true;
   const widgets = mergeWidgets(stored.widgets);
   const profiles: Record<string, Profile> = {};
   for (const [id, p] of Object.entries<any>(stored.profiles ?? {})) {
@@ -717,6 +795,8 @@ function merge(stored: any): AppConfig {
       name: typeof p.name === "string" && p.name ? p.name : "Perfil",
       scale: typeof p.scale === "number" ? p.scale : base.general.scale,
       opacity: typeof p.opacity === "number" ? p.opacity : base.general.opacity,
+      screenWidth: typeof p.screenWidth === "number" ? p.screenWidth : undefined,
+      screenHeight: typeof p.screenHeight === "number" ? p.screenHeight : undefined,
       widgets: mergeWidgets(p.widgets),
     };
   }
@@ -730,7 +810,7 @@ function merge(stored: any): AppConfig {
       widgets: structuredClone(widgets),
     };
   }
-  return { ...base, general, online, spotter, widgets, activeProfile, profiles };
+  return { ...base, general, online, spotter, discord, widgets, activeProfile, profiles };
 }
 
 class ConfigStore {
@@ -814,16 +894,20 @@ export async function loadConfig() {
   lastRemoteConfigStr = initialStr;
   applyMergedInPlace(initial);
   applyTheme(config.value.general);
+  await detectNativeResolution();
   config.loaded = true;
 }
 
 /** Copies the live layout into the active profile's saved slot. */
-function syncActiveProfile() {
+export function syncActiveProfile() {
   const c = config.value;
+  const native = getNativeResolution();
   c.profiles[c.activeProfile] = {
     name: c.profiles[c.activeProfile]?.name ?? "Perfil",
     scale: c.general.scale,
     opacity: c.general.opacity,
+    screenWidth: native.width,
+    screenHeight: native.height,
     widgets: $state.snapshot(c.widgets),
   };
 }
@@ -877,7 +961,17 @@ export function switchProfile(id: string) {
   c.activeProfile = id;
   c.general.scale = p.scale;
   c.general.opacity = p.opacity;
-  c.widgets = mergeWidgets($state.snapshot(p.widgets));
+
+  const native = getNativeResolution();
+  if (
+    p.screenWidth &&
+    p.screenHeight &&
+    (Math.abs(p.screenWidth - native.width) > 32 || Math.abs(p.screenHeight - native.height) > 32)
+  ) {
+    c.widgets = autoSizeProfileWidgets(p.widgets, p.screenWidth, p.screenHeight, native.width, native.height);
+  } else {
+    c.widgets = mergeWidgets($state.snapshot(p.widgets));
+  }
   saveConfig();
 }
 
@@ -887,9 +981,10 @@ export function createProfile(name: string, fromDefaults = false) {
   const c = config.value;
   const id = `p${Date.now().toString(36)}`;
   const d = defaults();
+  const native = getNativeResolution();
   c.profiles[id] = fromDefaults
-    ? { name, scale: d.general.scale, opacity: d.general.opacity, widgets: d.widgets }
-    : { name, scale: c.general.scale, opacity: c.general.opacity, widgets: $state.snapshot(c.widgets) };
+    ? { name, scale: d.general.scale, opacity: d.general.opacity, screenWidth: native.width, screenHeight: native.height, widgets: d.widgets }
+    : { name, scale: c.general.scale, opacity: c.general.opacity, screenWidth: native.width, screenHeight: native.height, widgets: $state.snapshot(c.widgets) };
   switchProfile(id);
 }
 
@@ -910,11 +1005,202 @@ export function deleteProfile(id: string) {
   saveConfig();
 }
 
-/** Exports the active HUD profile (plus theme/colors) as a downloadable .mdthud.json string. */
+let cachedNativeResolution: { width: number; height: number } = { width: 1920, height: 1080 };
+
+/** Resolves the native display resolution of the monitor hosting the HUD. */
+export async function detectNativeResolution(): Promise<{ width: number; height: number }> {
+  if (isNativeTauri()) {
+    try {
+      const monitors = await api.listMonitors();
+      if (monitors && monitors.length > 0) {
+        const chosen = config.value?.general?.monitor;
+        const target =
+          (chosen ? monitors.find((m) => m.name === chosen) : null) ??
+          monitors.find((m) => m.primary) ??
+          monitors[0];
+        if (target && target.width >= 640 && target.height >= 480) {
+          cachedNativeResolution = { width: target.width, height: target.height };
+          return cachedNativeResolution;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof window !== "undefined" && window.screen) {
+    const sw = window.screen.width;
+    const sh = window.screen.height;
+    if (sw >= 640 && sh >= 480) {
+      cachedNativeResolution = { width: sw, height: sh };
+      return cachedNativeResolution;
+    }
+  }
+  return cachedNativeResolution;
+}
+
+/** Synchronous getter for the cached native display resolution (never returns companion window size). */
+export function getNativeResolution(): { width: number; height: number } {
+  if (cachedNativeResolution.width >= 640 && cachedNativeResolution.height >= 480) {
+    return cachedNativeResolution;
+  }
+  if (typeof window !== "undefined" && window.screen) {
+    const sw = window.screen.width;
+    const sh = window.screen.height;
+    if (sw >= 640 && sh >= 480) {
+      return { width: sw, height: sh };
+    }
+  }
+  return { width: 1920, height: 1080 };
+}
+
+const WIDGET_APPROX_WIDTHS: Record<string, number> = {
+  dashboard: 480,
+  shiftlights: 420,
+  standings: 290,
+  relative: 290,
+  tyres: 344,
+  fuel: 270,
+  electronics: 210,
+  damage: 210,
+  radar: 220,
+  trackmap: 260,
+  weather: 250,
+  inputs: 200,
+  pacecatch: 270,
+  session: 240,
+  flags: 220,
+  delta: 200,
+  mdtbranding: 240,
+  tracklimits: 220,
+};
+
+const WIDGET_APPROX_HEIGHTS: Record<string, number> = {
+  dashboard: 240,
+  shiftlights: 70,
+  standings: 420,
+  relative: 320,
+  tyres: 240,
+  fuel: 180,
+  electronics: 180,
+  damage: 180,
+  radar: 220,
+  trackmap: 260,
+  weather: 160,
+  inputs: 180,
+  pacecatch: 180,
+  session: 120,
+  flags: 80,
+  delta: 80,
+  mdtbranding: 80,
+  tracklimits: 80,
+};
+
+/**
+ * Auto-sizes and repositions profile widgets to fit the user's current screen resolution.
+ * Si el .json es de la misma resolución que la pantalla nativa, NO APLICA (se mantiene tal cual).
+ */
+export function autoSizeProfileWidgets(
+  widgets: Record<string, WidgetConfig>,
+  sourceW?: number,
+  sourceH?: number,
+  targetW?: number,
+  targetH?: number,
+): Record<string, WidgetConfig> {
+  const native = getNativeResolution();
+  const curW = targetW ?? native.width;
+  const curH = targetH ?? native.height;
+
+  let maxWidgetX = 0;
+  let maxWidgetY = 0;
+  for (const w of Object.values(widgets)) {
+    if (typeof w.x === "number" && w.x > maxWidgetX) maxWidgetX = w.x;
+    if (typeof w.y === "number" && w.y > maxWidgetY) maxWidgetY = w.y;
+  }
+
+  let srcW = sourceW && sourceW >= 640 ? sourceW : 0;
+  let srcH = sourceH && sourceH >= 480 ? sourceH : 0;
+
+  // Si proviene del bug de tamaño de la ventana acompañante (1360x860), deducir la resolución real original
+  if (srcW === 1360 && srcH === 860) {
+    srcW = 0;
+    srcH = 0;
+  }
+
+  if (!srcW) {
+    if (maxWidgetX > 2560) srcW = 3440;
+    else if (maxWidgetX > 1920) srcW = 2560;
+    else if (maxWidgetX > 1400) srcW = 1920;
+    else srcW = 1920;
+  }
+  if (!srcH) {
+    if (maxWidgetY > 1150) srcH = 1440;
+    else if (maxWidgetY > 850) srcH = 1080;
+    else srcH = 1080;
+  }
+
+  // REQUISITO CRÍTICO: Si el .json es de la misma resolución que la pantalla nativa, NO APLICA.
+  if (Math.abs(srcW - curW) <= 32 && Math.abs(srcH - curH) <= 32) {
+    return widgets;
+  }
+
+  // Factores de escala vertical y tamaño
+  const scaleY = curH / srcH;
+  const scaleSize = Math.max(0.4, Math.min(2.5, +(scaleY).toFixed(3)));
+
+  const resized: Record<string, WidgetConfig> = {};
+  for (const [id, w] of Object.entries(widgets)) {
+    const copy = structuredClone(w);
+
+    // 1. AUTOREDIMENSIONAR (tamaño del widget)
+    if (typeof copy.size === "number") {
+      copy.size = Math.max(0.4, Math.min(2.5, +(copy.size * scaleSize).toFixed(2)));
+    }
+
+    const effectiveScale = copy.size ?? 1;
+    const approxW = Math.round((WIDGET_APPROX_WIDTHS[id] ?? 240) * effectiveScale);
+    const approxH = Math.round((WIDGET_APPROX_HEIGHTS[id] ?? 120) * effectiveScale);
+
+    // 2. POSICIONAR (coordenadas Y y X con anclaje inteligente por zonas)
+    if (typeof copy.y === "number") {
+      const newY = Math.round(copy.y * scaleY);
+      const maxY = Math.max(0, curH - approxH - 10);
+      copy.y = Math.max(10, Math.min(maxY, newY));
+    }
+
+    if (typeof copy.x === "number") {
+      const relX = copy.x / srcW;
+      let newX: number;
+
+      if (relX < 0.35) {
+        // Zona izquierda: mantener anclado al margen izquierdo
+        newX = Math.round(copy.x * (curW / srcW));
+      } else if (relX > 0.65) {
+        // Zona derecha: mantener anclado al margen derecho
+        const distFromRight = srcW - copy.x;
+        const scaledDistFromRight = distFromRight * scaleY;
+        newX = Math.round(curW - scaledDistFromRight);
+      } else {
+        // Zona central: mantener anclado con respecto al centro horizontal de la pantalla
+        const centerOffset = copy.x - srcW / 2;
+        newX = Math.round(curW / 2 + centerOffset * scaleY);
+      }
+
+      const maxX = Math.max(0, curW - approxW - 10);
+      copy.x = Math.max(10, Math.min(maxX, newX));
+    }
+
+    resized[id] = copy;
+  }
+
+  return resized;
+}
+
+/** Exports the active HUD profile (plus theme/colors and native screen resolution) as a downloadable .mdthud.json string. */
 export function exportActiveProfileJson(): { filename: string; content: string } {
   syncActiveProfile();
   const c = config.value;
   const p = c.profiles[c.activeProfile];
+  const screen = getNativeResolution();
   const payload = {
     app: "MDT-HUD",
     organization: "Mediterranean Motorsport",
@@ -928,6 +1214,8 @@ export function exportActiveProfileJson(): { filename: string; content: string }
       hudBgColor: c.general.hudBgColor,
       hudBorderOpacity: c.general.hudBorderOpacity,
       teammates: c.general.teammates,
+      screenWidth: screen.width,
+      screenHeight: screen.height,
       widgets: $state.snapshot(c.widgets),
     },
   };
@@ -938,8 +1226,8 @@ export function exportActiveProfileJson(): { filename: string; content: string }
   };
 }
 
-/** Imports a profile from a parsed .mdthud.json object and switches to it. */
-export function importProfileFromObject(raw: any): string {
+/** Imports a profile from a parsed .mdthud.json object, auto-resizes to the user's screen resolution (if different) and switches to it. */
+export function importProfileFromObject(raw: any, targetW?: number, targetH?: number): string {
   const src = raw?.profile ?? raw;
   if (!src || typeof src !== "object" || !src.widgets) {
     throw new Error("El archivo no contiene un perfil válido de MDT-HUD.");
@@ -948,11 +1236,18 @@ export function importProfileFromObject(raw: any): string {
   const c = config.value;
   const id = `p${Date.now().toString(36)}`;
   const name = typeof src.name === "string" && src.name.trim() ? src.name.trim() : "Perfil Importado MDT";
-  const widgets = mergeWidgets(src.widgets);
+  const rawWidgets = mergeWidgets(src.widgets);
+  const srcW = typeof src.screenWidth === "number" ? src.screenWidth : undefined;
+  const srcH = typeof src.screenHeight === "number" ? src.screenHeight : undefined;
+  const widgets = autoSizeProfileWidgets(rawWidgets, srcW, srcH, targetW, targetH);
+
+  const native = getNativeResolution();
   c.profiles[id] = {
     name,
     scale: typeof src.scale === "number" ? src.scale : 1,
     opacity: typeof src.opacity === "number" ? src.opacity : 0.92,
+    screenWidth: targetW ?? native.width,
+    screenHeight: targetH ?? native.height,
     widgets,
   };
   if (src.theme) c.general.theme = src.theme;
@@ -964,72 +1259,24 @@ export function importProfileFromObject(raw: any): string {
   return name;
 }
 
-/** Applies one of the 5 complete MDT overlay themes (MDT-AURA, MDT-F1, MDT-HY, MDT-GT3, MDT-LMP2). */
-export function applyCompleteOverlayTheme(themeId: PresetThemeId, applyDesignOptions = true) {
+/** Applies one of the 5 complete MDT overlay themes (MDT-AURA, MDT-F1, MDT-HY, MDT-GT3, MDT-LMP2) purely visually without changing user's widgets. */
+export function applyCompleteOverlayTheme(themeId: PresetThemeId, _applyDesignOptions = false) {
   const c = config.value;
   const preset = HUD_THEMES[themeId];
   if (!preset) return;
 
+  // Solo aplicar el cambio visual (colores, fondo, opacidad de borde y tema CSS)
   c.general.theme = themeId;
   c.general.accentColor = preset.accent;
   c.general.hudBgColor = preset.bg;
   c.general.hudBorderOpacity = preset.borderOpacity;
 
-  if (applyDesignOptions) {
-    const w = c.widgets;
-    w.dashboard.options.style = preset.dashboardStyle;
-    w.dashboard.options.rpmStyle = preset.rpmStyle;
-
-    if (themeId === "mdt-aura") {
-      w.dashboard.options.showMdtLogo = true;
-      w.dashboard.options.showSteeringWheel = true;
-      w.dashboard.options.showPedals = true;
-      w.shiftlights.enabled = false;
-      w.mdtbranding.enabled = true;
-      w.standings.options.showBranding = true;
-      w.radar.enabled = true;
-      w.pacecatch.enabled = true;
-    } else if (themeId === "mdt-f1") {
-      w.dashboard.options.style = "compact";
-      w.dashboard.options.rpmStyle = "center";
-      w.shiftlights.enabled = true;
-      w.shiftlights.options.style = "center";
-      w.delta.enabled = true;
-      w.electronics.enabled = true;
-      w.standings.options.showInterval = true;
-    } else if (themeId === "mdt-hy") {
-      w.dashboard.options.style = "ddu";
-      w.dashboard.options.rpmStyle = "center";
-      w.dashboard.options.showBattery = true;
-      w.liftcoast.enabled = true;
-      w.liftcoast.options.showRegen = true;
-      w.fuel.enabled = true;
-      w.fuel.options.showSaver = true;
-      w.electronics.enabled = true;
-    } else if (themeId === "mdt-gt3") {
-      w.dashboard.options.style = "radial";
-      w.dashboard.options.rpmStyle = "leds";
-      w.radar.enabled = true;
-      w.tracklimits.enabled = true;
-      w.tyres.enabled = true;
-      w.tyres.options.showBrakes = true;
-      w.damage.enabled = true;
-    } else if (themeId === "mdt-lmp2") {
-      w.dashboard.options.style = "ddu";
-      w.dashboard.options.rpmStyle = "leds";
-      w.laptiming.enabled = true;
-      w.laptiming.options.showSectors = true;
-      w.trackmap.enabled = true;
-      w.relative.enabled = true;
-      w.pacecatch.enabled = true;
-    }
-  }
-
+  // NO modificar los complementos elegidos por el usuario (c.widgets[...].enabled permanece intacto)
   saveConfig();
 }
 
 /** Creates one of the built-in MDT factory templates and activates it. */
-export function createMdtTemplateProfile(template: "competicion" | "streamer" | "minimalista" | "wec") {
+export function createMdtTemplateProfile(template: "competicion" | "streamer" | "minimalista" | "wec" | "broadcast") {
   if (template === "wec") template = "competicion";
   syncActiveProfile();
   const c = config.value;
@@ -1058,6 +1305,35 @@ export function createMdtTemplateProfile(template: "competicion" | "streamer" | 
     w.trackmap.enabled = true;
     w.weather.enabled = true;
     w.inputs.enabled = true;
+  } else if (template === "broadcast") {
+    for (const k of Object.keys(w)) w[k].enabled = false;
+    w.standings.enabled = true;
+    w.standings.x = 24;
+    w.standings.y = 80;
+    w.standings.options.showBranding = true;
+    w.relative.enabled = true;
+    w.relative.x = 24;
+    w.relative.y = 780;
+    w.trackmap.enabled = true;
+    w.trackmap.x = 1560;
+    w.trackmap.y = 50;
+    w.weather.enabled = true;
+    w.weather.x = 1560;
+    w.weather.y = 480;
+    w.mdtbranding.enabled = true;
+    w.mdtbranding.x = 24;
+    w.mdtbranding.y = 20;
+    w.flags.enabled = true;
+    if (w.battleforpos) {
+      w.battleforpos.enabled = true;
+      w.battleforpos.x = 740;
+      w.battleforpos.y = 320;
+    }
+    if (w.broadcastticker) {
+      w.broadcastticker.enabled = true;
+      w.broadcastticker.x = 160;
+      w.broadcastticker.y = 1010;
+    }
   } else if (template === "minimalista") {
     for (const k of Object.keys(w)) w[k].enabled = false;
     w.dashboard.enabled = true;
@@ -1074,14 +1350,59 @@ export function createMdtTemplateProfile(template: "competicion" | "streamer" | 
     competicion: "MDT Competición (Pro)",
     streamer: "MDT Streamer / Broadcast",
     minimalista: "MDT Minimalista",
+    broadcast: "MDT Modo Broadcast (Espectador)",
   };
 
   const id = `p${Date.now().toString(36)}`;
+  const native = getNativeResolution();
+  const finalWidgets =
+    Math.abs(native.width - 1920) > 32 || Math.abs(native.height - 1080) > 32
+      ? autoSizeProfileWidgets(w, 1920, 1080, native.width, native.height)
+      : w;
+
   c.profiles[id] = {
     name: labels[template],
     scale: 1,
     opacity: 0.92,
-    widgets: w,
+    screenWidth: native.width,
+    screenHeight: native.height,
+    widgets: finalWidgets,
   };
+  if (template === "broadcast") {
+    c.general.broadcastProfileId = id;
+  }
   switchProfile(id);
+}
+
+/** Activa o desactiva el Modo Broadcast cambiando automáticamente entre el perfil de pilotaje y el perfil de stream. */
+export function toggleBroadcastMode(forceState?: boolean) {
+  const c = config.value;
+  const next = typeof forceState === "boolean" ? forceState : !c.general.broadcastMode;
+  c.general.broadcastMode = next;
+  syncActiveProfile();
+
+  if (next) {
+    c.general.drivingProfileId = c.activeProfile;
+    if (c.general.broadcastProfileId && c.profiles[c.general.broadcastProfileId]) {
+      switchProfile(c.general.broadcastProfileId);
+    } else {
+      const existing = Object.entries(c.profiles).find(([_, p]) =>
+        p.name.toLowerCase().includes("broadcast") || p.name.toLowerCase().includes("retransmisión"),
+      );
+      if (existing) {
+        c.general.broadcastProfileId = existing[0];
+        switchProfile(existing[0]);
+      } else {
+        createMdtTemplateProfile("broadcast");
+        c.general.broadcastProfileId = c.activeProfile;
+      }
+    }
+  } else {
+    if (c.general.drivingProfileId && c.profiles[c.general.drivingProfileId]) {
+      switchProfile(c.general.drivingProfileId);
+    }
+  }
+
+  saveConfig();
+  api.setBroadcastMode(next);
 }

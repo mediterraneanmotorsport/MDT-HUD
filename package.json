@@ -1,7 +1,7 @@
 {
   "name": "mdt-hud",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.6",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -18,7 +18,7 @@
     "@tauri-apps/api": "^2.12.3",
     "@tauri-apps/plugin-opener": "^2.7.2",
     "@tauri-apps/plugin-process": "^2.4.0",
-    "@tauri-apps/plugin-updater": "^2.13.3",
+    "@tauri-apps/plugin-updater": "2.13.3",
     "simple-icons": "^16.34.0",
     "uplot": "^1.6.32"
   },

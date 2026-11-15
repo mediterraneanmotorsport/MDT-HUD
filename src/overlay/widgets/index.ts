@@ -22,6 +22,8 @@ import TrackLimits from "./TrackLimits.svelte";
 import TrackMap from "./TrackMap.svelte";
 import Tyres from "./Tyres.svelte";
 import Weather from "./Weather.svelte";
+import BattleForPos from "./BattleForPos.svelte";
+import BroadcastTicker from "./BroadcastTicker.svelte";
 
 export interface WidgetProps {
   opts: Record<string, any>;
@@ -53,4 +55,6 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   mdtbranding: MdtBranding,
   mfd: MfdWidget,
   stintplanner: StintPlanner,
+  battleforpos: BattleForPos,
+  broadcastticker: BroadcastTicker,
 };

@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import { config, loadConfig, resetLayout, switchProfile, WIDGETS } from "../lib/config.svelte";
+  import { config, loadConfig, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS } from "../lib/config.svelte";
   import { live, startLive } from "../lib/live.svelte";
   import SoftwareRepaint from "./SoftwareRepaint.svelte";
   import Logo from "../lib/Logo.svelte";
   import WidgetFrame from "./WidgetFrame.svelte";
   import { COMPONENTS } from "./widgets";
+
+  let saveMessage = $state("");
+  let demoStartedForEditing = $state(false);
 
   onMount(() => {
     startLive();
@@ -14,9 +17,45 @@
   });
 
   const edit = $derived(live.status.editMode);
+
+  // If user exits edit mode, automatically turn off demo mode if it was activated for editing
+  $effect(() => {
+    if (!edit && demoStartedForEditing && live.status.demo) {
+      demoStartedForEditing = false;
+      api.setDemoMode(false);
+    }
+  });
+
+  function toggleDemo() {
+    if (live.status.demo) {
+      demoStartedForEditing = false;
+      api.setDemoMode(false);
+    } else {
+      demoStartedForEditing = true;
+      api.setDemoMode(true);
+    }
+  }
+
+  function finishEditing() {
+    if (live.status.demo) {
+      demoStartedForEditing = false;
+      api.setDemoMode(false);
+    }
+    syncActiveProfile();
+    saveConfig();
+    api.setEditMode(false);
+  }
+  const isBroadcast = $derived(Boolean(config.value.general.broadcastMode));
+
+  $effect(() => {
+    if (config.loaded) {
+      void api.setBroadcastMode(isBroadcast);
+    }
+  });
+
   const onTrack = $derived(!!live.snap?.player && live.snap.inRealtime);
-  const trackOk = $derived(!config.value.general.onlyOnTrack || onTrack);
-  const focusOk = $derived(!config.value.general.hideUnfocused || live.status.gameFocused || live.status.demo);
+  const trackOk = $derived(!config.value.general.onlyOnTrack || onTrack || isBroadcast);
+  const focusOk = $derived(!config.value.general.hideUnfocused || live.status.gameFocused || live.status.demo || isBroadcast);
   const show = $derived(config.loaded && (edit || (trackOk && focusOk)));
   const batteryFull = $derived(
     !!live.snap?.player && live.snap.player.electricMotorState > 0 && live.snap.player.battery >= 0.975,
@@ -45,9 +84,12 @@
       <div class="hud-title">Editar diseño del HUD</div>
       <div class="text-xs text-muted">Arrastra para mover · rueda para tamaño · <kbd class="kbd">Shift</kbd> + rueda para todos · <kbd class="kbd">Ctrl+Shift+F9</kbd> para terminar</div>
     </div>
-    {#if !live.snap?.player}
-      <button class="btn px-3! py-1.5! text-xs!" onclick={() => api.setDemoMode(true)}>Datos demo</button>
-    {/if}
+    <button
+      class={["btn px-3! py-1.5! text-xs! font-bold", live.status.demo ? "bg-warn! text-black" : ""]}
+      onclick={toggleDemo}
+    >
+      {live.status.demo ? "✕ Quitar demo" : "Datos demo"}
+    </button>
     {#if Object.keys(config.value.profiles).length > 1}
       <select
         class="field py-1.5! text-xs!"
@@ -58,8 +100,20 @@
         {#each Object.entries(config.value.profiles) as [id, p] (id)}<option value={id}>{p.name}</option>{/each}
       </select>
     {/if}
+    <button
+      class="btn bg-accent text-white px-3! py-1.5! text-xs! font-bold hover:bg-accent-hi"
+      title="Guardar perfil actual en disco"
+      onclick={() => {
+        syncActiveProfile();
+        saveConfig();
+        saveMessage = "✓ Guardado";
+        setTimeout(() => (saveMessage = ""), 2500);
+      }}
+    >
+      {saveMessage || "💾 Guardar perfil"}
+    </button>
     <button class="btn px-3! py-1.5! text-xs!" onclick={resetLayout}>Restablecer</button>
-    <button class="btn btn-primary px-4! py-1.5! text-xs!" onclick={() => api.setEditMode(false)}>Listo</button>
+    <button class="btn btn-primary px-4! py-1.5! text-xs!" onclick={finishEditing}>Listo</button>
   </div>
 {/if}
 

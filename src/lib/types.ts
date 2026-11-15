@@ -149,6 +149,7 @@ export interface Damage {
 
 export interface Vehicle {
   id: number;
+  slotId?: number;
   place: number;
   classPlace: number;
   driver: string;
@@ -181,6 +182,7 @@ export interface Vehicle {
   /** Unserved penalties the game logged, oldest first; may be shorter than numPenalties. */
   penalties: Penalty[];
   finishStatus: number;
+  qualification: number;
   flag: number;
   fuelFraction: number;
   control: number;
@@ -247,6 +249,7 @@ export interface Snapshot {
   vehicles: Vehicle[];
   timing: Timing;
   strategy: Strategy;
+  focusedSlot?: number | null;
 }
 
 export interface Status {

@@ -20,7 +20,7 @@ fn mag(v: layout::Vec3) -> f64 {
 
 /// Converts a copied `LMU_Data` block into a [`Snapshot`]. Timing and
 /// strategy are filled in later by the recorder.
-pub fn parse(buf: &[u8]) -> Snapshot {
+pub fn parse(buf: &[u8], focused_slot: Option<i32>) -> Snapshot {
     let game_version: i32 = read_at(buf, layout::OFF_GENERIC_GAME_VERSION);
     let info: ScoringInfo = read_at(buf, layout::OFF_SCORING_INFO);
 
@@ -82,8 +82,19 @@ pub fn parse(buf: &[u8]) -> Snapshot {
             scoring_player.and_then(|sp| telemetry.get(&sp.id).copied())
         };
 
-    let player = if let Some(t) = player_telem {
-        let scoring = scoring_player.or_else(|| vehicles.iter().find(|v| v.id == t.id));
+    let focused_vehicle = focused_slot.and_then(|slot| {
+        vehicles.iter().find(|v| v.slot_id == slot || v.id == slot)
+    });
+    let focused_telem = focused_vehicle.and_then(|fv| telemetry.get(&fv.id).copied());
+
+    let (chosen_telem, chosen_scoring) = if let (Some(ft), Some(fv)) = (focused_telem, focused_vehicle) {
+        (Some(ft), Some(fv))
+    } else {
+        (player_telem, scoring_player)
+    };
+
+    let player = if let Some(t) = chosen_telem {
+        let scoring = chosen_scoring.or_else(|| vehicles.iter().find(|v| v.id == t.id));
         let mut player = parse_player(&t, scoring, &info);
         player.ffb = read_at::<f32>(buf, layout::OFF_GENERIC_FFB_TORQUE) as f64;
         Some(player)
@@ -102,6 +113,7 @@ pub fn parse(buf: &[u8]) -> Snapshot {
         vehicles,
         timing: Default::default(),
         strategy: Default::default(),
+        focused_slot,
     }
 }
 
@@ -153,6 +165,7 @@ fn parse_vehicle(v: &VehicleScoring) -> Vehicle {
     let pos = v.pos;
     Vehicle {
         id: v.id,
+        slot_id: v.id,
         place: v.place,
         class_place: 0,
         driver: cstr(&v.driver_name),
@@ -188,6 +201,7 @@ fn parse_vehicle(v: &VehicleScoring) -> Vehicle {
         num_pitstops: v.num_pitstops,
         num_penalties: v.num_penalties,
         finish_status: v.finish_status,
+        qualification: v.qualification,
         flag: v.flag,
         fuel_fraction: v.fuel_fraction as f64 / 255.0,
         control: v.control,
@@ -339,7 +353,7 @@ fn parse_player(t: &TelemInfo, scoring: Option<&Vehicle>, info: &ScoringInfo) ->
         front_arb: t.front_anti_sway,
         rear_arb: t.rear_anti_sway,
         brake_bias_front: 1.0 - t.rear_brake_bias,
-        speed_limiter: t.speed_limiter_active != 0 || t.speed_limiter != 0,
+        speed_limiter: t.speed_limiter_active != 0,
         headlights: t.headlights != 0,
         wipers: t.wiper_state,
         ignition: t.ignition_starter,

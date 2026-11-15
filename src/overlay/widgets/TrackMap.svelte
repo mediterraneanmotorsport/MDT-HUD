@@ -71,8 +71,12 @@
         const [x, y] = project(f, v.pos[0], v.pos[2]);
         return { v, x, y };
       })
-      // Draw the player last so it's on top.
-      .sort((a, b) => Number(a.v.isPlayer) - Number(b.v.isPlayer)),
+      // Draw the player / focused car last so it's on top.
+      .sort((a, b) => {
+        const aTarget = live.snap?.focusedSlot != null ? (a.v.slotId === live.snap.focusedSlot || a.v.id === live.snap.focusedSlot) : a.v.isPlayer;
+        const bTarget = live.snap?.focusedSlot != null ? (b.v.slotId === live.snap.focusedSlot || b.v.id === live.snap.focusedSlot) : b.v.isPlayer;
+        return Number(aTarget) - Number(bTarget);
+      }),
   );
 </script>
 
@@ -91,8 +95,10 @@
     {/if}
     {#each cars as c (c.v.id)}
       {@const mate = isTeammate(c.v, teammates)}
-      {#if c.v.isPlayer}
-        <circle cx={c.x} cy={c.y} r="6.5" fill="#fff" stroke="#000" stroke-width="1.5" />
+      {@const isTarget = live.snap?.focusedSlot != null ? (c.v.slotId === live.snap.focusedSlot || c.v.id === live.snap.focusedSlot) : c.v.isPlayer}
+      {#if isTarget}
+        <circle cx={c.x} cy={c.y} r="7.5" fill="var(--color-accent)" stroke="#fff" stroke-width="2" />
+        <circle cx={c.x} cy={c.y} r="3" fill="#fff" />
       {:else if mate}
         <circle cx={c.x} cy={c.y} r="7.5" fill="none" stroke="#fff" stroke-width="1.5" />
         <circle

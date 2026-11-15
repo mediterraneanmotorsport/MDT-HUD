@@ -1,13 +1,18 @@
 <script lang="ts">
   import {
+    autoSizeProfileWidgets,
     config,
     createMdtTemplateProfile,
     createProfile,
     deleteProfile,
+    detectNativeResolution,
     exportActiveProfileJson,
+    getNativeResolution,
     importProfileFromObject,
     renameProfile,
+    saveConfig,
     switchProfile,
+    syncActiveProfile,
   } from "../../lib/config.svelte";
 
   type Mode = { kind: "idle" } | { kind: "rename" } | { kind: "new"; fromDefaults: boolean } | { kind: "delete" };
@@ -42,7 +47,8 @@
     else if (e.key === "Escape") mode = { kind: "idle" };
   }
 
-  function exportProfile() {
+  async function exportProfile() {
+    await detectNativeResolution();
     const { filename, content } = exportActiveProfileJson();
     const blob = new Blob([content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -51,7 +57,8 @@
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    feedback = `Exportado: ${filename}`;
+    const native = getNativeResolution();
+    feedback = `Exportado: ${filename} (${native.width}×${native.height})`;
     setTimeout(() => (feedback = ""), 3500);
   }
 
@@ -59,14 +66,55 @@
     const file = (e.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
     try {
+      await detectNativeResolution();
       const text = await file.text();
-      const importedName = importProfileFromObject(JSON.parse(text));
-      feedback = `Perfil importado: "${importedName}"`;
+      const parsed = JSON.parse(text);
+      const native = getNativeResolution();
+      const srcW = parsed?.profile?.screenWidth ?? parsed?.screenWidth;
+      const srcH = parsed?.profile?.screenHeight ?? parsed?.screenHeight;
+      const importedName = importProfileFromObject(parsed);
+      if (srcW && srcH && Math.abs(srcW - native.width) <= 32 && Math.abs(srcH - native.height) <= 32) {
+        feedback = `✓ Perfil "${importedName}" importado (misma resolución ${native.width}×${native.height}, sin cambios)`;
+      } else if (srcW && srcH) {
+        feedback = `✓ Perfil "${importedName}" importado y auto-adaptado de ${srcW}×${srcH} a ${native.width}×${native.height}`;
+      } else {
+        feedback = `✓ Perfil "${importedName}" importado y adaptado a ${native.width}×${native.height}`;
+      }
     } catch (err) {
       feedback = `Error al importar: ${err instanceof Error ? err.message : String(err)}`;
     }
     (e.currentTarget as HTMLInputElement).value = "";
+    setTimeout(() => (feedback = ""), 5000);
+  }
+
+  async function autoScaleCurrentProfile() {
+    await detectNativeResolution();
+    const native = getNativeResolution();
+    const c = config.value;
+    const p = c.profiles[active];
+    if (!p) return;
+    const srcW = p.screenWidth ?? 1920;
+    const srcH = p.screenHeight ?? 1080;
+    if (Math.abs(srcW - native.width) <= 32 && Math.abs(srcH - native.height) <= 32) {
+      feedback = `La resolución de la pantalla ya coincide con el perfil (${native.width}×${native.height}). No aplica cambios.`;
+      setTimeout(() => (feedback = ""), 4000);
+      return;
+    }
+    c.widgets = autoSizeProfileWidgets(p.widgets, srcW, srcH, native.width, native.height);
+    p.screenWidth = native.width;
+    p.screenHeight = native.height;
+    p.widgets = structuredClone(c.widgets);
+    syncActiveProfile();
+    saveConfig();
+    feedback = `✓ Perfil "${activeName}" adaptado a tu pantalla (${native.width}×${native.height})`;
     setTimeout(() => (feedback = ""), 4000);
+  }
+
+  function handleManualSave() {
+    syncActiveProfile();
+    saveConfig();
+    feedback = `✓ Perfil "${activeName}" guardado correctamente`;
+    setTimeout(() => (feedback = ""), 3500);
   }
 </script>
 
@@ -106,6 +154,9 @@
       {#each profiles as [id, p] (id)}<option value={id}>{p.name}</option>{/each}
     </select>
     <div class="flex flex-wrap gap-2">
+      <button class="btn btn-primary flex items-center gap-1.5 font-bold shadow-md" title="Guardar perfil actual en disco" onclick={handleManualSave}>
+        💾 Guardar perfil
+      </button>
       <button class="btn" onclick={() => start({ kind: "new", fromDefaults: false })}>Duplicar</button>
       <button class="btn" onclick={() => start({ kind: "new", fromDefaults: true })}>Nuevo</button>
       <button class="btn" onclick={() => start({ kind: "rename" })}>Renombrar</button>
@@ -114,7 +165,7 @@
         class="field text-xs font-semibold text-accent"
         value=""
         onchange={(e) => {
-          const val = e.currentTarget.value as "competicion" | "streamer" | "minimalista" | "";
+          const val = e.currentTarget.value as "competicion" | "streamer" | "minimalista" | "broadcast" | "";
           if (val) createMdtTemplateProfile(val);
           e.currentTarget.value = "";
         }}
@@ -122,6 +173,7 @@
         <option value="">+ Plantilla MDT…</option>
         <option value="competicion">MDT Competición (Pro)</option>
         <option value="streamer">MDT Streamer / Broadcast</option>
+        <option value="broadcast">MDT Modo Broadcast (Espectador)</option>
         <option value="minimalista">MDT Minimalista</option>
       </select>
       <button class="btn" title="Exportar perfil a archivo .mdthud.json para compartir con el equipo" onclick={exportProfile}>
@@ -129,6 +181,9 @@
       </button>
       <button class="btn" title="Importar perfil .mdthud.json de un compañero" onclick={() => fileInput?.click()}>
         Importar .json
+      </button>
+      <button class="btn" title="Auto-redimensionar y posicionar este perfil a la resolución de tu pantalla" onclick={autoScaleCurrentProfile}>
+        📐 Auto-size pantalla
       </button>
       <input bind:this={fileInput} type="file" accept=".json" class="hidden" onchange={onImportFile} />
     </div>

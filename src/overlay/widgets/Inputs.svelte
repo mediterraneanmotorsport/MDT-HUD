@@ -72,6 +72,12 @@
       ctx.stroke();
     };
     const css = getComputedStyle(document.documentElement);
+    if (opts.showGhostTrace) {
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      line(2, "rgba(255, 255, 255, 0.35)", (v) => Math.min(1, v * 0.9), 1.5);
+      ctx.restore();
+    }
     if (opts.showSteering) line(3, "rgb(245 245 245 / 0.65)", (v) => (v + 1) / 2, 1.5);
     line(1, css.getPropertyValue("--color-throttle"), (v) => v);
     line(2, css.getPropertyValue("--color-brake"), (v) => v);

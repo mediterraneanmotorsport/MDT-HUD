@@ -1,18 +1,42 @@
 <script lang="ts">
   import { api } from "../../lib/api";
-  import { config, HUD_THEMES, saveConfig, type HudTheme } from "../../lib/config.svelte";
+  import { config, createMdtTemplateProfile, HUD_THEMES, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
   import type { MonitorInfo } from "../../lib/types";
   import { live } from "../../lib/live.svelte";
   import { SPOTTER_EVENTS, spotter } from "../../lib/spotter.svelte";
   import { REPO_URL, starOnGitHub } from "../../lib/star.svelte";
   import { checkForUpdate, installUpdate, updater } from "../../lib/updater.svelte";
+  import { testDiscordWebhook } from "../../lib/discord";
   import Toggle from "../components/Toggle.svelte";
 
   const g = $derived(config.value.general);
   const sp = $derived(config.value.spotter);
+  const dc = $derived(config.value.discord);
 
   let starError = $state(false);
   const star = () => starOnGitHub().catch(() => (starError = true));
+
+  let testingDiscord = $state(false);
+  let discordMsg = $state("");
+
+  async function handleTestDiscord() {
+    if (testingDiscord) return;
+    testingDiscord = true;
+    discordMsg = "";
+    try {
+      const res = await testDiscordWebhook(dc.webhookUrl);
+      if (res.ok) {
+        discordMsg = "✓ ¡Mensaje de prueba enviado con éxito a tu Discord!";
+      } else {
+        discordMsg = `⚠️ Error: ${res.error}`;
+      }
+    } catch (e) {
+      discordMsg = `⚠️ Error: ${String(e)}`;
+    } finally {
+      testingDiscord = false;
+      setTimeout(() => (discordMsg = ""), 5000);
+    }
+  }
 
   let monitors = $state<MonitorInfo[]>([]);
   const refreshMonitors = () => api.listMonitors().then((m) => (monitors = m)).catch(() => {});
@@ -48,6 +72,13 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button
+          class="btn text-xs bg-accent/20 border border-accent/40 hover:bg-accent/30 text-fg transition-colors"
+          onclick={() => api.openSpotterFolder()}
+          title="Abre la carpeta %APPDATA%/MDT-HUD/Perfil/ para añadir o sustituir audios .wav"
+        >
+          📁 Abrir carpeta de voces (.wav)
+        </button>
         <button class="btn text-xs" onclick={() => spotter.refreshManifest()}>Recargar carpetas .wav</button>
         <Toggle
           checked={sp.enabled}
@@ -186,6 +217,91 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       INTEGRACIÓN DISCORD (WEBHOOKS TELEMETRÍA)
+       ========================================================================= -->
+  <div class="mb-6 card overflow-hidden text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-3">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">💬</span>
+        <div>
+          <div class="font-semibold text-fg">Integración con Discord (Webhooks)</div>
+          <div class="text-xs text-muted">
+            Exporta y envía automáticamente el gráfico PNG de telemetría con el nombre del piloto al finalizar cada sesión
+          </div>
+        </div>
+      </div>
+      <Toggle
+        checked={dc.enabled}
+        label="Activar Discord"
+        onchange={(v) => {
+          dc.enabled = v;
+          saveConfig();
+        }}
+      />
+    </div>
+
+    {#if dc.enabled}
+      <div class="divide-y divide-line">
+        <div class="flex items-center justify-between p-4 bg-accent/5">
+          <div>
+            <div class="font-medium text-fg">Envío automático al terminar sesión</div>
+            <div class="text-xs text-muted">
+              Al cruzar la meta con bandera a cuadros o salir a boxes tras completar vueltas, genera el PNG y lo publica en Discord.
+            </div>
+          </div>
+          <Toggle
+            checked={dc.autoExport}
+            label="Auto-exportar a Discord"
+            onchange={(v) => {
+              dc.autoExport = v;
+              saveConfig();
+            }}
+          />
+        </div>
+
+        <div class="flex flex-col gap-2 p-4">
+          <label class="flex flex-col gap-1">
+            <span class="text-xs font-semibold text-muted uppercase">URL del Webhook de Discord</span>
+            <input
+              type="url"
+              class="field w-full font-mono text-xs"
+              placeholder="https://discord.com/api/webhooks/1234567890/abcdefg..."
+              bind:value={dc.webhookUrl}
+              oninput={saveConfig}
+            />
+          </label>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <label class="flex items-center gap-2 text-xs">
+              <span class="text-muted">Nombre del Bot:</span>
+              <input
+                type="text"
+                class="field py-1 text-xs w-48"
+                placeholder="Ingeniera MDT"
+                bind:value={dc.botName}
+                oninput={saveConfig}
+              />
+            </label>
+            <div class="flex items-center gap-2">
+              {#if discordMsg}
+                <span class={["text-xs font-bold", discordMsg.startsWith("✓") ? "text-good" : "text-bad"]}>
+                  {discordMsg}
+                </span>
+              {/if}
+              <button
+                class="btn text-xs bg-accent text-white font-bold hover:bg-accent-hi"
+                onclick={handleTestDiscord}
+                disabled={testingDiscord || !dc.webhookUrl}
+              >
+                {testingDiscord ? "Enviando..." : "🧪 Probar Webhook"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
+  </div>
+
   <div class="divide-y divide-line card text-sm">
     <div class="flex items-center justify-between gap-6 p-4">
       <div>
@@ -262,6 +378,54 @@
           <option value={g.monitor}>{g.monitor} (no conectado, usando principal)</option>
         {/if}
       </select>
+    </div>
+    <div class="flex flex-col gap-3 p-4 bg-accent/5 border-l-2 border-accent">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="font-medium text-fg flex items-center gap-2">
+            <span>📺 Modo Broadcast (Espectador / Streaming)</span>
+            <span class="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">NUEVO</span>
+          </div>
+          <div class="text-xs text-muted">
+            Mantiene el HUD y overlay interactivos y siempre visibles en streaming/repetición, cargando la telemetría del coche enfocado.
+          </div>
+        </div>
+        <Toggle checked={Boolean(g.broadcastMode)} label="Modo Broadcast" onchange={(v) => toggleBroadcastMode(v)} />
+      </div>
+
+      {#if g.broadcastMode}
+        <div class="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/30 p-3 text-xs">
+          <span class="font-semibold text-accent uppercase tracking-wider">Perfil activo de Broadcast:</span>
+          <select
+            class="field py-1 text-xs"
+            value={config.value.activeProfile}
+            onchange={(e) => {
+              const id = e.currentTarget.value;
+              g.broadcastProfileId = id;
+              switchProfile(id);
+              saveConfig();
+            }}
+          >
+            {#each Object.entries(config.value.profiles) as [id, p] (id)}
+              <option value={id}>{p.name}</option>
+            {/each}
+          </select>
+          <button
+            type="button"
+            class="btn bg-accent text-white px-2.5 py-1 text-xs font-bold hover:bg-accent-hi"
+            onclick={() => {
+              createMdtTemplateProfile("broadcast");
+              g.broadcastProfileId = config.value.activeProfile;
+              saveConfig();
+            }}
+          >
+            + Crear nuevo perfil Broadcast
+          </button>
+          <span class="text-[11px] text-muted">
+            Consejo: Haz clic en cualquier piloto de la clasificación en el overlay para enfocar la cámara y mostrar su telemetría.
+          </span>
+        </div>
+      {/if}
     </div>
     <div class="flex items-center justify-between p-4">
       <div>

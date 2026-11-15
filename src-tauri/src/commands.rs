@@ -135,7 +135,8 @@ pub fn apply_edit_mode(app: &AppHandle, enabled: bool) {
     let state = app.state::<AppState>();
     state.edit_mode.store(enabled, Ordering::Release);
     if let Some(overlay) = app.get_webview_window("overlay") {
-        let _ = overlay.set_ignore_cursor_events(!enabled);
+        let broadcast = state.shared.broadcast_mode.load(Ordering::Acquire);
+        let _ = overlay.set_ignore_cursor_events(!enabled && !broadcast);
         if enabled {
             let _ = overlay.show();
             let _ = overlay.set_focus();
@@ -344,4 +345,230 @@ pub async fn leaderboard_boards(state: State<'_, AppState>) -> CmdResult<Vec<Boa
 pub async fn ranked_lap_trace(state: State<'_, AppState>, remote_id: String) -> CmdResult<LapTrace> {
     crate::online::require_enabled(&state.config_path)?;
     crate::online::ranked_lap_trace(&remote_id).await
+}
+
+use std::path::{Path, PathBuf};
+
+fn copy_dir_recursive(src: &Path, dst: &Path) {
+    if !src.exists() || !src.is_dir() {
+        return;
+    }
+    let _ = std::fs::create_dir_all(dst);
+    if let Ok(entries) = std::fs::read_dir(src) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let dest = dst.join(entry.file_name());
+            if path.is_dir() {
+                copy_dir_recursive(&path, &dest);
+            } else if path.is_file() {
+                if !dest.exists() {
+                    let _ = std::fs::copy(&path, &dest);
+                }
+            }
+        }
+    }
+}
+
+pub fn ensure_spotter_profiles(data_dir: &Path) {
+    let spotter_dir = data_dir.join("Perfil");
+    let _ = std::fs::create_dir_all(&spotter_dir);
+
+    // If Sara or Antonio folders don't exist yet, copy from app assets/resources
+    let has_sara = spotter_dir.join("Sara").is_dir();
+    let has_antonio = spotter_dir.join("Antonio").is_dir();
+
+    if !has_sara || !has_antonio {
+        let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()));
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        if let Some(ref ed) = exe_dir {
+            candidates.push(ed.join("Perfil"));
+            candidates.push(ed.join("resources").join("Perfil"));
+            candidates.push(ed.join("resources").join("public").join("Perfil"));
+            candidates.push(ed.join("_up_").join("public").join("Perfil"));
+        }
+        candidates.push(PathBuf::from("public/Perfil"));
+        candidates.push(PathBuf::from("../public/Perfil"));
+        candidates.push(PathBuf::from("Perfil"));
+        candidates.push(PathBuf::from("../Perfil"));
+
+        for src in candidates {
+            if src.join("Sara").is_dir() {
+                copy_dir_recursive(&src, &spotter_dir);
+                break;
+            }
+        }
+    }
+
+    let readme_path = spotter_dir.join("LEEME_VOCES_SPOTTER.txt");
+    if !readme_path.exists() {
+        let _ = std::fs::write(
+            readme_path,
+            "MDT-HUD · Perfiles de Voz para Spotter e Ingeniero de Pista\n\nAquí puedes añadir nuevos perfiles de voz o sustituir audios .wav.\nCrea una subcarpeta con el nombre de la voz (ej: Perfil/MiVoz/) y dentro subcarpetas de eventos (ej: yellow_flag, blue_flag, pit_limiter, low_fuel, box_this_lap, tc_up, etc.) con archivos Audio1.wav, Audio2.wav..."
+        );
+    }
+}
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            b' ' => out.push_str("%20"),
+            _ => {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
+}
+
+pub fn scan_spotter_manifest(spotter_dir: &Path) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    if let Ok(entries) = std::fs::read_dir(spotter_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let profile_name = entry.file_name().to_string_lossy().to_string();
+            let mut events_map = serde_json::Map::new();
+
+            if let Ok(ev_entries) = std::fs::read_dir(&path) {
+                for ev_entry in ev_entries.flatten() {
+                    let ev_path = ev_entry.path();
+                    if !ev_path.is_dir() {
+                        continue;
+                    }
+                    let event_name = ev_entry.file_name().to_string_lossy().to_string();
+                    let mut file_urls = Vec::new();
+
+                    if let Ok(files) = std::fs::read_dir(&ev_path) {
+                        for f in files.flatten() {
+                            let fp = f.path();
+                            if fp.is_file() {
+                                let fname = f.file_name().to_string_lossy().to_string();
+                                if fname.ends_with(".wav") || fname.ends_with(".mp3") || fname.ends_with(".ogg") {
+                                    let url = format!(
+                                        "/Perfil/{}/{}/{}",
+                                        percent_encode(&profile_name),
+                                        percent_encode(&event_name),
+                                        percent_encode(&fname)
+                                    );
+                                    file_urls.push(serde_json::Value::String(url));
+                                }
+                            }
+                        }
+                    }
+                    events_map.insert(event_name, serde_json::Value::Array(file_urls));
+                }
+            }
+            map.insert(profile_name, serde_json::Value::Object(events_map));
+        }
+    }
+    serde_json::Value::Object(map)
+}
+
+/// Sends HTTP PUT /rest/watch/focus/{slot_id} to LMU's local REST server at 127.0.0.1:6397.
+/// Uses a direct, synchronous TCP connection with explicit Content-Length: 0 and timeout to avoid CORS,
+/// chunked transfer issues, and async runtime dependencies.
+pub fn lmu_rest_focus(slot_id: i64) -> bool {
+    use std::io::{Read, Write};
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let targets = ["127.0.0.1:6397", "localhost:6397"];
+    for target in targets {
+        if let Ok(addrs) = target.to_socket_addrs() {
+            for addr in addrs {
+                if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(800)) {
+                    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
+                    let _ = stream.set_write_timeout(Some(Duration::from_millis(1000)));
+
+                    let http_request = format!(
+                        "PUT /rest/watch/focus/{slot_id} HTTP/1.1\r\n\
+                         Host: {target}\r\n\
+                         User-Agent: MDT-HUD/1.0.4\r\n\
+                         Accept: application/json\r\n\
+                         Content-Length: 0\r\n\
+                         Connection: close\r\n\
+                         \r\n"
+                    );
+
+                    if stream.write_all(http_request.as_bytes()).is_ok() {
+                        let mut resp_buf = [0u8; 1024];
+                        if let Ok(n) = stream.read(&mut resp_buf) {
+                            let resp = String::from_utf8_lossy(&resp_buf[..n]);
+                            if resp.starts_with("HTTP/1.1 200")
+                                || resp.starts_with("HTTP/1.0 200")
+                                || resp.starts_with("HTTP/1.1 204")
+                                || resp.starts_with("HTTP/1.0 204")
+                            {
+                                eprintln!("[LMU-FOCUS] Slot {slot_id} focused successfully via {addr}");
+                                return true;
+                            } else {
+                                eprintln!("[LMU-FOCUS] Target {addr} responded: {}", resp.lines().next().unwrap_or(""));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    eprintln!("[LMU-FOCUS] Could not reach LMU REST API on port 6397 for slot {slot_id}");
+    false
+}
+
+/// Focuses/spectates a driver in Le Mans Ultimate via its local REST API.
+#[tauri::command]
+pub async fn focus_vehicle(app: AppHandle, slot_id: i64) -> CmdResult<bool> {
+    let state = app.state::<AppState>();
+    state.shared.focused_slot.store(slot_id as i32, Ordering::Release);
+    let ok = tokio::task::spawn_blocking(move || lmu_rest_focus(slot_id))
+        .await
+        .unwrap_or(false);
+    Ok(ok)
+}
+
+/// Sets or clears the focused vehicle slot for telemetry overlays.
+#[tauri::command]
+pub fn set_focused_slot(app: AppHandle, slot_id: Option<i32>) {
+    let state = app.state::<AppState>();
+    state.shared.focused_slot.store(slot_id.unwrap_or(-1), Ordering::Release);
+}
+
+/// Enables or disables broadcast mode, updating overlay click-through state.
+#[tauri::command]
+pub fn set_broadcast_mode(app: AppHandle, enabled: bool) {
+    let state = app.state::<AppState>();
+    state.shared.broadcast_mode.store(enabled, Ordering::Release);
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        let editing = state.edit_mode.load(Ordering::Acquire);
+        let _ = overlay.set_ignore_cursor_events(!editing && !enabled);
+    }
+}
+
+/// Returns the dynamic manifest of all spotter profiles found in %APPDATA%/MDT-HUD/Perfil/
+#[tauri::command]
+pub fn get_spotter_manifest(state: State<AppState>) -> CmdResult<serde_json::Value> {
+    ensure_spotter_profiles(&state.data_dir);
+    let spotter_dir = state.data_dir.join("Perfil");
+    Ok(scan_spotter_manifest(&spotter_dir))
+}
+
+/// Opens the Spotter voice profiles (.wav) folder in the OS file explorer.
+#[tauri::command]
+pub fn open_spotter_folder(state: State<AppState>) -> CmdResult<()> {
+    ensure_spotter_profiles(&state.data_dir);
+    let spotter_dir = state.data_dir.join("Perfil");
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("explorer").arg(&spotter_dir).spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = open::that(&spotter_dir);
+    }
+    Ok(())
 }

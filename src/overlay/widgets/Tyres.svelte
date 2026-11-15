@@ -105,10 +105,10 @@
 
 <!-- Brake on the inboard side: a short bar coloured by its temperature, with the value right above it. -->
 {#snippet brake(w: Wheel)}
-  <div class="flex h-[58px] flex-col items-center justify-center gap-1 px-1.5" title="Brake temperature">
+  <div class="flex h-[58px] flex-col items-center justify-center gap-1 px-1" title="Temperatura de frenos">
     <!-- The degree sign hangs outside so the digits stay centred over the bar. -->
-    <span class="relative text-[11px] leading-none text-muted">{Math.round(temp(w.brakeTemp, units))}<span class="absolute left-full">°</span></span>
-    <div class="h-[26px] w-[8px] rounded-[3px]" style:background={brakeColor(w.brakeTemp)}></div>
+    <span class="relative text-[10px] leading-none font-semibold text-muted">{Math.round(temp(w.brakeTemp, units))}<span class="absolute left-full text-[8px]">°</span></span>
+    <div class="h-[24px] w-[7px] rounded-[2px]" style:background={brakeColor(w.brakeTemp)}></div>
   </div>
 {/snippet}
 
@@ -152,7 +152,7 @@
   </div>
 {/snippet}
 
-<div class="hud w-[288px] p-3">
+<div class={["hud p-3 transition-all duration-150", opts.showBrakes ? "w-[344px]" : "w-[290px]"]}>
   <div class="mb-2 flex items-center justify-between">
     <span class="hud-title">Neumáticos{layer === "core" ? " · int." : ""}</span>
     {#if compounds.some(Boolean)}

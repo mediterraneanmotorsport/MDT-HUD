@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream, UdpSocket};
 use std::process::Command;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
@@ -38,6 +39,7 @@ pub struct MobileRelayState {
     pub auto_popups: bool,
     pub config_seq: u64,
     pub pushed_snap: Option<Value>,
+    pub pushed_at: Option<Instant>,
     pub app_config: Option<Value>,
     pub app_config_mtime: Option<SystemTime>,
     pub last_live_et: f64,
@@ -54,6 +56,7 @@ impl Default for MobileRelayState {
             auto_popups: false,
             config_seq: 1,
             pushed_snap: None,
+            pushed_at: None,
             app_config: None,
             app_config_mtime: None,
             last_live_et: -1.0,
@@ -400,9 +403,17 @@ fn handle_client(
     }
 
     if method.eq_ignore_ascii_case("OPTIONS") {
-        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Accept, *\r\nAccess-Control-Allow-Private-Network: true\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes())?;
         return Ok(());
+    }
+
+    if clean_path == "/__spotter_files" {
+        let state = app.state::<AppState>();
+        crate::commands::ensure_spotter_profiles(&state.data_dir);
+        let manifest = crate::commands::scan_spotter_manifest(&state.data_dir.join("Perfil"));
+        let body = serde_json::to_vec(&manifest).unwrap_or_default();
+        return send_response(&mut stream, "200 OK", "application/json", &body);
     }
 
     if clean_path == "/__mobile_info" {
@@ -428,6 +439,144 @@ fn handle_client(
         };
         let body = serde_json::to_vec(&map).unwrap_or_else(|_| b"null".to_vec());
         return send_response(&mut stream, "200 OK", "application/json", &body);
+    }
+
+    if clean_path.starts_with("/lmu-api/rest/watch/focus/")
+        || clean_path.starts_with("/rest/watch/focus/")
+        || clean_path == "/__focus_vehicle"
+    {
+        let slot_id = if clean_path.starts_with("/lmu-api/rest/watch/focus/") {
+            clean_path.trim_start_matches("/lmu-api/rest/watch/focus/").trim_matches('/').parse::<i64>().ok()
+        } else if clean_path.starts_with("/rest/watch/focus/") {
+            clean_path.trim_start_matches("/rest/watch/focus/").trim_matches('/').parse::<i64>().ok()
+        } else {
+            query_str.split('&').find_map(|part| {
+                if let Some((k, v)) = part.split_once('=') {
+                    if k == "slotId" {
+                        return v.parse::<i64>().ok();
+                    }
+                }
+                None
+            })
+        };
+
+        if let Some(id) = slot_id {
+            let ok = crate::commands::lmu_rest_focus(id);
+            let resp = if ok {
+                b"{\"ok\":true}".to_vec()
+            } else {
+                b"{\"ok\":false,\"error\":\"lmu_unreachable\"}".to_vec()
+            };
+            return send_response(&mut stream, "200 OK", "application/json", &resp);
+        }
+    }
+
+    if clean_path == "/__mobile_focus" {
+        let state = app.state::<AppState>();
+        if let Ok(parsed) = serde_json::from_slice::<Value>(&body_bytes) {
+            if let Some(slot) = parsed.get("slotId").or_else(|| parsed.get("focusSlotId")).and_then(Value::as_i64) {
+                state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                let _ = tokio::task::spawn_blocking(move || crate::commands::lmu_rest_focus(slot));
+            }
+        }
+        return send_response(&mut stream, "200 OK", "application/json", b"{\"ok\":true}");
+    }
+
+    if clean_path == "/__mobile_stream" {
+        let state = app.state::<AppState>();
+        let _ = stream.set_nodelay(true);
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(3600)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(8)));
+
+        let sse_init = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache, no-transform\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n\r\n";
+        if stream.write_all(sse_init.as_bytes()).is_err() || stream.flush().is_err() {
+            return Ok(());
+        }
+
+        loop {
+            let live_snap = state.shared.latest.read().ok().map(|s| s.clone());
+            let demo_on = state.shared.demo.load(Ordering::Acquire);
+
+            let mut st = relay.lock().unwrap_or_else(|e| e.into_inner());
+
+            // Check if disk config.json was updated
+            if let Ok(meta) = std::fs::metadata(&state.config_path) {
+                if let Ok(mtime) = meta.modified() {
+                    if st.app_config_mtime != Some(mtime) {
+                        if let Ok(text) = std::fs::read_to_string(&state.config_path) {
+                            if let Ok(val) = serde_json::from_str::<Value>(&text) {
+                                if st.mobile_theme.is_none() {
+                                    if let Some(t) = val.pointer("/general/theme").and_then(Value::as_str) {
+                                        if t != "custom" {
+                                            st.mobile_theme = Some(t.to_string());
+                                        }
+                                    }
+                                }
+                                st.app_config = Some(val);
+                                st.app_config_mtime = Some(mtime);
+                                st.config_seq += 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let snap_val = if let Some(ref s) = live_snap {
+                if s.player.is_some() {
+                    serde_json::to_value(s).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let is_pushed_fresh = st.pushed_at.map_or(false, |t| t.elapsed() < Duration::from_millis(2000));
+            let pushed = if is_pushed_fresh { st.pushed_snap.clone() } else { None };
+
+            let page = st.page;
+            let page_seq = st.page_seq;
+            let pages = st.pages.clone();
+            let mobile_theme = st.mobile_theme.clone();
+            let auto_popups = st.auto_popups;
+            let config_seq = st.config_seq;
+            let app_config = st.app_config.clone();
+            drop(st);
+
+            let final_snap = if snap_val.is_some() {
+                snap_val
+            } else if pushed.is_some() {
+                pushed
+            } else if demo_on {
+                let mut guard = state.preview.lock().unwrap_or_else(|e| e.into_inner());
+                let sim = guard.get_or_insert_with(|| PreviewSim::new(state.db.clone()));
+                serde_json::to_value(sim.next()).ok()
+            } else {
+                None
+            };
+
+            let payload = json!({
+                "page": page,
+                "pageSeq": page_seq,
+                "pages": pages,
+                "mobileTheme": mobile_theme,
+                "autoPopups": auto_popups,
+                "configSeq": config_seq,
+                "appConfig": app_config,
+                "snap": final_snap,
+            });
+
+            if let Ok(body) = serde_json::to_string(&payload) {
+                let chunk = format!("data: {}\n\n", body);
+                if stream.write_all(chunk.as_bytes()).is_err() || stream.flush().is_err() {
+                    break;
+                }
+            }
+
+            thread::sleep(Duration::from_millis(33)); // 30Hz streaming
+        }
+
+        return Ok(());
     }
 
     if clean_path == "/__mobile_state" {
@@ -467,9 +616,14 @@ fn handle_client(
                         emit_cfg = Some(cfg.clone());
                     }
                 }
+                if let Some(slot) = parsed.get("focusSlotId").or_else(|| parsed.get("slotId")).and_then(Value::as_i64) {
+                    state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                    let _ = tokio::task::spawn_blocking(move || crate::commands::lmu_rest_focus(slot));
+                }
                 if let Some(snap) = parsed.get("snap") {
                     if !snap.is_null() {
                         st.pushed_snap = Some(snap.clone());
+                        st.pushed_at = Some(Instant::now());
                     }
                 }
             }
@@ -515,18 +669,8 @@ fn handle_client(
         }
 
         let snap_val = if let Some(ref s) = live_snap {
-            if let Some(ref p) = s.player {
-                let et = p.elapsed_time + s.session.current_et;
-                if (et - st.last_live_et).abs() > 1e-6 {
-                    st.last_live_et = et;
-                    st.last_live_change = Instant::now();
-                }
-                let is_fresh = s.in_realtime || demo_on || st.last_live_change.elapsed() < Duration::from_secs(3);
-                if is_fresh {
-                    serde_json::to_value(s).ok()
-                } else {
-                    None
-                }
+            if s.player.is_some() {
+                serde_json::to_value(s).ok()
             } else {
                 None
             }
@@ -534,7 +678,8 @@ fn handle_client(
             None
         };
 
-        let pushed = st.pushed_snap.clone();
+        let is_pushed_fresh = st.pushed_at.map_or(false, |t| t.elapsed() < Duration::from_millis(2000));
+        let pushed = if is_pushed_fresh { st.pushed_snap.clone() } else { None };
         let page = st.page;
         let page_seq = st.page_seq;
         let pages = st.pages.clone();
@@ -548,10 +693,12 @@ fn handle_client(
             snap_val
         } else if pushed.is_some() {
             pushed
-        } else {
+        } else if demo_on {
             let mut guard = state.preview.lock().unwrap_or_else(|e| e.into_inner());
             let sim = guard.get_or_insert_with(|| PreviewSim::new(state.db.clone()));
             serde_json::to_value(sim.next()).ok()
+        } else {
+            None
         };
 
         let body = serde_json::to_vec(&json!({
@@ -566,6 +713,18 @@ fn handle_client(
         }))
         .unwrap_or_default();
         return send_response(&mut stream, "200 OK", "application/json", &body);
+    }
+
+    // Check if custom audio exists on disk in %APPDATA%/MDT-HUD/Perfil/
+    if clean_path.starts_with("/Perfil/") {
+        let state = app.state::<AppState>();
+        let rel = clean_path.trim_start_matches("/Perfil/");
+        let disk_file = state.data_dir.join("Perfil").join(rel);
+        if disk_file.is_file() {
+            if let Ok(bytes) = std::fs::read(&disk_file) {
+                return send_response(&mut stream, "200 OK", "audio/wav", &bytes);
+            }
+        }
     }
 
     // Serve static frontend assets embedded in Tauri
@@ -592,7 +751,7 @@ fn send_response(
     body: &[u8],
 ) -> std::io::Result<()> {
     let header = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Accept, *\r\nAccess-Control-Allow-Private-Network: true\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(header.as_bytes())?;

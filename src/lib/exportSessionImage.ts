@@ -35,7 +35,7 @@ export async function renderSessionSummaryBlob(
   const W = 1200;
   const rowH = 34;
   const tableRows = Math.max(1, shownLaps.length);
-  const H = 430 + tableRows * rowH + 76;
+  const H = 445 + tableRows * rowH + 76;
   const dpr = 2;
 
   const canvas = document.createElement("canvas");
@@ -110,18 +110,41 @@ export async function renderSessionSummaryBlob(
 
   ctx.fillStyle = "#2287ec";
   ctx.font = "800 13px 'Barlow Condensed', 'Segoe UI', sans-serif";
-  ctx.fillText("MEDITERRANEAN MOTORSPORT  ·  MDT-HUD TELEMETRÍA OFICIAL", logoEndX, 44);
+  ctx.fillText("MEDITERRANEAN MOTORSPORT  ·  MDT-HUD TELEMETRÍA OFICIAL", logoEndX, 42);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "800 36px 'Barlow Condensed', 'Segoe UI', sans-serif";
-  ctx.fillText(session.track.toUpperCase(), logoEndX, 80);
+  ctx.font = "800 32px 'Barlow Condensed', 'Segoe UI', sans-serif";
+  ctx.fillText(session.track.toUpperCase(), logoEndX, 74);
+
+  const driverName = (session.driver?.trim() || "Piloto MDT").toUpperCase();
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "800 16px 'Barlow Condensed', 'Segoe UI', sans-serif";
+  ctx.fillText(`👤 PILOTO: ${driverName}`, logoEndX, 96);
 
   ctx.fillStyle = "#94a3b8";
-  ctx.font = "600 15px 'Barlow', 'Segoe UI', sans-serif";
-  ctx.fillText(`${session.car}  ·  ${session.sessionType}  ·  ${dateTime(session.startedAt)}`, logoEndX, 104);
+  ctx.font = "600 13px 'Barlow', 'Segoe UI', sans-serif";
+  ctx.fillText(`${session.car}  ·  ${session.sessionType}  ·  ${dateTime(session.startedAt)}`, logoEndX, 116);
 
-  // Right header badge: Class + MDT Logo
+  // Right header badges: Pilot Badge + Category Badge
   const clsColor = classColor(session.carClass);
+
+  // 1. Pilot Badge
+  roundRect(ctx, W - pad - 380, 34, 195, 56, 10);
+  ctx.fillStyle = "rgba(9, 22, 38, 0.9)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "800 11px 'Barlow Condensed', 'Segoe UI', sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("PILOTO OFICIAL", W - pad - 195, 53);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 17px 'Barlow Condensed', 'Segoe UI', sans-serif";
+  ctx.fillText(driverName, W - pad - 195, 77);
+
+  // 2. Class Badge
   roundRect(ctx, W - pad - 170, 34, 170, 56, 10);
   ctx.fillStyle = "rgba(9, 22, 38, 0.9)";
   ctx.fill();
@@ -130,12 +153,12 @@ export async function renderSessionSummaryBlob(
   ctx.stroke();
 
   ctx.fillStyle = clsColor;
-  ctx.font = "800 12px 'Barlow Condensed', 'Segoe UI', sans-serif";
+  ctx.font = "800 11px 'Barlow Condensed', 'Segoe UI', sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("CATEGORÍA", W - pad - 16, 54);
+  ctx.fillText("CATEGORÍA", W - pad - 16, 53);
   ctx.fillStyle = "#ffffff";
   ctx.font = "800 22px 'Barlow Condensed', 'Segoe UI', sans-serif";
-  ctx.fillText(session.carClass || "LMU", W - pad - 16, 79);
+  ctx.fillText(session.carClass || "LMU", W - pad - 16, 78);
   ctx.textAlign = "left";
 
   // 4. Compute Session Metrics
@@ -184,7 +207,7 @@ export async function renderSessionSummaryBlob(
 
   const cardGap = 16;
   const cardW = (W - pad * 2 - cardGap * 3) / 4;
-  const cardY = 132;
+  const cardY = 142;
   const cardH = 98;
 
   cards.forEach((c, i) => {
@@ -215,7 +238,7 @@ export async function renderSessionSummaryBlob(
   });
 
   // 5. Lap Table
-  const tableY = 252;
+  const tableY = 260;
   const tableW = W - pad * 2;
   const tableH = 42 + tableRows * rowH;
 

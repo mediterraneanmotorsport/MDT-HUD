@@ -537,6 +537,7 @@ impl DemoSim {
             vehicles,
             timing: Default::default(),
             strategy: Default::default(),
+            focused_slot: None,
         }
     }
 }

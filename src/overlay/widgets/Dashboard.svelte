@@ -36,19 +36,42 @@
   const hybrid = $derived(!!p && p.electricMotorState > 0);
   const battery = $derived(p ? Math.max(0, Math.min(1, p.battery)) : 0);
   const batteryFull = $derived(hybrid && battery >= 0.975);
+  const snap = $derived(live.snap);
+  const me = $derived(
+    snap?.vehicles.find((v) =>
+      snap.focusedSlot != null
+        ? v.slotId === snap.focusedSlot || v.id === snap.focusedSlot
+        : v.isPlayer,
+    ),
+  );
+  const isYellowFlag = $derived(
+    Boolean(
+      snap &&
+        (snap.session.yellowFlagState > 0 ||
+          snap.session.phase === 6 ||
+          (me && !me.inPits && snap.session.sectorYellow[me.sector - 1])),
+    ),
+  );
+  const isBlueFlag = $derived(Boolean(me?.flag === 6));
+  const isPitLimiter = $derived(Boolean(p?.speedLimiter));
+  const noIconBg = $derived(Boolean(opts.transparentIcons ?? opts.noIconBg ?? false));
   const deltaVal = $derived(
     live.snap?.timing.deltaPb ?? (live.snap?.timing.sessionBest && p ? p.deltaBest : null),
   );
   const hudAlertClass = $derived(
-    batteryFull
-      ? "hud-battery-full"
-      : (opts.deltaBorder ?? true) && deltaVal != null
-        ? deltaVal < -0.005
-          ? "hud-delta-good"
-          : deltaVal > 0.005
-            ? "hud-delta-bad"
-            : ""
-        : "",
+    isYellowFlag
+      ? "border-2 border-[#ffd400] ring-4 ring-[#ffd400]/70 shadow-[0_0_24px_#ffd400] animate-pulse"
+      : isBlueFlag
+        ? "border-2 border-[#1d6cf2] ring-4 ring-[#1d6cf2]/70 shadow-[0_0_24px_#1d6cf2] animate-pulse"
+        : batteryFull
+          ? "hud-battery-full"
+          : (opts.deltaBorder ?? true) && deltaVal != null
+            ? deltaVal < -0.005
+              ? "hud-delta-good"
+              : deltaVal > 0.005
+                ? "hud-delta-bad"
+                : ""
+            : "",
   );
   const motor = $derived(
     batteryFull
@@ -78,9 +101,10 @@
     !!p && (p.tcSlip > 0 || p.tcCut > 0 || p.migration > 0 || p.frontArb > 0 || p.rearArb > 0),
   );
 
-  // Highlight chips briefly when the driver changes TC, ABS, MAP, BB, Slip, Cut, Migration or ARB
+  // Highlight chips & show large popup when the driver changes TC, ABS, MAP, BB, Slip, Cut, Migration or ARB
   let changedKey = $state<string | null>(null);
   let changedBanner = $state<string | null>(null);
+  let changedPopup = $state<{ title: string; value: string; color: string } | null>(null);
   let changedTimer: ReturnType<typeof setTimeout> | null = null;
   let lastElecSig = "";
   let prevElec: {
@@ -95,14 +119,16 @@
     rArb: number;
   } | null = null;
 
-  function markChanged(key: string, banner: string) {
+  function markChanged(key: string, banner: string, title: string, value: string, color: string) {
     changedKey = key;
     changedBanner = banner;
+    changedPopup = { title, value, color };
     if (changedTimer) clearTimeout(changedTimer);
     changedTimer = setTimeout(() => {
       changedKey = null;
       changedBanner = null;
-    }, 1500);
+      changedPopup = null;
+    }, 2200);
   }
 
   $effect(() => {
@@ -116,15 +142,22 @@
     if (sig === lastElecSig) return;
     lastElecSig = sig;
     if (prevElec) {
-      if (p.tc !== prevElec.tc) markChanged("TC", `TC ${p.tc > 0 ? p.tc : "OFF"}`);
-      else if (p.tcSlip !== prevElec.tcSlip) markChanged("TC", `TC SLIP ${p.tcSlip}`);
-      else if (p.tcCut !== prevElec.tcCut) markChanged("TC", `TC CUT ${p.tcCut}`);
-      else if (p.abs !== prevElec.abs) markChanged("ABS", `ABS ${p.abs > 0 ? p.abs : "OFF"}`);
-      else if (p.motorMap !== prevElec.map) markChanged("MAP", `MAPA ${p.motorMap}`);
-      else if (bb !== prevElec.bb) markChanged("BB", `BB ${bb}%`);
-      else if (p.migration !== prevElec.mig) markChanged("BB", `MIGRACIÓN ${p.migration}`);
+      if (p.tc !== prevElec.tc)
+        markChanged("TC", `TC ${p.tc > 0 ? p.tc : "OFF"}`, "CONTROL DE TRACCIÓN (TC)", p.tc > 0 ? String(p.tc) : "OFF", "#f59e0b");
+      else if (p.tcSlip !== prevElec.tcSlip)
+        markChanged("TC", `TC SLIP ${p.tcSlip}`, "TC SLIP", String(p.tcSlip), "#f59e0b");
+      else if (p.tcCut !== prevElec.tcCut)
+        markChanged("TC", `TC CUT ${p.tcCut}`, "TC CUT", String(p.tcCut), "#f59e0b");
+      else if (p.abs !== prevElec.abs)
+        markChanged("ABS", `ABS ${p.abs > 0 ? p.abs : "OFF"}`, "SISTEMA ABS", p.abs > 0 ? String(p.abs) : "OFF", "#38bdf8");
+      else if (p.motorMap !== prevElec.map)
+        markChanged("MAP", `MAPA ${p.motorMap}`, "MAPA MOTOR (MAP)", String(p.motorMap), "#22c55e");
+      else if (bb !== prevElec.bb)
+        markChanged("BB", `BB ${bb}%`, "REPARTO DE FRENADA (BB)", `${bb}%`, "#ef4444");
+      else if (p.migration !== prevElec.mig)
+        markChanged("BB", `MIGRACIÓN ${p.migration}`, "MIGRACIÓN FRENADA", String(p.migration), "#ef4444");
       else if (p.frontArb !== prevElec.fArb || p.rearArb !== prevElec.rArb)
-        markChanged("ARB", `ARB ${p.frontArb}/${p.rearArb}`);
+        markChanged("ARB", `ARB ${p.frontArb}/${p.rearArb}`, "BARRAS ESTABILIZADORAS", `${p.frontArb} / ${p.rearArb}`, "#38bdf8");
     }
     prevElec = {
       tc: p.tc,
@@ -261,7 +294,12 @@
 {#snippet indicator(title: string, color: string | null, icon: Snippet)}
   <div
     {title}
-    class={["grid h-7 place-items-center rounded-md transition-colors", color ? "bg-hud-2 ring-1 ring-white/10" : "text-faint opacity-50"]}
+    class={[
+      "grid h-7 place-items-center rounded-md transition-colors",
+      noIconBg
+        ? (color ? "ring-1 ring-white/10" : "text-faint opacity-40")
+        : (color ? "bg-hud-2 ring-1 ring-white/10" : "bg-black/20 text-faint opacity-50"),
+    ]}
     style:color
   >
     <svg
@@ -317,7 +355,7 @@
   {#if opts.showIndicators && p}
     <div class="mt-2.5 grid grid-cols-6 gap-1.5">
       {@render indicator("Luces", p.headlights ? ON : null, headlightIcon)}
-      {@render indicator("Limitador Pit", p.speedLimiter ? WARN : null, limiterIcon)}
+      {@render indicator("Limitador Pit", isPitLimiter ? WARN : null, limiterIcon)}
       {@render indicator("Control de tracción", p.tcActive ? WARN : null, tcIcon)}
       {@render indicator("ABS", p.absActive ? WARN : null, absIcon)}
       {@render indicator("Limpiaparabrisas", p.wipers > 0 ? ON : null, wiperIcon)}
@@ -385,7 +423,16 @@
 {/snippet}
 
 {#snippet pitLimiterBanner()}
-  {#if p?.speedLimiter}
+  {#if isYellowFlag}
+    <div class="mb-2 animate-pulse rounded bg-[#ffd400] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_15px_#ffd400]">
+      ⚠️ BANDERA AMARILLA
+    </div>
+  {:else if isBlueFlag}
+    <div class="mb-2 animate-pulse rounded bg-[#1d6cf2] py-0.5 text-center font-display text-xs font-black tracking-widest text-white uppercase shadow-[0_0_15px_#1d6cf2]">
+      🟦 BANDERA AZUL · CEDE EL PASO
+    </div>
+  {/if}
+  {#if isPitLimiter}
     <div class="mb-2 animate-pulse rounded bg-warn py-0.5 text-center font-display text-xs font-extrabold tracking-widest text-black uppercase">
       LIMITADOR DE PIT ACTIVO
     </div>
@@ -407,6 +454,25 @@
   {/if}
 {/snippet}
 
+{#snippet bigRotaryOverlay()}
+  {#if changedPopup}
+    <div class="pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-2">
+      <div
+        class="flex flex-col items-center justify-center rounded-2xl border-4 bg-[#070e1b]/95 px-6 py-3.5 shadow-2xl backdrop-blur-md transition-all duration-150"
+        style:border-color={changedPopup.color}
+        style:box-shadow="0 0 35px {changedPopup.color}"
+      >
+        <span class="font-display text-[10px] font-black tracking-[0.25em] text-white/80 uppercase" style:color={changedPopup.color}>
+          {changedPopup.title}
+        </span>
+        <span class="mt-0.5 font-display text-4xl sm:text-5xl font-black text-white tracking-wider tabular-nums">
+          {changedPopup.value}
+        </span>
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
 <!-- =========================================================================
      MODE 1: WEC / BROADCAST MDT (Deportivo con LEDs, caja central azul MDT)
      ========================================================================= -->
@@ -418,6 +484,7 @@
       flash && "ring-2 ring-accent shadow-[0_0_25px_rgb(34_135_236_/_0.6)]",
     ]}
   >
+    {@render bigRotaryOverlay()}
     {#if showMdtLogo}
       <img
         src="/mdt-logo.png"
@@ -449,7 +516,7 @@
           "relative flex h-[74px] w-[74px] shrink-0 items-center justify-center rounded-xl border-2 bg-gradient-to-b from-accent/25 to-black/50 shadow-inner transition-colors",
           flash
             ? "border-sky-400 bg-sky-500/30 text-white shadow-[0_0_18px_#38bdf8]"
-            : p?.speedLimiter
+            : isPitLimiter
               ? "border-warn text-warn"
               : "border-accent/70 text-white",
         ]}
@@ -482,11 +549,12 @@
 {:else if style === "ddu"}
   <div
     class={[
-      "hud w-[380px] overflow-hidden rounded-xl border-2 border-accent/40 bg-[#070a10]/95 p-2.5 shadow-2xl",
+      "hud relative w-[380px] overflow-hidden rounded-xl border-2 border-accent/40 bg-[#070a10]/95 p-2.5 shadow-2xl",
       hudAlertClass,
       flash && "border-sky-400 bg-sky-950/60",
     ]}
   >
+    {@render bigRotaryOverlay()}
     {@render batteryFullBanner()}
     {@render pitLimiterBanner()}
     <!-- Top LED Strip -->
@@ -500,7 +568,7 @@
         {/if}
         <span class="text-accent">MDT-HUD</span>
       </div>
-      {#if p?.speedLimiter}
+      {#if isPitLimiter}
         <span class="animate-pulse rounded bg-warn px-1.5 py-px text-black">LIMITADOR DE PIT</span>
       {:else if p?.tcActive}
         <span class="rounded bg-amber-500 px-1.5 py-px text-black">TC ACTIVO</span>
@@ -543,7 +611,7 @@
       <div
         class={[
           "flex flex-col items-center justify-center rounded-lg border-2 bg-black/70 py-1",
-          flash ? "border-sky-400 bg-sky-500/30 text-sky-200" : p?.speedLimiter ? "border-warn text-warn" : "border-accent text-white",
+          flash ? "border-sky-400 bg-sky-500/30 text-sky-200" : isPitLimiter ? "border-warn text-warn" : "border-accent text-white",
         ]}
       >
         <span class="text-[9px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
@@ -631,7 +699,7 @@
     {#if opts.showIndicators && p}
       <div class="mt-2 grid grid-cols-6 gap-1">
         {@render indicator("Luces", p.headlights ? ON : null, headlightIcon)}
-        {@render indicator("Limitador Pit", p.speedLimiter ? WARN : null, limiterIcon)}
+        {@render indicator("Limitador Pit", isPitLimiter ? WARN : null, limiterIcon)}
         {@render indicator("Control de tracción", p.tcActive ? WARN : null, tcIcon)}
         {@render indicator("ABS", p.absActive ? WARN : null, absIcon)}
         {@render indicator("Limpiaparabrisas", p.wipers > 0 ? ON : null, wiperIcon)}
@@ -647,7 +715,8 @@
   {@const R = 52}
   {@const CIRC = 2 * Math.PI * R}
   {@const ARC = CIRC * 0.75}
-  <div class={["hud w-[340px] p-3", hudAlertClass]}>
+  <div class={["hud relative w-[340px] p-3", hudAlertClass]}>
+    {@render bigRotaryOverlay()}
     {@render batteryFullBanner()}
     {@render pitLimiterBanner()}
     <div class="flex items-center justify-between gap-3">
@@ -716,13 +785,14 @@
      MODE 4: BARRA HORIZONTAL COMPACTA
      ========================================================================= -->
 {:else if style === "compact"}
-  <div class={["hud flex items-center gap-3 px-3.5 py-2", hudAlertClass]}>
+  <div class={["hud relative flex items-center gap-3 px-3.5 py-2", hudAlertClass]}>
+    {@render bigRotaryOverlay()}
     {#if batteryFull}
       <span class="animate-pulse rounded bg-[#00ff66] px-2 py-0.5 font-display text-[11px] font-black text-black shadow-[0_0_12px_#00ff66]">
         ⚡ BAT 100%
       </span>
     {/if}
-    {#if p?.speedLimiter}
+    {#if isPitLimiter}
       <span class="animate-pulse rounded bg-warn px-2 py-0.5 font-display text-[11px] font-black text-black">
         LIMITADOR PIT
       </span>
@@ -735,7 +805,7 @@
     <div
       class={[
         "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 font-display text-3xl font-black",
-        flash ? "border-sky-400 bg-sky-500/30 text-white" : p?.speedLimiter ? "border-warn text-warn" : "border-accent bg-accent/15 text-white",
+        flash ? "border-sky-400 bg-sky-500/30 text-white" : isPitLimiter ? "border-warn text-warn" : "border-accent bg-accent/15 text-white",
       ]}
       title="Marcha"
     >
@@ -786,7 +856,8 @@
      MODE 5: CLÁSICO ESTÁNDAR
      ========================================================================= -->
 {:else}
-  <div class={["hud w-[340px] p-3", hudAlertClass]}>
+  <div class={["hud relative w-[340px] p-3", hudAlertClass]}>
+    {@render bigRotaryOverlay()}
     {@render batteryFullBanner()}
     {@render pitLimiterBanner()}
     {@render rpmHeader("h-2")}
@@ -804,7 +875,7 @@
       </div>
       <div class="flex flex-col items-center px-3">
         <span class="text-[9px] font-bold tracking-widest text-muted uppercase">MARCHA</span>
-        <div class={["hud-value text-[64px] leading-none font-bold", p?.speedLimiter && "text-warn"]}>{gear}</div>
+        <div class={["hud-value text-[64px] leading-none font-bold", isPitLimiter && "text-warn"]}>{gear}</div>
       </div>
       <div class="flex items-end gap-2">
         <div class="flex flex-col items-end text-right">

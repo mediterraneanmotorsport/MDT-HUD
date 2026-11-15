@@ -2,7 +2,7 @@
 //! and the database writer for finished laps.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -31,6 +31,10 @@ pub struct Shared {
     pub game_window: AtomicU64,
     /// Whether the game window currently has keyboard focus.
     pub game_focused: AtomicBool,
+    /// Focused vehicle slot for broadcast/spectator telemetry (-1 = default player).
+    pub focused_slot: AtomicI32,
+    /// Whether broadcast mode is active.
+    pub broadcast_mode: AtomicBool,
 }
 
 impl Shared {
@@ -44,6 +48,8 @@ impl Shared {
             game_dir: RwLock::new(None),
             game_window: AtomicU64::new(0),
             game_focused: AtomicBool::new(false),
+            focused_slot: AtomicI32::new(-1),
+            broadcast_mode: AtomicBool::new(false),
         }
     }
 }
@@ -217,7 +223,9 @@ fn run_loop(app: AppHandle, shared: Arc<Shared>, mut recorder: Recorder) {
                         if shared.game_window.swap(hwnd, Ordering::AcqRel) != hwnd {
                             crate::car_render::remember_game_dir(&app, &shared, hwnd);
                         }
-                        let mut s = lmu::parse(&buf);
+                        let focused_slot = shared.focused_slot.load(Ordering::Acquire);
+                        let focused_opt = if focused_slot >= 0 { Some(focused_slot) } else { None };
+                        let mut s = lmu::parse(&buf, focused_opt);
                         penalties.update(&mut s, hwnd);
                         let key = (s.session.current_et, s.player.as_ref().map_or(0.0, |p| p.elapsed_time));
                         if key != last_key {

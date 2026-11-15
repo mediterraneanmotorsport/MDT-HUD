@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { api } from "../../lib/api";
   import { config, type Units } from "../../lib/config.svelte";
   import { classColor, clock, gap, isTeammate, lapTime, penaltyBadge, penaltyTitle, sessionLabel, shortName, timeOfDay } from "../../lib/format";
   import { useLive } from "../../lib/live.svelte";
@@ -16,7 +17,13 @@
   const teammates = $derived(config.value.general.teammates);
 
   // Session header: lap-limited races count laps, everything else counts down the clock.
-  const me = $derived(snap?.vehicles.find((v) => v.isPlayer));
+  const me = $derived(
+    snap?.vehicles.find((v) =>
+      snap.focusedSlot != null
+        ? v.slotId === snap.focusedSlot || v.id === snap.focusedSlot
+        : v.isPlayer,
+    ),
+  );
   const remaining = $derived.by(() => {
     const s = snap?.session;
     if (!s) return "–";
@@ -86,9 +93,22 @@
     });
   });
 
+  const startGridMap = new Map<number, number>();
+  $effect(() => {
+    if (!snap?.vehicles) return;
+    for (const v of snap.vehicles) {
+      if (!startGridMap.has(v.id)) {
+        startGridMap.set(v.id, v.qualification > 0 ? v.qualification : v.place);
+      } else if (v.qualification > 0 && startGridMap.get(v.id) !== v.qualification) {
+        startGridMap.set(v.id, v.qualification);
+      }
+    }
+  });
+
   const columns = $derived(
     [
       "22px", // position
+      opts.showPosGained ? "32px" : "", // posiciones ganadas / perdidas
       "36px", // number
       opts.showLogo ? "18px" : "",
       "minmax(130px,1fr)", // driver
@@ -113,6 +133,26 @@
   }
 </script>
 
+{#snippet posGainedBadge(v: Vehicle)}
+  {@const start = v.qualification > 0 ? v.qualification : (startGridMap.get(v.id) ?? v.place)}
+  {@const diff = start - v.place}
+  <span
+    class={[
+      "flex items-center justify-center font-mono text-[10px] font-bold tabular-nums",
+      diff > 0 ? "text-[#22c55e]" : diff < 0 ? "text-[#ef4444]" : "text-muted/60",
+    ]}
+    title="Parrilla: P{start} → Actual: P{v.place} ({diff > 0 ? `+${diff} ganadas` : diff < 0 ? `${diff} perdidas` : 'sin cambios'})"
+  >
+    {#if diff > 0}
+      ▲+{diff}
+    {:else if diff < 0}
+      ▼{diff}
+    {:else}
+      =
+    {/if}
+  </span>
+{/snippet}
+
 {#snippet time(t: number, color: string | undefined, cls: string)}
   <span class="text-right">
     <span
@@ -136,7 +176,19 @@
         <img src="/mdt-logo.png" alt="MDT" class="h-4 w-auto object-contain" draggable="false" />
         <span class="font-display text-[13px] font-extrabold tracking-wider text-fg uppercase italic">MDT-HUD</span>
       </div>
-      <span class="font-display text-[10px] font-semibold tracking-[0.2em] text-accent-hi uppercase">Mediterranean Motorsport</span>
+      <div class="flex items-center gap-2">
+        {#if live.snap?.focusedSlot != null}
+          <button
+            type="button"
+            class="rounded bg-accent px-2 py-0.5 text-[10px] font-bold text-white shadow hover:bg-accent-hi transition-colors cursor-pointer"
+            title="Restablecer enfoque a tu coche"
+            onclick={() => api.setFocusedSlot(null)}
+          >
+            ✕ Mi coche
+          </button>
+        {/if}
+        <span class="font-display text-[10px] font-semibold tracking-[0.2em] text-accent-hi uppercase">Mediterranean Motorsport</span>
+      </div>
     </div>
   {/if}
   {#if opts.showSession && snap}
@@ -162,19 +214,36 @@
     </div>
     {#each g.rows as r, i (r.v.id)}
       {@const mate = isTeammate(r.v, teammates)}
+      {@const isTargetFocused = live.snap?.focusedSlot != null ? (r.v.slotId === live.snap.focusedSlot || r.v.id === live.snap.focusedSlot) : r.v.isPlayer}
       <div
         class={[
-          "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5",
-          r.v.isPlayer
-            ? "bg-accent text-white"
+          "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-colors hover:ring-1 hover:ring-accent",
+          isTargetFocused
+            ? "bg-accent text-white shadow-[0_0_12px_var(--color-accent)] ring-1 ring-white/60 font-bold"
             : mate
               ? "bg-accent/20 ring-1 ring-accent/60"
               : i % 2 === 1 && "bg-white/[0.03]",
           (r.v.finishStatus === 2 || r.v.finishStatus === 3) && "opacity-50",
         ]}
         style:grid-template-columns={columns}
+        onclick={() => {
+          const targetSlot = r.v.slotId ?? r.v.id;
+          api.focusVehicle(targetSlot);
+          api.setFocusedSlot(targetSlot);
+        }}
+        title="Click para enfocar coche #{r.v.number} {r.v.driver} en el juego y cargar su telemetría"
+        role="button"
+        tabindex="0"
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            const targetSlot = r.v.slotId ?? r.v.id;
+            api.focusVehicle(targetSlot);
+            api.setFocusedSlot(targetSlot);
+          }
+        }}
       >
         <span class="text-right font-semibold">{r.v.classPlace}</span>
+        {#if opts.showPosGained}{@render posGainedBadge(r.v)}{/if}
         <span
           class="rounded-[4px] text-center text-[12px] leading-[18px] font-bold text-white"
           style:background={classColor(r.v.class)}

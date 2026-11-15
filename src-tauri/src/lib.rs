@@ -156,14 +156,19 @@ pub fn run() {
         )
         .setup(move |app| {
             // Dev builds keep their own laps, identity key and config so they never touch the installed app's.
-            let (mut data_dir, mut config_dir) = (app.path().app_data_dir()?, app.path().app_config_dir()?);
-            // Carry data over from before the identifier changed from com.lm-overlay.app.
-            for dir in [&data_dir, &config_dir] {
-                let legacy = dir.with_file_name("com.lm-overlay.app");
-                if !dir.exists() && legacy.is_dir() {
-                    if let Err(e) = std::fs::rename(&legacy, dir) {
-                        eprintln!("migrating {}: {e}", legacy.display());
-                    }
+            let (mut data_dir, mut config_dir) = (
+                app.path().app_data_dir()?.with_file_name("MDT-HUD"),
+                app.path().app_config_dir()?.with_file_name("MDT-HUD"),
+            );
+            // Carry data over from before the folder was renamed
+            for legacy_name in ["xyz.mulsanne", "mulsanne", "com.lm-overlay.app"] {
+                let legacy_data = data_dir.with_file_name(legacy_name);
+                if !data_dir.exists() && legacy_data.is_dir() {
+                    let _ = std::fs::rename(&legacy_data, &data_dir);
+                }
+                let legacy_config = config_dir.with_file_name(legacy_name);
+                if !config_dir.exists() && legacy_config.is_dir() {
+                    let _ = std::fs::rename(&legacy_config, &config_dir);
                 }
             }
             if cfg!(debug_assertions) {
@@ -172,6 +177,7 @@ pub fn run() {
             }
             std::fs::create_dir_all(&data_dir)?;
             std::fs::create_dir_all(&config_dir)?;
+            commands::ensure_spotter_profiles(&data_dir);
 
             let db = Arc::new(db::Db::open(&data_dir.join("laps.db")).map_err(|e| format!("database: {e}"))?);
             let shared = Arc::new(engine::Shared::new());
@@ -268,6 +274,11 @@ pub fn run() {
             commands::leaderboard,
             commands::leaderboard_boards,
             commands::ranked_lap_trace,
+            commands::focus_vehicle,
+            commands::set_focused_slot,
+            commands::set_broadcast_mode,
+            commands::get_spotter_manifest,
+            commands::open_spotter_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

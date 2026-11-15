@@ -26,6 +26,8 @@ pub struct Snapshot {
     pub vehicles: Vec<Vehicle>,
     pub timing: Timing,
     pub strategy: Strategy,
+    #[serde(default)]
+    pub focused_slot: Option<i32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -229,6 +231,8 @@ pub struct Wheel {
 #[serde(rename_all = "camelCase")]
 pub struct Vehicle {
     pub id: i32,
+    #[serde(default)]
+    pub slot_id: i32,
     pub place: u8,
     pub class_place: u16,
     pub driver: String,
@@ -266,6 +270,7 @@ pub struct Vehicle {
     /// trace log. May hold fewer entries than `num_penalties` when the log
     /// has no matching line.
     pub penalties: Vec<Penalty>,
+    pub qualification: i32,
     pub finish_status: i8,
     pub flag: u8,
     pub fuel_fraction: f64,

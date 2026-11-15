@@ -227,6 +227,7 @@ function buildFallbackFixtures() {
           numPenalties: idx === 3 ? 1 : 0,
           penalties: idx === 3 ? [{ kind: "driveThrough", seconds: 0, reason: "Track Limits" }] : [],
           finishStatus: 0,
+          qualification: (idx === 0 ? 2 : idx === 1 ? 1 : idx + 1),
           flag: 0,
           fuelFraction: 0.65,
           control: idx === 0 ? 0 : 1,
@@ -414,6 +415,13 @@ export async function install() {
           };
         case "open_mobile_firewall":
           return true;
+        case "focus_vehicle":
+          return fetch(`/lmu-api/rest/watch/focus/${args.slotId}`, {
+            method: "PUT",
+            headers: { accept: "application/json" },
+          })
+            .then((r) => r.ok)
+            .catch(() => false);
         case "set_edit_mode":
           editMode = args.enabled;
           emit("edit-mode", editMode);
@@ -522,9 +530,37 @@ export async function install() {
     { shouldMockEvents: true },
   );
 
-  if (noLive) return;
-  let i = 0;
-  setInterval(() => {
-    emit("snapshot", fx.frames[i++ % fx.frames.length]);
-  }, 50);
+  let demoInterval: ReturnType<typeof setInterval> | null = null;
+  const startDemoLoop = () => {
+    if (demoInterval) return;
+    let i = 0;
+    demoInterval = setInterval(() => {
+      emit("snapshot", fx.frames[i++ % fx.frames.length]);
+    }, 50);
+  };
+  const stopDemoLoop = () => {
+    if (demoInterval) {
+      clearInterval(demoInterval);
+      demoInterval = null;
+    }
+  };
+  (window as any).__MDT_START_DEMO__ = startDemoLoop;
+  (window as any).__MDT_STOP_DEMO__ = stopDemoLoop;
+
+  const isMobileClient =
+    /android|iphone|ipod/i.test(navigator.userAgent) ||
+    location.hash.includes("mobile") ||
+    location.hash.includes("dash") ||
+    location.hash.includes("ddu") ||
+    location.hash.includes("pitwall") ||
+    location.pathname.includes("mobile") ||
+    location.pathname.includes("dash") ||
+    location.pathname.includes("ddu") ||
+    location.pathname.includes("pitwall");
+
+  const forceDemo = new URLSearchParams(location.search).has("demo");
+
+  if (!noLive && (!isMobileClient || forceDemo)) {
+    startDemoLoop();
+  }
 }

@@ -1,6 +1,16 @@
 # Changelog
 
-## [1.0.4](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.3...v1.0.4) (2026-11-14)
+## [1.0.6](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.4...v1.0.6) (2026-11-16)
+
+### Features & Improvements
+
+* **Integración Oficial con Discord (`Ingeniera MDT`)**: Webhook oficial integrado por defecto para todos los miembros y pilotos de MDT (`https://discord.com/api/webhooks/...`). Envío automático al finalizar cada sesión o stint del informe gráfico PNG con el nombre del piloto, tiempos por sector, vuelta rápida, vueltas completadas y telemetría de neumáticos.
+* **Modo Broadcast (Espectador) con Selección de Piloto en Tiempo Real**: Perfil de overlays especializado para comentaristas y streamers (`MDT Modo Broadcast`). Al hacer clic sobre cualquier piloto en la tabla de clasificación (Standings o Pitwall), el juego enfoca automáticamente la cámara en dicho coche mediante la API REST de LMU (`/rest/watch/focus/{slotid}`) y todos los complementos (velocidad, marchas, pedales, RPM, neumáticos y consumos) muestran los datos en vivo del piloto seleccionado.
+* **DDU Móvil Server-Sent Events (SSE) a 30 FPS**: Arquitectura de transmisión reactiva continua sin saturación de conexiones HTTP ni congelaciones de datos en velocidad o marchas. Incluye soporte de Screen Wake Lock para mantener la pantalla del móvil siempre encendida sin apagarse por inactividad, auto-ocultación de la barra de configuración tras 5 segundos y logotipo oficial de MDT al escanear.
+* **Aviso de Limitador de Boxes Preciso**: Detección basada en el bit real del limitador del simulador (`speed_limiter_active`), eliminando cualquier falso destello durante cambios de marcha e indicando el limitador al instante incluso a coche parado.
+* **Muro de Ingenieros (Pitwall) con Mapa Interactivo**: Integración del mapa completo del circuito en vivo con telemetría de rivales, estrategia de combustible, lift & coast, meteorología con previsión de cambios y personalización de datos a mostrar.
+* **Gestor de Perfiles de Voz del Spotter**: Botón directo para acceder a la carpeta de perfiles de voz `.wav` en Windows con escaneo dinámico de nuevos perfiles de audio personalizados.
+* **Auto-escalado de Perfiles entre Resoluciones (Auto-size)**: Ajuste proporcional de posición y tamaño de todos los widgets al importar configuraciones de otras pantallas (p. ej. Ultrawide a 1080p).
 
 ### Features & Bug Fixes
 

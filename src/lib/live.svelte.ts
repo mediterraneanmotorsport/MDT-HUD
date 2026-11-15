@@ -1,6 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
 import { getContext, setContext } from "svelte";
 import { api, isNativeTauri } from "./api";
+import { config } from "./config.svelte";
+import { sendSessionToDiscord } from "./discord";
 import { spotter } from "./spotter.svelte";
 import type { Snapshot, Status } from "./types";
 import { wheelControl } from "./wheelControl.svelte";
@@ -45,12 +47,65 @@ export async function startLive() {
       /android|iphone|ipod|ipad/i.test(navigator.userAgent));
   const isOverlayWindow = typeof window !== "undefined" && location.hash.startsWith("#overlay");
   wheelControl.startHost();
+
+  let lastSessionCode = -1;
+  let lastSessionTrack = "";
+  let lastPhase = -1;
+  let lastInRealtime = false;
+  let lastLapNumber = 0;
+  let lastExportedSessionId: number | null = null;
+  let exitGarageTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function triggerAutoDiscordExport() {
+    if (!config.value.discord?.enabled || !config.value.discord?.autoExport || !config.value.discord?.webhookUrl) {
+      return;
+    }
+    const sessions = await api.listSessions({ limit: 1 }).catch(() => []);
+    const latest = sessions[0];
+    if (!latest || latest.lapCount < 1 || latest.id === lastExportedSessionId) return;
+
+    const laps = await api.listLaps(latest.id).catch(() => []);
+    if (!laps || laps.length === 0) return;
+
+    lastExportedSessionId = latest.id;
+    console.log(`[MDT] Auto-exportando sesión ${latest.id} con gráfico PNG a Discord...`);
+    const res = await sendSessionToDiscord(latest, laps);
+    if (res.ok) {
+      console.log(`[MDT] ✓ Sesión ${latest.id} exportada y enviada a Discord exitosamente.`);
+    } else {
+      console.warn(`[MDT] Error al auto-exportar sesión a Discord:`, res.error);
+    }
+  }
+
   await listen<Snapshot>("snapshot", (e) => {
     live.snap = e.payload;
     if (!isRemoteView && !isOverlayWindow) {
       spotter.update(e.payload);
       if (!isNativeTauri()) {
         wheelControl.pushSnapshotToMobile(e.payload);
+      }
+
+      // Check for session completion / transitions
+      const s = e.payload.session;
+      const p = e.payload.player;
+      if (s) {
+        if (lastPhase >= 0 && lastPhase < 7 && s.phase >= 7) {
+          setTimeout(triggerAutoDiscordExport, 1500);
+        }
+        if (lastSessionCode !== -1 && (s.code !== lastSessionCode || (lastSessionTrack && s.track !== lastSessionTrack))) {
+          setTimeout(triggerAutoDiscordExport, 1000);
+        }
+        lastSessionCode = s.code;
+        lastSessionTrack = s.track;
+        lastPhase = s.phase;
+      }
+      if (p) {
+        if (lastInRealtime && !e.payload.inRealtime && lastLapNumber > 0) {
+          clearTimeout(exitGarageTimer);
+          exitGarageTimer = setTimeout(triggerAutoDiscordExport, 3000);
+        }
+        lastInRealtime = e.payload.inRealtime;
+        lastLapNumber = p.lapNumber;
       }
     }
   });

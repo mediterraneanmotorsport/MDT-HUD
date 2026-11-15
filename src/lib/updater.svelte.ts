@@ -41,7 +41,7 @@ async function checkLatestRelease() {
 export async function checkForUpdate() {
   if (updater.phase === "checking" || updater.phase === "downloading") return;
   if (!inTauri()) {
-    updater.version ||= "1.0.1";
+    updater.version ||= "1.0.6";
     updater.phase = "upToDate";
     return;
   }
