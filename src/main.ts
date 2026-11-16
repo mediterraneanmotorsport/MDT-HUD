@@ -10,12 +10,16 @@ if (!("__TAURI_INTERNALS__" in window)) {
   await (await import("./dev/mock")).install();
 }
 
-// `#overlay` = transparent desktop overlay; `#mobile` / `/mobile` / `/dash` (or smartphone browser) = Mobile DDU; `#pitwall` = Pit Wall.
+// `#overlay` / `#broadcast` = transparent desktop overlay for OBS / monitors; `#mobile` / `/mobile` / `/dash` = Mobile DDU; `#pitwall` = Pit Wall.
 const hash = location.hash.toLowerCase();
 const path = location.pathname.toLowerCase();
 const isPhoneBrowser = /android|iphone|ipod/i.test(navigator.userAgent);
 
-const isOverlay = hash.startsWith("#overlay");
+const isOverlay =
+  hash.startsWith("#overlay") ||
+  hash.startsWith("#broadcast") ||
+  path === "/overlay" ||
+  path === "/broadcast";
 const isPitWall = hash.startsWith("#pitwall") || path === "/pitwall";
 const isMobile =
   hash.startsWith("#mobile") ||

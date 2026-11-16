@@ -45,10 +45,14 @@
     saveConfig();
     api.setEditMode(false);
   }
-  const isBroadcast = $derived(Boolean(config.value.general.broadcastMode));
+  const isBroadcastUrl = typeof window !== "undefined" && (location.hash.includes("broadcast") || location.pathname.includes("broadcast"));
+  const isBroadcast = $derived(Boolean(config.value.general.broadcastMode) || isBroadcastUrl);
 
   $effect(() => {
     if (config.loaded) {
+      if (isBroadcastUrl && config.value.general.broadcastProfileId && config.value.activeProfile !== config.value.general.broadcastProfileId) {
+        switchProfile(config.value.general.broadcastProfileId);
+      }
       void api.setBroadcastMode(isBroadcast);
     }
   });

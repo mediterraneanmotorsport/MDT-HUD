@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getContext, setContext } from "svelte";
 import { api, isNativeTauri } from "./api";
-import { config } from "./config.svelte";
+import { applyRemoteConfig, config } from "./config.svelte";
 import { sendSessionToDiscord } from "./discord";
 import { remoteStream } from "./remoteStream.svelte";
 import { spotter } from "./spotter.svelte";
@@ -130,5 +130,25 @@ export async function startLive() {
     live.snap ??= snap;
     live.status = status;
     remoteStream.init();
+  }
+
+  // When loaded in a browser (e.g. OBS Studio Browser Source at localhost:1420),
+  // stream live telemetry from the internal MDT HTTP server (30Hz SSE)
+  if (!isNativeTauri() && typeof EventSource !== "undefined") {
+    try {
+      const sse = new EventSource("/__mobile_stream");
+      sse.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data?.snap && (data.snap.source === "lmu" || data.snap.player || data.snap.vehicles?.length)) {
+            (window as any).__MDT_STOP_DEMO__?.();
+            live.snap = data.snap;
+          }
+          if (data?.appConfig) {
+            applyRemoteConfig(data.appConfig);
+          }
+        } catch {}
+      };
+    } catch {}
   }
 }

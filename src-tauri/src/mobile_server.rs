@@ -729,7 +729,7 @@ fn handle_client(
 
     // Serve static frontend assets embedded in Tauri
     let asset_path = match clean_path {
-        "/" | "/mobile" | "/dash" | "/ddu" | "/pitwall" => "index.html".to_string(),
+        "/" | "/mobile" | "/dash" | "/ddu" | "/pitwall" | "/broadcast" | "/overlay" => "index.html".to_string(),
         p => p.trim_start_matches('/').to_string(),
     };
 
