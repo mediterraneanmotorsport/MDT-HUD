@@ -38,6 +38,8 @@
   import TrackMap from "../overlay/widgets/TrackMap.svelte";
   import Tyres from "../overlay/widgets/Tyres.svelte";
 
+  let { embedded = false } = $props();
+
   let remoteSnap = $state.raw<Snapshot | null>(null);
   let rootEl = $state<HTMLDivElement | null>(null);
 
@@ -93,6 +95,11 @@
       }
     } catch {
       // ignore
+    }
+
+    if (embedded) {
+      // In embedded desktop app mode, live.snap is updated directly in real time
+      return;
     }
 
     let mounted = true;

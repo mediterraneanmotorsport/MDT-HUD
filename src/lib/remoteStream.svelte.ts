@@ -147,11 +147,24 @@ class RemoteStreamStore {
     // 1. Announce session metadata every 2 seconds
     if (now - this.lastAnnounceAt >= 2000) {
       this.lastAnnounceAt = now;
-      const driverName =
-        config.value.broadcast?.driverName?.trim() ||
-        snap.player.name?.trim() ||
-        config.value.general.teammates?.split(",")[0]?.trim() ||
-        "Piloto MDT";
+      const playerVeh = snap.vehicles?.find((v) => v.isPlayer);
+      const sessionPlayer = snap.session?.playerName?.trim();
+      const vehDriver = playerVeh?.driver?.trim();
+
+      let driverName = config.value.broadcast?.driverName?.trim();
+      if (!driverName) {
+        if (sessionPlayer && !sessionPlayer.toLowerCase().includes("mdt") && sessionPlayer.toLowerCase() !== "player" && sessionPlayer.toLowerCase() !== "driver") {
+          driverName = sessionPlayer;
+        } else if (vehDriver && !vehDriver.toLowerCase().includes("mdt") && vehDriver.toLowerCase() !== "player") {
+          driverName = vehDriver;
+        } else if (sessionPlayer && sessionPlayer.toLowerCase() !== "player") {
+          driverName = sessionPlayer;
+        } else if (vehDriver) {
+          driverName = vehDriver;
+        } else {
+          driverName = "Piloto MDT";
+        }
+      }
 
       const announcement: ActiveLiveSession = {
         id: this.myId,
