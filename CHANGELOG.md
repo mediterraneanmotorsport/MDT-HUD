@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.8](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.7...v1.0.8) (2026-11-16) - Beta Telemetría en Vivo & Pitwall
+
+### Features & Improvements
+* **Telemetría en Vivo y Retransmisión Comunitaria**: Se comparte automáticamente la telemetría en tiempo real entre los pilotos y compañeros del equipo Mediterranean Motorsport a través de la red MQTT.
+* **Muro de Ingenieros (Pitwall) Completo en la App**: Visualización en vivo del muro de telemetría completo (Lovely Pitwall) dentro de la aplicación, incluyendo tabla de clasificación en directo, mapa de la pista con posiciones de todos los coches, telemetría de pedales (acelerador, freno, embrague), velocidades, marchas, presiones, temperaturas y estado de los 4 neumáticos, electrónica (TC, ABS, BB, Map) y estrategia de combustible.
+* **Detección de Sesión en Garaje y Boxes**: La retransmisión y detección de sesión se activa tan pronto el piloto entra al circuito o servidor (incluso en el garaje preparando el coche), mostrando el distintivo `🟡 EN BOXES / GARAJE` o `🟢 EN PISTA`.
+* **Identificación Automática del Piloto**: Extracción automática del nombre real del piloto y tags de equipo MDT en Le Mans Ultimate.
+* **Opción de Rollback a v1.0.7 Estable**: Botón directo en Ajustes para volver a la versión estable 1.0.7 en cualquier momento si se desea salir de la beta.
+
+### Bug Fixes
+* **Corrección de excepción en reloj de pista**: eliminado el formateo por slice en valores numéricos de `timeOfDay`.
+* **Protección de geometrías en TrackMap**: blindado el acceso a coordenadas `pos` para coches sin trazada registrada.
+* **Ajuste de escalado de Pitwall**: corrección de desbordamientos `h-dvh w-dvw` al visualizarlo embebido dentro de la ventana de la aplicación.
+* **Control seguro de desconexión**: blindado el reseteo de sesión y botón `(✕ Salir)` al alternar entre pestañas.
+
 ## [1.0.7](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.6...v1.0.7) (2026-11-16)
 
 ### Bug Fixes

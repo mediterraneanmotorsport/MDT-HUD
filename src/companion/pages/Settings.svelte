@@ -575,6 +575,29 @@
         {/if}
       </div>
     </div>
+
+    <!-- Canal Beta & Rollback a versión estable v1.0.7 -->
+    <div class="border-t border-line bg-surface-2/40 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div>
+        <div class="font-semibold text-fg flex items-center gap-1.5">
+          <span>🧪</span>
+          <span>Versión 1.0.8 (Beta de Telemetría en Vivo & Pitwall)</span>
+        </div>
+        <div class="text-muted mt-0.5">
+          Si experimentas problemas durante la beta o prefieres la versión anterior, puedes reinstalar la 1.0.7 estable en cualquier momento.
+        </div>
+      </div>
+      <a
+        class="btn bg-surface-3 hover:bg-surface-2 text-fg border border-line flex items-center gap-1.5 px-3 py-1.5 rounded font-semibold text-xs transition-colors shadow-sm"
+        href="https://github.com/mediterraneanmotorsport/MDT-HUD/releases/download/v1.0.7/MDT-HUD_1.0.7_x64-setup.exe"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Descargar e instalar versión estable oficial v1.0.7"
+      >
+        <span>🔙</span>
+        <span>Volver a v1.0.7 (Estable)</span>
+      </a>
+    </div>
   </div>
 
   <div class="mt-6 flex items-center justify-between gap-4 card p-4 text-sm">
