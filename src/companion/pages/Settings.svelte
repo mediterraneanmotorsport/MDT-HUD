@@ -581,7 +581,7 @@
       <div>
         <div class="font-semibold text-fg flex items-center gap-1.5">
           <span>🧪</span>
-          <span>Versión 1.0.8 (Beta de Telemetría en Vivo & Pitwall)</span>
+          <span>Versión 1.0.9 (Beta de Telemetría en Vivo & Pitwall)</span>
         </div>
         <div class="text-muted mt-0.5">
           Si experimentas problemas durante la beta o prefieres la versión anterior, puedes reinstalar la 1.0.7 estable en cualquier momento.
