@@ -1,0 +1,9 @@
+EVENTO: Salida a Pista
+Perfil: Sara
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: Radio check, te recibo alto y claro. Coche en pista, calienta neumáticos y frenos con calma.
+Audio2: Pista abierta y coche listo con tus reglajes. Vamos a buscar buenas sensaciones.
+Audio3: Salimos del garaje. Condiciones de pista estables, haz una primera vuelta limpia para coger ritmo.

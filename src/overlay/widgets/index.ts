@@ -24,6 +24,7 @@ import Tyres from "./Tyres.svelte";
 import Weather from "./Weather.svelte";
 import BattleForPos from "./BattleForPos.svelte";
 import BroadcastTicker from "./BroadcastTicker.svelte";
+import SpotterWidget from "./SpotterWidget.svelte";
 
 export interface WidgetProps {
   opts: Record<string, any>;
@@ -57,4 +58,5 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   stintplanner: StintPlanner,
   battleforpos: BattleForPos,
   broadcastticker: BroadcastTicker,
+  spotter: SpotterWidget,
 };

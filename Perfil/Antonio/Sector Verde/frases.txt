@@ -1,0 +1,9 @@
+EVENTO: Sector Verde
+Perfil: Antonio
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: Sector verde, mejorando tu marca personal.
+Audio2: Buen parcial en el sector, recortando décimas. ¡Sigue tirando!
+Audio3: Verde en el sector, mantén esa trazada y remata la vuelta.

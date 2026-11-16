@@ -25,6 +25,7 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   { folder: "Bandera Amarilla", label: "Bandera amarilla", priority: 2, cooldownMs: 14000, category: "flags", ttsDefault: "Atención, bandera amarilla" },
   { folder: "Bandera Azul", label: "Bandera azul", priority: 2, cooldownMs: 16000, category: "flags", ttsDefault: "Bandera azul, coche rápido detrás" },
   { folder: "Bandera Negra", label: "Bandera negra / Penalización", priority: 2, cooldownMs: 25000, category: "flags", ttsDefault: "Atención, tenemos una penalización" },
+  { folder: "Vuelta Cancelada", label: "Vuelta anulada (Límites de pista)", priority: 2, cooldownMs: 15000, category: "flags", ttsDefault: "Vuelta anulada por límites de pista. Enfría gomas y prepara la siguiente." },
   { folder: "Bandera Verde", label: "Bandera verde", priority: 2, cooldownMs: 10000, category: "flags", ttsDefault: "Bandera verde, pista libre" },
   { folder: "Lluvia Inminente", label: "Comienzo de lluvia", priority: 2, cooldownMs: 35000, category: "flags", ttsDefault: "Atención, están cayendo las primeras gotas en pista. Precaución, la superficie resbala." },
 
@@ -33,6 +34,7 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   { folder: "Combustible Bajo", label: "Combustible bajo (<2.5 vueltas)", priority: 3, cooldownMs: 45000, category: "strategy", ttsDefault: "Atención, quedan dos vueltas de combustible" },
   { folder: "Entrada Boxes", label: "Entrada a calle de boxes", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Entrando a calle de boxes, vigila la velocidad" },
   { folder: "Salida Boxes", label: "Salida de boxes a pista", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Saliendo de boxes, cuidado con la línea blanca" },
+  { folder: "Salida Pit Lane", label: "Salida del pit lane (Línea de boxes)", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Fin de pit lane, limitador fuera. Gas a fondo, a por ellos." },
   { folder: "Parada Exitosa", label: "Salida de parada limpia", priority: 3, cooldownMs: 35000, category: "strategy", ttsDefault: "Buena parada de boxes. Ruedas nuevas y depósito listo, a por ellos." },
   { folder: "Limitador Pit", label: "Limitador de boxes activado", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Limitador activado" },
   { folder: "Pista Secandose", label: "Pista secándose", priority: 3, cooldownMs: 45000, category: "strategy", ttsDefault: "La lluvia ha cesado y la pista empieza a secarse, cuida neumáticos o prepara slicks." },
@@ -44,11 +46,15 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   { folder: "Neumaticos Calientes", label: "Neumáticos sobrecalentados", priority: 4, cooldownMs: 45000, category: "car", ttsDefault: "Cuidado, neumáticos sobrecalentados" },
 
   // PRIORIDAD 4: Lucha y Presión en pista
+  { folder: "Trafico Salida Boxes", label: "Tráfico en recta al salir de boxes", priority: 2, cooldownMs: 18000, category: "traffic", ttsDefault: "¡Atención! Tráfico rápido en recta de meta, cede el paso al incorporarte." },
   { folder: "Coche Delante Cerca", label: "Rival delante a tiro (< 0.8s)", priority: 4, cooldownMs: 30000, category: "traffic", ttsDefault: "Tienes al coche de delante a tiro de rebufo, presiónale, cometerá un error." },
   { folder: "Presion Detras", label: "Presión por detrás (< 0.6s)", priority: 4, cooldownMs: 25000, category: "traffic", ttsDefault: "Tienes a un rival pegado detrás a pocas décimas, defiende el interior." },
   { folder: "Trafico Delante", label: "Tráfico de otra categoría / Doblados", priority: 4, cooldownMs: 25000, category: "traffic", ttsDefault: "Tráfico de otra categoría delante, busca una salida limpia sin comprometer tu trazada." },
 
   // PRIORIDAD 5: Ritmo, Adelantamientos y Momentos de Carrera
+  { folder: "Salida a Pista", label: "Coche sale a pista (Inicio de tanda)", priority: 3, cooldownMs: 30000, category: "session", ttsDefault: "Radio check, te recibo alto y claro. Coche en pista, calienta neumáticos y frenos con calma." },
+  { folder: "Sector Verde", label: "Sector verde (Mejora personal)", priority: 4, cooldownMs: 6000, category: "session", ttsDefault: "Sector {sector} en verde, mejorando tu marca personal." },
+  { folder: "Sector Purpura", label: "Sector púrpura (Récord de sesión)", priority: 4, cooldownMs: 6000, category: "session", ttsDefault: "¡Sector {sector} en púrpura! El más rápido de la sesión." },
   { folder: "Posicion Ganada", label: "Posición ganada (Adelantamiento)", priority: 5, cooldownMs: 12000, category: "session", ttsDefault: "¡Buena esa! Posición ganada, estás en P{place}. Ahora abre hueco y marca tu ritmo." },
   { folder: "Posicion Perdida", label: "Posición perdida", priority: 5, cooldownMs: 12000, category: "session", ttsDefault: "Hemos perdido la posición, estás en P{place}. Cabeza fría, mantén el ritmo y te la devuelves." },
   { folder: "Lider Carrera", label: "Líder de carrera (P1 en pista)", priority: 5, cooldownMs: 30000, category: "session", ttsDefault: "P1. Eres el líder de la carrera, gestiona el ritmo y cuida gomas." },
@@ -69,7 +75,17 @@ const EVENT_MAP = new Map<string, SpotterEventDef>(SPOTTER_EVENTS.map((e) => [e.
 interface QueuedClip {
   event: SpotterEventDef;
   enqueuedAt: number;
-  context?: { place?: number; classPlace?: number };
+  context?: { place?: number; classPlace?: number; sector?: number };
+}
+
+export interface ActiveSpotterTransmission {
+  folder: string;
+  label: string;
+  priority: SpotterPriority;
+  text: string;
+  profile: string;
+  category: "traffic" | "flags" | "strategy" | "car" | "session";
+  startedAt: number;
 }
 
 class SpotterEngine {
@@ -79,6 +95,7 @@ class SpotterEngine {
   });
   lastEvent = $state<string | null>(null);
   playing = $state(false);
+  currentTransmission = $state<ActiveSpotterTransmission | null>(null);
 
   private lastPlayedFile = new Map<string, string>();
   private lastTriggeredAt = new Map<string, number>();
@@ -192,6 +209,9 @@ class SpotterEngine {
   private aheadCloseTicks = 0;
   private behindCloseTicks = 0;
   private lastRain: number | null = null;
+  private wasDriving = false;
+  private lastSector: number | null = null;
+  private lastLapInvalidated = false;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -247,7 +267,7 @@ class SpotterEngine {
   }
 
   /** Trigger a spotter event respecting priority, cooldowns, and anti-loop rules. */
-  trigger(folder: string, force = false, context?: { place?: number; classPlace?: number }) {
+  trigger(folder: string, force = false, context?: { place?: number; classPlace?: number; sector?: number }) {
     const cfg = config.value.spotter;
     if (!force && !cfg?.enabled) return;
 
@@ -308,6 +328,7 @@ class SpotterEngine {
     }
     this.playing = false;
     this.currentPriority = null;
+    this.currentTransmission = null;
   }
 
   private playNextInQueue() {
@@ -321,7 +342,7 @@ class SpotterEngine {
     }
   }
 
-  private playNow(def: SpotterEventDef, context?: { place?: number; classPlace?: number }) {
+  private playNow(def: SpotterEventDef, context?: { place?: number; classPlace?: number; sector?: number }) {
     const cfg = config.value.spotter;
     const profile = cfg?.profile || "Sara";
     const volume = Math.max(0, Math.min(1, cfg?.volume ?? 0.85));
@@ -333,13 +354,33 @@ class SpotterEngine {
     if (pos) {
       ttsText = ttsText.replace(/\{place\}/g, String(pos));
     }
+    if (context?.sector != null) {
+      ttsText = ttsText.replace(/\{sector\}/g, String(context.sector));
+    }
 
     this.lastEvent = `${profile}: ${def.folder}`;
     this.playing = true;
     this.currentPriority = def.priority;
     this.currentStartedAt = performance.now();
+    this.currentTransmission = {
+      folder: def.folder,
+      label: def.label,
+      priority: def.priority,
+      text: ttsText,
+      profile,
+      category: def.category,
+      startedAt: this.currentStartedAt,
+    };
 
     if (useRadio) this.playRadioClick(true, volume);
+
+    const finishTransmission = () => {
+      setTimeout(() => {
+        if (!this.playing) {
+          this.currentTransmission = null;
+        }
+      }, 1200);
+    };
 
     const url = this.pickRandomUrl(profile, def.folder);
 
@@ -355,6 +396,7 @@ class SpotterEngine {
           this.currentAudio = null;
           this.playing = false;
           this.currentPriority = null;
+          finishTransmission();
           this.playNextInQueue();
         }
       };
@@ -385,6 +427,7 @@ class SpotterEngine {
         this.currentAudio = null;
         this.playing = false;
         this.currentPriority = null;
+        finishTransmission();
         this.playNextInQueue();
       }
     };
@@ -446,6 +489,15 @@ class SpotterEngine {
     const st = snap.strategy;
     const me = snap.vehicles.find((v) => v.isPlayer);
     const now = performance.now();
+
+    // Start of driving stint / leaving garage into the game
+    const isDriving = Boolean(snap.inRealtime && !me?.inGarage && p.speed > 1.2);
+    if (isDriving && !this.wasDriving) {
+      this.wasDriving = true;
+      this.trigger("Salida a Pista");
+    } else if (!snap.inRealtime || Boolean(me?.inGarage)) {
+      this.wasDriving = false;
+    }
 
     // -------------------------------------------------------------------------
     // 1. PRIORITY 1: Side-by-side Traffic Spotter with Hysteresis
@@ -582,6 +634,21 @@ class SpotterEngine {
     const isPitLimiter = (this.speedLimiterTicks ?? 0) >= 2;
     if (isPitLimiter && !this.lastSpeedLimiter) {
       this.trigger("Limitador Pit");
+    } else if (this.lastSpeedLimiter && !isPitLimiter && (p.inPits || this.wasRecentlyInPits || now - this.lastPitExitTime < 14000)) {
+      // Exiting pit lane: check if fast traffic approaching in turn 1 / main straight
+      let hasApproachingTraffic = false;
+      for (const v of snap.vehicles) {
+        if (v.isPlayer || v.inPits) continue;
+        if (v.sector === 1 && v.lapDist < 420 && v.speed > 35) {
+          hasApproachingTraffic = true;
+          break;
+        }
+      }
+      if (hasApproachingTraffic) {
+        this.trigger("Trafico Salida Boxes");
+      } else {
+        this.trigger("Salida Pit Lane");
+      }
     }
     this.lastSpeedLimiter = isPitLimiter;
 
@@ -691,6 +758,43 @@ class SpotterEngine {
     }
     this.lastCompletedLaps = completedLaps;
     if (pb > 0 && this.lastBestLap === 0) this.lastBestLap = pb;
+
+    // Sector completion check (PB Green & Session Best Purple)
+    const curSector = p.sector;
+    if (this.lastSector != null && this.lastSector !== curSector && !p.inPits && !p.lapInvalidated && p.speed > 25) {
+      let completedSectorIdx = -1;
+      let sectorTime = 0;
+
+      if (this.lastSector === 1 && curSector === 2) {
+        completedSectorIdx = 0;
+        sectorTime = snap.timing.currentSectors[0];
+      } else if (this.lastSector === 2 && curSector === 3) {
+        completedSectorIdx = 1;
+        sectorTime = snap.timing.currentSectors[1];
+      } else if (this.lastSector === 3 && curSector === 1) {
+        completedSectorIdx = 2;
+        sectorTime = snap.timing.lastSectors[2];
+      }
+
+      if (completedSectorIdx >= 0 && sectorTime > 0.5) {
+        const sb = snap.timing.sessionBestSectors[completedSectorIdx];
+        const pb = snap.timing.personalBestSectors[completedSectorIdx];
+        const sectorNum = completedSectorIdx + 1;
+
+        if (sb > 0 && sectorTime <= sb + 0.002) {
+          this.trigger("Sector Purpura", false, { sector: sectorNum });
+        } else if (pb > 0 && sectorTime <= pb + 0.002) {
+          this.trigger("Sector Verde", false, { sector: sectorNum });
+        }
+      }
+    }
+    this.lastSector = curSector;
+
+    // Lap invalidated / track limits
+    if (p.lapInvalidated && !this.lastLapInvalidated && !p.inPits && p.speed > 25) {
+      this.trigger("Vuelta Cancelada");
+    }
+    this.lastLapInvalidated = p.lapInvalidated;
 
     // Mid-race milestone
     if (s.kind === "race" && !this.calledHalfRace) {

@@ -1,0 +1,9 @@
+EVENTO: Vuelta Cancelada
+Perfil: Antonio
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: Vuelta anulada por límites de pista. Enfría gomas y prepara la siguiente.
+Audio2: Tiempo de vuelta cancelado, hemos pisado fuera.
+Audio3: Olvida esta vuelta, excedidos los límites. Concéntrate en la siguiente.

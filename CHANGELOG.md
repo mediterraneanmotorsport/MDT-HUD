@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.9...v1.1.0) (2026-11-17) - Radio de Spotter Animada & Triggers de Competición
+
+### Features & Improvements
+* **Widget Overlay Animado de Spotter (Team Radio WEC)**: Nuevo widget opcional en pantalla con animación de transmisión en tiempo real, indicador LED «ON AIR», ecualizador de ondas de sonido dinámico y subtítulos de lo que comunica el spotter. Insignias luminosas contextuales según la prioridad y evento (Púrpura, Verde, Rojo, Amarillo, Cian). Totalmente configurable y reposicionable desde la pestaña Overlays.
+* **Nuevas Funciones y Triggers del Spotter Contextual**:
+  * *Salida Pit Lane*: Aviso de incorporación y pista libre al cruzar la línea de salida de boxes o desconectar el limitador de velocidad.
+  * *Salida a Pista*: Mensaje de confirmación de radio check y salida a pista al pulsar «Drive» o abandonar el garaje.
+  * *Sectores en Verde*: Notificación inmediata al batir la mejor marca personal en el Sector 1, 2 o 3 con sustitución dinámica del sector.
+  * *Sectores en Púrpura*: Notificación al conseguir el récord absoluto de la sesión en el sector.
+  * *Vuelta Cancelada*: Aviso en tiempo real de tiempo anulado por límites de pista.
+  * *Alerta de Tráfico al Incorporarse*: Aviso prioritario si se aproxima un rival rápido por la recta principal al salir de boxes.
+* **Soporte de Perfiles de Audio Dinámicos**: Escaneo automático de archivos de audio `.wav`, `.mp3` y `.ogg` con cualquier nomenclatura (`Audio1.wav`, `1.wav`, etc.) y respaldo inmediato mediante síntesis de voz (TTS) con filtro de radio walkie-talkie.
+* **Integración Avanzada con OBS Studio**: Soporte completo para fuentes de navegador con fondo transparente 100% alfa en `http://localhost:1420/#broadcast` y `http://localhost:1420/#overlay`.
+
 ## [1.0.8](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.7...v1.0.8) (2026-11-16) - Beta Telemetría en Vivo & Pitwall
 
 ### Features & Improvements

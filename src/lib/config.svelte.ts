@@ -703,6 +703,35 @@ export const WIDGETS: WidgetMeta[] = [
       speed: 5,
     },
   },
+  {
+    id: "spotter",
+    name: "Radio de Spotter (Team Radio)",
+    description: "Widget animado estilo Team Radio / WEC que aparece en pantalla cuando el spotter o ingeniero transmite un mensaje de voz o aviso.",
+    defaults: { enabled: true, x: 740, y: 70 },
+    options: [
+      {
+        key: "style",
+        label: "Estilo visual de la radio",
+        type: "select",
+        choices: [
+          { value: "wec", label: "Banner oficial WEC / Broadcast" },
+          { value: "compact", label: "Cápsula deportiva moderna" },
+          { value: "minimal", label: "Minimalista transparente" },
+        ],
+      },
+      { key: "showText", label: "Mostrar texto y subtítulo de la radio", type: "boolean" },
+      { key: "showEqualizer", label: "Mostrar ondas animadas de transmisión", type: "boolean" },
+      { key: "showProfile", label: "Mostrar nombre del ingeniero (Sara / Antonio)", type: "boolean" },
+      { key: "showCategoryBadge", label: "Mostrar insignia de evento (Banderas, PB, Tráfico)", type: "boolean" },
+    ],
+    optionDefaults: {
+      style: "wec",
+      showText: true,
+      showEqualizer: true,
+      showProfile: true,
+      showCategoryBadge: true,
+    },
+  },
 ];
 
 export const widgetMeta = (id: string) => WIDGETS.find((w) => w.id === id)!;

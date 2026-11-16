@@ -1,0 +1,9 @@
+EVENTO: Sector Purpura
+Perfil: Antonio
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: ¡Sector en púrpura! El más rápido de toda la sesión.
+Audio2: ¡Púrpura en el sector! Vienes volando, tiempazo.
+Audio3: Récord absoluto en el sector, estratosférico. ¡Céntrate en la frenada y clava la vuelta!

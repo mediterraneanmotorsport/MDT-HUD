@@ -1,0 +1,9 @@
+EVENTO: Salida Pit Lane
+Perfil: Sara
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: Fin de pit lane, limitador fuera. Gas a fondo, a por ellos.
+Audio2: Pista libre en la incorporación. Recuerda no cruzar la línea blanca de boxes.
+Audio3: Salida limpia. Cuidado con los neumáticos fríos en las primeras frenadas.

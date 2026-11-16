@@ -1,0 +1,9 @@
+EVENTO: Trafico Salida Boxes
+Perfil: Antonio
+
+Puedes colocar aquí tus archivos de audio personalizados en formato WAV (Audio1.wav, Audio2.wav, Audio3.wav...).
+Si no hay archivos WAV presentes, MDT-HUD utilizará la síntesis de voz (TTS) con estas frases por defecto:
+
+Audio1: ¡Atención en la salida! Viene un coche lanzado en recta, mantén el interior.
+Audio2: Cuidado al incorporarte, tráfico rápido por detrás en recta principal.
+Audio3: Tráfico llegando a la curva 1, cede el paso al salir del carril.
