@@ -2,6 +2,7 @@
   import { remoteStream, type ActiveLiveSession } from "../../lib/remoteStream.svelte";
   import { live } from "../../lib/live.svelte";
   import { config } from "../../lib/config.svelte";
+  import { api } from "../../lib/api";
   import { lapTime } from "../../lib/format";
   import PitWall from "../../mobile/PitWall.svelte";
 
@@ -31,18 +32,30 @@
     remoteStream.startSpectating(s);
   }
 
+  function handleShowLocalPitwall() {
+    showLocalPitwall = true;
+    // Si no hay telemetría activa de LMU, activar demo para mostrar todos los datos de inmediato
+    if (!live.snap || live.snap.source === "none" || !live.snap.vehicles || live.snap.vehicles.length === 0) {
+      void api.setDemoMode(true);
+    }
+  }
+
   function handleExitSpectating() {
+    const wasLocal = showLocalPitwall;
     remoteStream.stopSpectating();
     showLocalPitwall = false;
+    if (wasLocal && live.status.demo && (!live.snap || live.snap.source !== "lmu")) {
+      void api.setDemoMode(false);
+    }
   }
 </script>
 
 <!-- MODO PITWALL ACTIVO: Ya sea espectando a un piloto remoto o viendo el pitwall propio -->
 {#if (remoteStream.spectatingId && remoteStream.spectatingSession) || showLocalPitwall}
   {@const s = remoteStream.spectatingSession}
-  <div class="flex h-full flex-col bg-[#070b12] text-white">
+  <div class="flex h-full w-full flex-col overflow-hidden bg-[#070b12] text-white">
     <!-- Barra superior de control del Pitwall en vivo -->
-    <header class="flex shrink-0 items-center justify-between border-b border-line bg-surface-1/90 px-4 py-2.5 backdrop-blur-md">
+    <header class="flex h-11 shrink-0 items-center justify-between border-b border-white/10 bg-[#0d131f] px-4 shadow">
       <div class="flex items-center gap-3">
         {#if s}
           <span class="flex items-center gap-1.5 rounded-full bg-red-500/20 border border-red-500/50 px-2.5 py-0.5 text-xs font-bold text-red-400">
@@ -61,18 +74,27 @@
             <span>📍 {s.track}</span>
             <span>·</span>
             <span class="font-bold text-fg">Vuelta {s.lap}</span>
+            <span>·</span>
+            <span class={s.inPits ? "text-yellow-400 font-semibold" : "text-good font-semibold"}>
+              {s.inPits ? "En Garaje / Boxes" : "En Pista"}
+            </span>
           </div>
         {:else}
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-good animate-pulse"></span>
             <span class="text-sm font-bold text-fg">MDT Pitwall Oficial (Telemetría Local / Demostración)</span>
+            {#if live.status.demo}
+              <span class="rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 px-2 py-0.5 text-[10px] font-bold">
+                MODO DEMOSTRACIÓN ACTIVO
+              </span>
+            {/if}
           </div>
         {/if}
       </div>
 
       <div class="flex items-center gap-2">
         <button
-          class="btn bg-surface-2 border border-line hover:bg-surface-3 text-fg text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+          class="btn bg-surface-2 border border-line hover:bg-surface-3 text-fg text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors"
           onclick={handleExitSpectating}
         >
           <span>✕</span>
@@ -82,7 +104,7 @@
     </header>
 
     <!-- Componente Pitwall con toda la información disponible (Leaderboard, Mapa, Neumáticos, Pedales, Consumos, Tiempos) -->
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="flex-1 min-h-0 w-full overflow-hidden">
       <PitWall embedded={true} />
     </div>
   </div>
@@ -118,7 +140,7 @@
       <div class="flex items-center gap-3">
         <button
           class="btn bg-accent/20 border border-accent/50 hover:bg-accent/30 text-fg text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
-          onclick={() => (showLocalPitwall = true)}
+          onclick={handleShowLocalPitwall}
           title="Ver tu propio muro de telemetría Pitwall completo"
         >
           <span>🖥️</span>
@@ -133,7 +155,7 @@
         {:else if config.value.broadcast.enabled}
           <div class="flex items-center gap-2 rounded-lg bg-surface-2 border border-line px-3 py-1.5 text-muted text-xs">
             <span class="h-2 w-2 rounded-full bg-accent/60"></span>
-            <span>Retransmisión activa</span>
+            <span>Esperando sesión en LMU</span>
           </div>
         {/if}
       </div>
@@ -197,10 +219,17 @@
                 </div>
               </div>
 
-              <div class="flex items-center gap-1.5 text-xs text-good font-semibold bg-good/10 border border-good/25 px-2 py-0.5 rounded-full">
-                <span class="h-2 w-2 rounded-full bg-good animate-pulse"></span>
-                <span>EN VIVO</span>
-              </div>
+              {#if s.inPits}
+                <div class="flex items-center gap-1.5 text-xs text-yellow-400 font-semibold bg-yellow-500/10 border border-yellow-500/30 px-2 py-0.5 rounded-full">
+                  <span class="h-2 w-2 rounded-full bg-yellow-400"></span>
+                  <span>EN BOXES / GARAJE</span>
+                </div>
+              {:else}
+                <div class="flex items-center gap-1.5 text-xs text-good font-semibold bg-good/10 border border-good/25 px-2 py-0.5 rounded-full">
+                  <span class="h-2 w-2 rounded-full bg-good animate-pulse"></span>
+                  <span>EN PISTA</span>
+                </div>
+              {/if}
             </div>
 
             <!-- Datos de telemetría y carrera -->
@@ -244,15 +273,15 @@
         <div class="h-16 w-16 rounded-2xl bg-surface-2 border border-line flex items-center justify-center text-3xl mb-4">
           📡
         </div>
-        <h3 class="text-lg font-bold text-fg">No hay pilotos en pista en este momento</h3>
+        <h3 class="text-lg font-bold text-fg">No hay sesiones activas en este momento</h3>
         <p class="mt-1.5 max-w-md text-sm text-muted">
-          En cuanto cualquier piloto del equipo entre a rodar en Le Mans Ultimate con MDT-HUD abierto, su sesión aparecerá aquí al instante para que puedas seguir su telemetría en tiempo real.
+          En cuanto cualquier piloto del equipo entre a una sesión en Le Mans Ultimate (en el garaje, boxes o en pista), su sesión aparecerá aquí al instante para que puedas seguir su telemetría y muro de boxes en tiempo real.
         </p>
 
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <button
             class="btn bg-accent text-white hover:bg-accent-hi text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2"
-            onclick={() => (showLocalPitwall = true)}
+            onclick={handleShowLocalPitwall}
           >
             <span>🖥️</span>
             <span>Abrir Muro de Telemetría (Pitwall) con datos locales / demo</span>
@@ -265,7 +294,7 @@
             <span>Retransmisión Automática de Telemetría</span>
           </div>
           <div>
-            Tu telemetría se comparte de forma automática con tu nombre de piloto al salir a pista en el simulador. Puedes consultar o desactivar esta opción en Ajustes.
+            Tu telemetría se comparte de forma automática con tu nombre de piloto tan pronto entras a una sesión en el simulador (incluso en el garaje antes de salir a pista). Puedes cambiar tu nombre de piloto o desactivar la retransmisión en Ajustes.
           </div>
         </div>
       </div>

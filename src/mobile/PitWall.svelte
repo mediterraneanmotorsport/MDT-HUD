@@ -19,6 +19,8 @@
     pressure,
     pressureUnit,
     shortName,
+    speed,
+    speedUnit,
     temp,
     tempUnit,
   } from "../lib/format";
@@ -338,7 +340,9 @@
   bind:this={rootEl}
   data-hud-theme={wheelControl.mobileTheme}
   class={[
-    "flex h-dvh w-dvw flex-col overflow-hidden text-white select-none bg-[#070b12] font-sans",
+    embedded
+      ? "flex h-full w-full flex-col overflow-y-auto text-white select-none bg-[#070b12] font-sans"
+      : "flex h-dvh w-dvw flex-col overflow-hidden text-white select-none bg-[#070b12] font-sans",
     batteryFull && "hud-battery-full border-[3px] border-[#00ff66]",
   ]}
 >
@@ -442,7 +446,7 @@
        LOVELY PITWALL LAYOUT (REPLICA COMPLETA)
        ========================================================================= -->
   {#if viewMode === "lovely"}
-    <main class="grid min-h-0 flex-1 grid-cols-12 gap-2 overflow-hidden p-2.5">
+    <main class={["grid min-h-0 flex-1 grid-cols-12 gap-2 p-2.5", embedded ? "overflow-y-auto" : "overflow-hidden"]}>
       <!-- ==========================================
            COLUMNA IZQUIERDA: LEADERBOARD + RELATIVE BAR + TELEMETRÍA INFERIOR (7/12 cols)
            ========================================== -->
@@ -867,8 +871,8 @@
             <!-- Speed -->
             <div class="flex flex-col items-center justify-center rounded bg-black/40 p-2">
               <span class="text-[9px] font-bold text-white/40 uppercase">VELOCIDAD</span>
-              <span class="font-mono text-3xl font-black text-white">{Math.round(p?.speed ?? 0)}</span>
-              <span class="text-[9px] font-semibold text-white/60">{units === "imperial" ? "MPH" : "KMH"}</span>
+              <span class="font-mono text-3xl font-black text-white">{Math.round(speed(p?.speed ?? 0, units))}</span>
+              <span class="text-[9px] font-semibold text-white/60">{speedUnit(units).toUpperCase()}</span>
             </div>
 
             <!-- Gear & RPM -->
