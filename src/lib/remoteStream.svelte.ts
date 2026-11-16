@@ -255,7 +255,11 @@ class RemoteStreamStore {
     this.spectatingId = session.id;
     this.spectatingSession = session;
     if (live.snap) {
-      this.originalLocalSnap = structuredClone(live.snap);
+      try {
+        this.originalLocalSnap = JSON.parse(JSON.stringify(live.snap));
+      } catch {
+        this.originalLocalSnap = null;
+      }
     }
 
     // Inicializar inmediatamente un snapshot preliminar con la información de la sesión para vista instantánea
@@ -264,6 +268,7 @@ class RemoteStreamStore {
       connected: true,
       inRealtime: !session.inPits,
       frame: 1,
+      gameVersion: 1,
       session: {
         track: session.track,
         trackLength: 4909,
@@ -296,55 +301,135 @@ class RemoteStreamStore {
         },
       },
       player: {
+        id: 1,
         slotId: 1,
         driver: session.driver,
-        carClass: session.carClass,
-        vehicleModel: session.car,
-        vehicleName: session.car,
-        vehicleClass: session.carClass,
+        carClass: session.carClass || "LMU",
+        vehicleModel: session.car || "LMU Car",
+        vehicleName: session.car || "LMU Car",
+        vehFile: "",
+        vehicleClass: session.carClass || "LMU",
+        elapsedTime: 120,
         speed: (session.speedKmh || 0) / 3.6,
         rpm: session.rpm || 0,
+        maxRpm: 8500,
         gear: session.gear || 0,
+        maxGears: 6,
         inPits: session.inPits,
         lapNumber: session.lap || 1,
+        lapStartEt: 0,
+        lapDist: 0,
+        sector: 1,
         lastLapTime: session.lastLapTime || 0,
         bestLapTime: session.bestLapTime || 0,
         tc: 4,
+        tcMax: 10,
         tcCut: 0,
         tcSlip: 0,
         abs: 2,
+        absMax: 10,
+        tcActive: false,
+        absActive: false,
         motorMap: 1,
+        motorMapMax: 5,
         brakeBiasFront: 0.56,
         fuel: 65,
         fuelCapacity: 110,
         battery: 0.9,
+        regenKw: 0,
+        virtualEnergy: 0.85,
         electricMotorState: 1,
         throttle: 0,
         brake: 0,
         clutch: 0,
+        rawThrottle: 0,
+        rawBrake: 0,
+        rawSteering: 0,
+        steering: 0,
+        steeringRangeDeg: 540,
+        gLat: 0,
+        gLong: 0,
+        pos: [0, 0, 0],
+        yaw: 0,
+        waterTemp: 85,
+        oilTemp: 90,
+        turboBoost: 0,
+        deltaBest: 0,
+        lapInvalidated: false,
+        trackLimitsSteps: 0,
+        trackLimitsStepsPerPenalty: 3,
+        trackLimitsStepsPerPoint: 1,
+        liftAndCoast: 0,
+        migration: 0,
+        frontArb: 0,
+        rearArb: 0,
+        speedLimiter: false,
+        headlights: false,
+        wipers: 0,
+        ignition: 1,
+        antiStall: false,
+        ffb: 0,
+        overheating: false,
+        detached: false,
+        dents: [],
+        damage: null,
+        lastImpactMagnitude: 0,
+        lastImpactEt: 0,
+        gapAhead: 0,
+        gapBehind: 0,
+        frontCompound: "DRY",
+        rearCompound: "DRY",
         wheels: [
-          { wear: 0.95, pressure: 190, carcassTemp: 86, brakeTemp: 450 },
-          { wear: 0.95, pressure: 190, carcassTemp: 87, brakeTemp: 455 },
-          { wear: 0.94, pressure: 188, carcassTemp: 88, brakeTemp: 440 },
-          { wear: 0.94, pressure: 188, carcassTemp: 89, brakeTemp: 445 },
-        ],
+          { wear: 0.95, pressure: 190, carcassTemp: 86, brakeTemp: 450, innerTemp: 86, middleTemp: 86, outerTemp: 86 },
+          { wear: 0.95, pressure: 190, carcassTemp: 87, brakeTemp: 455, innerTemp: 87, middleTemp: 87, outerTemp: 87 },
+          { wear: 0.94, pressure: 188, carcassTemp: 88, brakeTemp: 440, innerTemp: 88, middleTemp: 88, outerTemp: 88 },
+          { wear: 0.94, pressure: 188, carcassTemp: 89, brakeTemp: 445, innerTemp: 89, middleTemp: 89, outerTemp: 89 },
+        ] as any,
       } as any,
       vehicles: [
         {
           id: 1,
           slotId: 1,
           driver: session.driver,
-          carClass: session.carClass,
-          class: session.carClass,
-          model: session.car,
+          carClass: session.carClass || "LMU",
+          class: session.carClass || "LMU",
+          vehicle: session.car || "LMU Car",
+          model: session.car || "LMU Car",
+          team: session.team || "Mediterranean Motorsport",
           place: 1,
           classPlace: 1,
           lap: session.lap || 1,
           totalLaps: session.lap || 1,
+          lapDist: 0,
+          sector: 1,
           bestLap: session.bestLapTime || 0,
           lastLap: session.lastLapTime || 0,
+          bestS1: 0,
+          bestS2: 0,
+          lastS1: 0,
+          lastS2: 0,
+          curS1: 0,
+          curS2: 0,
+          timeBehindNext: 0,
+          lapsBehindNext: 0,
+          timeBehindLeader: 0,
+          lapsBehindLeader: 0,
+          timeIntoLap: 0,
+          estimatedLapTime: session.bestLapTime || 0,
           isPlayer: true,
           inPits: session.inPits,
+          pitState: 0,
+          inGarage: false,
+          numPitstops: 0,
+          numPenalties: 0,
+          penalties: [],
+          finishStatus: 0,
+          qualification: 1,
+          flag: 0,
+          fuelFraction: 0.6,
+          control: 0,
+          speed: (session.speedKmh || 0) / 3.6,
+          pos: [0, 0, 0],
         } as any,
       ],
       timing: {} as any,
@@ -355,14 +440,20 @@ class RemoteStreamStore {
       } as any,
     } as Snapshot;
 
-    this.client?.subscribe(`${TELEMETRY_TOPIC_PREFIX}${session.id}`);
+    try {
+      this.client?.subscribe(`${TELEMETRY_TOPIC_PREFIX}${session.id}`);
+    } catch (e) {
+      console.warn("[MDT Live] Error al suscribir:", e);
+    }
     console.log(`[MDT Live] Siguiendo en vivo a: ${session.driver} (${session.car})`);
   }
 
   /** Stop spectating and return to local telemetry */
   stopSpectating() {
     if (!this.spectatingId) return;
-    this.client?.unsubscribe(`${TELEMETRY_TOPIC_PREFIX}${this.spectatingId}`);
+    try {
+      this.client?.unsubscribe(`${TELEMETRY_TOPIC_PREFIX}${this.spectatingId}`);
+    } catch {}
     console.log(`[MDT Live] Desconectado del piloto ${this.spectatingSession?.driver}`);
     this.spectatingId = null;
     this.spectatingSession = null;

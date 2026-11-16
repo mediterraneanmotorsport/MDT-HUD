@@ -28,24 +28,39 @@
   }
 
   function handleConnect(s: ActiveLiveSession) {
-    showLocalPitwall = false;
-    remoteStream.startSpectating(s);
+    try {
+      showLocalPitwall = false;
+      remoteStream.startSpectating(s);
+    } catch (e) {
+      console.error("[LiveStream] Error al conectar con piloto:", e);
+    }
   }
 
   function handleShowLocalPitwall() {
-    showLocalPitwall = true;
-    // Si no hay telemetría activa de LMU, activar demo para mostrar todos los datos de inmediato
-    if (!live.snap || live.snap.source === "none" || !live.snap.vehicles || live.snap.vehicles.length === 0) {
-      void api.setDemoMode(true);
+    try {
+      showLocalPitwall = true;
+      // Si no hay telemetría activa de LMU, activar demo para mostrar todos los datos de inmediato
+      if (!live.snap || live.snap.source === "none" || !live.snap.vehicles || live.snap.vehicles.length === 0) {
+        void api.setDemoMode(true);
+      }
+    } catch (e) {
+      console.error("[LiveStream] Error al abrir Pitwall local:", e);
     }
   }
 
   function handleExitSpectating() {
-    const wasLocal = showLocalPitwall;
-    remoteStream.stopSpectating();
-    showLocalPitwall = false;
-    if (wasLocal && live.status.demo && (!live.snap || live.snap.source !== "lmu")) {
-      void api.setDemoMode(false);
+    try {
+      const wasLocal = showLocalPitwall;
+      remoteStream.stopSpectating();
+      showLocalPitwall = false;
+      if (wasLocal && live.status.demo && (!live.snap || live.snap.source !== "lmu")) {
+        void api.setDemoMode(false);
+      }
+    } catch (e) {
+      console.error("[LiveStream] Error al salir:", e);
+      remoteStream.spectatingId = null;
+      remoteStream.spectatingSession = null;
+      showLocalPitwall = false;
     }
   }
 </script>
@@ -206,7 +221,7 @@
             <div class="flex items-start justify-between gap-3">
               <div class="flex items-center gap-3">
                 <div class="h-10 w-10 rounded-lg bg-surface-3 border border-line flex items-center justify-center font-bold text-fg">
-                  {s.driver.slice(0, 2).toUpperCase()}
+                  {(s.driver || "MDT").slice(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <div class="flex items-center gap-2">

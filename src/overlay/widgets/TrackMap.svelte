@@ -53,7 +53,7 @@
 
   $effect(() => {
     const p = live.snap?.player;
-    if (stored || !p) return;
+    if (stored || !p || !p.pos || !Array.isArray(p.pos) || p.pos.length < 3) return;
     const last = trail.at(-1);
     if (!last || Math.hypot(p.pos[0] - last[0], p.pos[2] - last[1]) > 15) {
       trail = [...trail, [p.pos[0], p.pos[2]]];
@@ -66,7 +66,7 @@
 
   const cars = $derived(
     (live.snap?.vehicles ?? [])
-      .filter((v) => !v.inGarage)
+      .filter((v) => !v.inGarage && Array.isArray(v.pos) && v.pos.length >= 3)
       .map((v) => {
         const [x, y] = project(f, v.pos[0], v.pos[2]);
         return { v, x, y };

@@ -234,7 +234,7 @@
   const p = $derived(activeSnap?.player);
   const st = $derived(activeSnap?.strategy);
   const s = $derived(activeSnap?.session);
-  const me = $derived(activeSnap?.vehicles.find((v) => v.isPlayer));
+  const me = $derived(activeSnap?.vehicles?.find((v) => v.isPlayer) ?? null);
   const teammates = $derived(config.value.general.teammates);
   const vehicles = $derived(activeSnap?.vehicles ?? []);
   const batteryFull = $derived(!!p && p.electricMotorState > 0 && p.battery >= 0.975);
@@ -525,7 +525,7 @@
                       class="rounded px-1.5 py-0.5 text-[9px] font-black text-white uppercase tracking-wider"
                       style:background={classColor(v.class)}
                     >
-                      {v.class.slice(0, 3)}
+                      {(v.class || "LMU").slice(0, 3)}
                     </span>
                   </div>
 
@@ -606,7 +606,7 @@
                   class="rounded px-1.5 py-0.5 text-[10px] font-black text-white uppercase"
                   style:background={classColor(relativeRivals.behind.class)}
                 >
-                  {relativeRivals.behind.class.slice(0, 3)}
+                  {(relativeRivals.behind.class || "LMU").slice(0, 3)}
                 </span>
                 <span class="text-white/60">{lapTime(relativeRivals.behind.lastLap)}</span>
                 <span class="font-bold text-white">{shortName(relativeRivals.behind.driver)}</span>
@@ -641,7 +641,7 @@
                   class="rounded px-1.5 py-0.5 text-[10px] font-black text-white uppercase"
                   style:background={classColor(relativeRivals.ahead.class)}
                 >
-                  {relativeRivals.ahead.class.slice(0, 3)}
+                  {(relativeRivals.ahead.class || "LMU").slice(0, 3)}
                 </span>
               {:else}
                 <span class="text-white/40">– Líder absoluto</span>
@@ -787,7 +787,7 @@
                 <div class="text-[10px] text-white/50">TRACK MAP & ENTORNO</div>
               </div>
               <div class="font-mono text-sm font-bold text-accent">
-                {s?.timeOfDay ? s.timeOfDay.slice(0, 5) : "12:00"}
+                {s?.timeOfDay ? (typeof s.timeOfDay === "number" ? clock(s.timeOfDay) : String(s.timeOfDay).slice(0, 5)) : "12:00"}
               </div>
             </div>
 
@@ -987,14 +987,14 @@
               </div>
               <div class="text-right font-mono">
                 <div class="text-xs font-bold text-white">P{selectedVehicle.place} (Clase {selectedVehicle.class})</div>
-                <div class="text-[10px] text-white/60">{selectedVehicle.numPitstops} pits · {selectedVehicle.tyreLaps}v neum</div>
+                <div class="text-[10px] text-white/60">{selectedVehicle.numPitstops ?? 0} pits · {selectedVehicle.tyreLaps ?? 0}v neum</div>
               </div>
             </div>
             {#if me && selectedVehicle.id !== me.id}
               <div class="mt-2 flex items-center justify-between border-t border-white/10 pt-1.5 text-xs">
                 <span class="text-white/60">Diferencia contigo:</span>
                 <span class="font-mono font-bold text-accent">
-                  {(selectedVehicle.timeBehindLeader - me.timeBehindLeader).toFixed(2)}s
+                  {(Number(selectedVehicle.timeBehindLeader || 0) - Number(me.timeBehindLeader || 0)).toFixed(2)}s
                 </span>
                 <button
                   class="text-[10px] text-white/60 underline hover:text-white"
