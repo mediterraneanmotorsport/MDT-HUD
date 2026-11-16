@@ -103,6 +103,13 @@ export interface AppConfig {
     botName: string;
     autoExport: boolean;
   };
+  /** Retransmisión pública de telemetría en vivo con la comunidad y el equipo */
+  broadcast: {
+    enabled: boolean;
+    driverName: string;
+    brokerUrl: string;
+    rateHz: number;
+  };
   widgets: Record<string, WidgetConfig>;
   /** Id of the profile mirrored by `general.scale/opacity` and `widgets`. */
   activeProfile: string;
@@ -752,6 +759,12 @@ function defaults(): AppConfig {
       botName: "Ingeniera MDT",
       autoExport: true,
     },
+    broadcast: {
+      enabled: true,
+      driverName: "",
+      brokerUrl: "wss://broker.hivemq.com:8884/mqtt",
+      rateHz: 15,
+    },
     widgets,
     activeProfile: "default",
     profiles: { default: { name: "Por defecto", scale: 1, opacity: 0.92, widgets: structuredClone(widgets) } },
@@ -787,6 +800,10 @@ function merge(stored: any): AppConfig {
   }
   if (discord.enabled === undefined) discord.enabled = true;
   if (discord.autoExport === undefined) discord.autoExport = true;
+  const broadcast = { ...base.broadcast, ...(stored.broadcast ?? {}) };
+  if (broadcast.enabled === undefined) broadcast.enabled = true;
+  if (!broadcast.brokerUrl) broadcast.brokerUrl = base.broadcast.brokerUrl;
+  if (!broadcast.rateHz) broadcast.rateHz = 15;
   const widgets = mergeWidgets(stored.widgets);
   const profiles: Record<string, Profile> = {};
   for (const [id, p] of Object.entries<any>(stored.profiles ?? {})) {
@@ -810,7 +827,7 @@ function merge(stored: any): AppConfig {
       widgets: structuredClone(widgets),
     };
   }
-  return { ...base, general, online, spotter, discord, widgets, activeProfile, profiles };
+  return { ...base, general, online, spotter, discord, broadcast, widgets, activeProfile, profiles };
 }
 
 class ConfigStore {
@@ -830,6 +847,8 @@ function applyMergedInPlace(next: AppConfig) {
   Object.assign(config.value.general, next.general);
   Object.assign(config.value.online, next.online);
   Object.assign(config.value.spotter, next.spotter);
+  if (next.discord) Object.assign(config.value.discord, next.discord);
+  if (next.broadcast) Object.assign(config.value.broadcast, next.broadcast);
   for (const [id, wNext] of Object.entries(next.widgets)) {
     if (config.value.widgets[id]) {
       config.value.widgets[id].enabled = wNext.enabled;

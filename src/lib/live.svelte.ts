@@ -3,6 +3,7 @@ import { getContext, setContext } from "svelte";
 import { api, isNativeTauri } from "./api";
 import { config } from "./config.svelte";
 import { sendSessionToDiscord } from "./discord";
+import { remoteStream } from "./remoteStream.svelte";
 import { spotter } from "./spotter.svelte";
 import type { Snapshot, Status } from "./types";
 import { wheelControl } from "./wheelControl.svelte";
@@ -78,7 +79,10 @@ export async function startLive() {
   }
 
   await listen<Snapshot>("snapshot", (e) => {
-    live.snap = e.payload;
+    if (!remoteStream.spectatingId) {
+      live.snap = e.payload;
+    }
+    remoteStream.onLocalTelemetry(e.payload);
     if (!isRemoteView && !isOverlayWindow) {
       spotter.update(e.payload);
       if (!isNativeTauri()) {
@@ -125,5 +129,6 @@ export async function startLive() {
     const [snap, status] = await Promise.all([api.getSnapshot(), api.getStatus()]);
     live.snap ??= snap;
     live.status = status;
+    remoteStream.init();
   }
 }

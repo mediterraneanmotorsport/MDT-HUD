@@ -8,10 +8,12 @@
   import { checkForUpdate, downloadLatestRelease, installUpdate, updater } from "../../lib/updater.svelte";
   import { testDiscordWebhook } from "../../lib/discord";
   import Toggle from "../components/Toggle.svelte";
+  import { remoteStream } from "../../lib/remoteStream.svelte";
 
   const g = $derived(config.value.general);
   const sp = $derived(config.value.spotter);
   const dc = $derived(config.value.discord);
+  const bc = $derived(config.value.broadcast);
 
   let starError = $state(false);
   const star = () => starOnGitHub().catch(() => (starError = true));
@@ -297,6 +299,72 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- =========================================================================
+       RETRANSMISIÓN DE TELEMETRÍA EN DIRECTO (MDT LIVE)
+       ========================================================================= -->
+  <div class="mb-6 card overflow-hidden text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-3">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">📡</span>
+        <div>
+          <div class="font-semibold text-fg">Retransmisión de Telemetría en Vivo (Emisor)</div>
+          <div class="text-xs text-muted">
+            Comparte automáticamente tus datos de telemetría en tiempo real mientras ruedas en pista para que el equipo pueda verte.
+          </div>
+        </div>
+      </div>
+      <Toggle
+        checked={bc.enabled}
+        label="Retransmitir en vivo"
+        onchange={(v) => {
+          bc.enabled = v;
+          saveConfig();
+        }}
+      />
+    </div>
+
+    {#if bc.enabled}
+      <div class="divide-y divide-line">
+        <div class="flex items-center justify-between p-4 bg-accent/5">
+          <div>
+            <div class="font-medium text-fg">Estado de conexión de retransmisión</div>
+            <div class="text-xs text-muted">
+              {remoteStream.connected ? "Conectado al servidor de retransmisión oficial MDT" : "Conectando al servicio de retransmisión..."}
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-good">
+            <span class={["h-2 w-2 rounded-full", remoteStream.connected ? "bg-good animate-pulse" : "bg-bad"]}></span>
+            <span>{remoteStream.connected ? "En línea" : "Desconectado"}</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+          <label class="flex flex-col gap-1">
+            <span class="text-xs font-semibold text-muted uppercase">Nombre del Piloto a Mostrar</span>
+            <input
+              type="text"
+              class="field w-full text-xs"
+              placeholder={g.teammates?.split(",")[0]?.trim() || "Piloto MDT"}
+              bind:value={bc.driverName}
+              oninput={saveConfig}
+            />
+            <span class="text-[10px] text-muted">Si se deja vacío, tomará tu nombre de piloto del juego o de compañeros MDT.</span>
+          </label>
+
+          <label class="flex flex-col gap-1">
+            <span class="text-xs font-semibold text-muted uppercase">Frecuencia de telemetría (Hz)</span>
+            <select class="field text-xs" bind:value={bc.rateHz} onchange={saveConfig}>
+              <option value={10}>10 Hz (Bajo consumo de datos - 20 KB/s)</option>
+              <option value={15}>15 Hz (Recomendado - Fluido y ligero - 35 KB/s)</option>
+              <option value={20}>20 Hz (Alta fidelidad - 50 KB/s)</option>
+            </select>
+            <span class="text-[10px] text-muted">Frecuencia de refresco para los espectadores e ingenieros.</span>
+          </label>
         </div>
       </div>
     {/if}

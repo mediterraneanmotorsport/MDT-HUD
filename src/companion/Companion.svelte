@@ -21,12 +21,14 @@
   import StarPrompt from "./components/StarPrompt.svelte";
   import Analysis from "./pages/Analysis.svelte";
   import Live from "./pages/Live.svelte";
+  import LiveStream from "./pages/LiveStream.svelte";
   import Overlays from "./pages/Overlays.svelte";
   import Rankings from "./pages/Rankings.svelte";
   import Records from "./pages/Records.svelte";
   import Schedule from "./pages/Schedule.svelte";
   import Sessions from "./pages/Sessions.svelte";
   import Settings from "./pages/Settings.svelte";
+  import { remoteStream } from "../lib/remoteStream.svelte";
 
   let maximized = $state(false);
   let reportIssueError = $state(false);
@@ -80,6 +82,7 @@
 
   const PAGES: { id: Page; label: string; icon: string }[] = [
     { id: "live", label: "En vivo", icon: "M3 12h4l3-8 4 16 3-8h4" },
+    { id: "livestream", label: "En Directo", icon: "M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1 M7.8 16.2A6 6 0 0 1 12 6a6 6 0 0 1 4.2 10.2 M12 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" },
     { id: "overlays", label: "Overlays", icon: "M4 5h16v14H4z M8 9h5 M8 13h8" },
     { id: "sessions", label: "Sesiones", icon: "M4 6h16 M4 12h16 M4 18h10" },
     { id: "analysis", label: "Análisis", icon: "M4 19V5 M4 19h16 M7 15l4-5 3 3 5-7" },
@@ -111,6 +114,25 @@
       ondblclick={toggleMaximize}
     >
       <Logo size={22} tagline />
+
+      {#if remoteStream.spectatingId && remoteStream.spectatingSession}
+        <div class="ml-4 flex items-center gap-2 rounded-full bg-accent/20 border border-accent/60 px-3 py-1 text-xs">
+          <span class="h-2 w-2 rounded-full bg-good animate-ping"></span>
+          <span class="font-bold text-fg">Siguiendo a {remoteStream.spectatingSession.driver}</span>
+          <button
+            class="ml-1 text-[11px] font-bold text-muted hover:text-white px-1.5 py-0.2 rounded bg-surface-3 transition-colors"
+            onclick={() => remoteStream.stopSpectating()}
+            title="Volver a mi telemetría"
+          >
+            ✕ Salir
+          </button>
+        </div>
+      {:else if remoteStream.isBroadcasting}
+        <div class="ml-4 hidden sm:flex items-center gap-1.5 rounded-full bg-good/15 border border-good/40 px-2.5 py-0.5 text-[11px] font-semibold text-good">
+          <span class="h-1.5 w-1.5 rounded-full bg-good animate-pulse"></span>
+          <span>Emitiendo en directo</span>
+        </div>
+      {/if}
     </div>
 
     <!-- Selector rápido de tema visual de la app y overlays -->
@@ -235,6 +257,8 @@
     <main class="min-w-0 flex-1 overflow-y-auto">
       {#if nav.page === "live"}
         <Live />
+      {:else if nav.page === "livestream"}
+        <LiveStream />
       {:else if nav.page === "overlays"}
         <Overlays />
       {:else if nav.page === "sessions"}
