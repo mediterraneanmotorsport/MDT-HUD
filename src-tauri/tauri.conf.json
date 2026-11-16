@@ -40,7 +40,7 @@
       "../public/Perfil/**/*"
     ],
     "targets": ["nsis", "appimage", "deb"],
-    "createUpdaterArtifacts": false,
+    "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",

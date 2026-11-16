@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.6...v1.0.7) (2026-11-16)
+
+### Bug Fixes
+
+* **Restauración del Actualizador Automático con Firma (`latest.json` & `.sig`)**: reactivado `createUpdaterArtifacts: true` en el empaquetador Tauri para generar automáticamente los artefactos de actualización firmados y `latest.json`, restaurando el botón azul de «Instalar y reiniciar» en la aplicación de todos los usuarios.
+* **Botón de Descarga Directa de Fallback**: añadido botón visible «Descargar e Instalar» en el menú lateral y en Ajustes ante cualquier versión más reciente en GitHub.
+
 ## [1.0.6](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.4...v1.0.6) (2026-11-16)
 
 ### Features & Improvements
