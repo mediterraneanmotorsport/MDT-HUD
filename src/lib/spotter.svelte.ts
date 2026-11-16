@@ -13,35 +13,55 @@ export interface SpotterEventDef {
 }
 
 export const SPOTTER_EVENTS: SpotterEventDef[] = [
-  // PRIORIDAD 1: Tráfico en paralelo (Inmediato)
+  // PRIORIDAD 1: Tráfico en paralelo (Inmediato e interrumpible)
   { folder: "Coche Izquierda", label: "Coche a la izquierda", priority: 1, cooldownMs: 2500, category: "traffic", ttsDefault: "Coche a la izquierda" },
   { folder: "Coche Derecha", label: "Coche a la derecha", priority: 1, cooldownMs: 2500, category: "traffic", ttsDefault: "Coche a la derecha" },
   { folder: "Tres en Paralelo", label: "Tres en paralelo", priority: 1, cooldownMs: 2500, category: "traffic", ttsDefault: "Cuidado, tres en paralelo" },
   { folder: "Libre", label: "Pista libre (costados despejados)", priority: 1, cooldownMs: 1800, category: "traffic", ttsDefault: "Libre" },
 
-  // PRIORIDAD 2: Banderas y Seguridad
+  // PRIORIDAD 2: Banderas, Salida y Seguridad
+  { folder: "Salida Carrera", label: "Salida de carrera (Semáforo verde)", priority: 2, cooldownMs: 40000, category: "flags", ttsDefault: "¡Luces fuera, estamos en carrera! Cuidado en la primera curva, todos juntos." },
   { folder: "Full Course Yellow", label: "Full Course Yellow (FCY)", priority: 2, cooldownMs: 18000, category: "flags", ttsDefault: "Atención, Full Course Yellow en pista" },
   { folder: "Bandera Amarilla", label: "Bandera amarilla", priority: 2, cooldownMs: 14000, category: "flags", ttsDefault: "Atención, bandera amarilla" },
   { folder: "Bandera Azul", label: "Bandera azul", priority: 2, cooldownMs: 16000, category: "flags", ttsDefault: "Bandera azul, coche rápido detrás" },
   { folder: "Bandera Negra", label: "Bandera negra / Penalización", priority: 2, cooldownMs: 25000, category: "flags", ttsDefault: "Atención, tenemos una penalización" },
   { folder: "Bandera Verde", label: "Bandera verde", priority: 2, cooldownMs: 10000, category: "flags", ttsDefault: "Bandera verde, pista libre" },
+  { folder: "Lluvia Inminente", label: "Comienzo de lluvia", priority: 2, cooldownMs: 35000, category: "flags", ttsDefault: "Atención, están cayendo las primeras gotas en pista. Precaución, la superficie resbala." },
 
-  // PRIORIDAD 3: Estrategia y Boxes
+  // PRIORIDAD 3: Estrategia, Boxes y Combustible
   { folder: "Box Esta Vuelta", label: "Box en esta vuelta (<1.2 vueltas)", priority: 3, cooldownMs: 35000, category: "strategy", ttsDefault: "Box en esta vuelta, combustible crítico" },
   { folder: "Combustible Bajo", label: "Combustible bajo (<2.5 vueltas)", priority: 3, cooldownMs: 45000, category: "strategy", ttsDefault: "Atención, quedan dos vueltas de combustible" },
   { folder: "Entrada Boxes", label: "Entrada a calle de boxes", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Entrando a calle de boxes, vigila la velocidad" },
   { folder: "Salida Boxes", label: "Salida de boxes a pista", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Saliendo de boxes, cuidado con la línea blanca" },
+  { folder: "Parada Exitosa", label: "Salida de parada limpia", priority: 3, cooldownMs: 35000, category: "strategy", ttsDefault: "Buena parada de boxes. Ruedas nuevas y depósito listo, a por ellos." },
   { folder: "Limitador Pit", label: "Limitador de boxes activado", priority: 3, cooldownMs: 15000, category: "strategy", ttsDefault: "Limitador activado" },
+  { folder: "Pista Secandose", label: "Pista secándose", priority: 3, cooldownMs: 45000, category: "strategy", ttsDefault: "La lluvia ha cesado y la pista empieza a secarse, cuida neumáticos o prepara slicks." },
 
-  // PRIORIDAD 4: Estado del Coche y Neumáticos
+  // PRIORIDAD 4: Estado del Coche y Daños
   { folder: "Daños Coche", label: "Daños en el coche / Motor", priority: 4, cooldownMs: 30000, category: "car", ttsDefault: "Atención, hemos sufrido daños en el coche" },
+  { folder: "Abandono DNF", label: "Abandono / DNF", priority: 4, cooldownMs: 60000, category: "car", ttsDefault: "Una lástima, tenemos daños graves y debemos retirar el coche. Apaga el motor con seguridad." },
   { folder: "Neumaticos Frios", label: "Neumáticos fríos", priority: 4, cooldownMs: 45000, category: "car", ttsDefault: "Cuidado con los neumáticos fríos" },
   { folder: "Neumaticos Calientes", label: "Neumáticos sobrecalentados", priority: 4, cooldownMs: 45000, category: "car", ttsDefault: "Cuidado, neumáticos sobrecalentados" },
 
-  // PRIORIDAD 5: Ritmo y Carrera
+  // PRIORIDAD 4: Lucha y Presión en pista
+  { folder: "Coche Delante Cerca", label: "Rival delante a tiro (< 0.8s)", priority: 4, cooldownMs: 30000, category: "traffic", ttsDefault: "Tienes al coche de delante a tiro de rebufo, presiónale, cometerá un error." },
+  { folder: "Presion Detras", label: "Presión por detrás (< 0.6s)", priority: 4, cooldownMs: 25000, category: "traffic", ttsDefault: "Tienes a un rival pegado detrás a pocas décimas, defiende el interior." },
+  { folder: "Trafico Delante", label: "Tráfico de otra categoría / Doblados", priority: 4, cooldownMs: 25000, category: "traffic", ttsDefault: "Tráfico de otra categoría delante, busca una salida limpia sin comprometer tu trazada." },
+
+  // PRIORIDAD 5: Ritmo, Adelantamientos y Momentos de Carrera
+  { folder: "Posicion Ganada", label: "Posición ganada (Adelantamiento)", priority: 5, cooldownMs: 12000, category: "session", ttsDefault: "¡Buena esa! Posición ganada, estás en P{place}. Ahora abre hueco y marca tu ritmo." },
+  { folder: "Posicion Perdida", label: "Posición perdida", priority: 5, cooldownMs: 12000, category: "session", ttsDefault: "Hemos perdido la posición, estás en P{place}. Cabeza fría, mantén el ritmo y te la devuelves." },
+  { folder: "Lider Carrera", label: "Líder de carrera (P1 en pista)", priority: 5, cooldownMs: 30000, category: "session", ttsDefault: "P1. Eres el líder de la carrera, gestiona el ritmo y cuida gomas." },
   { folder: "Mejor Vuelta", label: "Mejor vuelta personal", priority: 5, cooldownMs: 15000, category: "session", ttsDefault: "Gran vuelta, mejor tiempo personal" },
-  { folder: "Ultima Vuelta", label: "Última vuelta", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Última vuelta" },
-  { folder: "Final Carrera", label: "Final de carrera (Bandera a cuadros)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros, final de carrera" },
+  { folder: "Mitad Carrera", label: "Ecuador de carrera (50%)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Mitad de carrera completada. El ritmo es bueno, mantén la consistencia." },
+  { folder: "Ultima Vuelta", label: "Última vuelta", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Última vuelta de carrera, dalo todo." },
+
+  // PRIORIDAD 5: Final de Carrera según Resultado
+  { folder: "Victoria", label: "Final: Victoria (P1 Ganador)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "¡Siii! ¡Victoria! ¡P1! ¡Qué carrerón te has marcado, increíble trabajo de todo el equipo!" },
+  { folder: "Podio", label: "Final: Podio (P2 o P3)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "¡Bandera a cuadros! ¡Estamos en el podio, P{place}! Gran carrera y valiosos puntos, fantástico trabajo." },
+  { folder: "Top 10", label: "Final: En los puntos (P4 - P10)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros. Terminamos en P{place}. Carrera sólida con buenos puntos para el equipo. Buen esfuerzo." },
+  { folder: "Final Dificil", label: "Final: Carrera difícil (> P10 o daños)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros. Día complicado hoy en pista. Trae el coche a boxes, analizaremos los datos para la próxima." },
+  { folder: "Final Carrera", label: "Final: Bandera a cuadros estándar", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros, final de carrera" },
 ];
 
 const EVENT_MAP = new Map<string, SpotterEventDef>(SPOTTER_EVENTS.map((e) => [e.folder, e]));
@@ -49,6 +69,7 @@ const EVENT_MAP = new Map<string, SpotterEventDef>(SPOTTER_EVENTS.map((e) => [e.
 interface QueuedClip {
   event: SpotterEventDef;
   enqueuedAt: number;
+  context?: { place?: number; classPlace?: number };
 }
 
 class SpotterEngine {
@@ -141,7 +162,7 @@ class SpotterEngine {
     }
   }
 
-  // Telemetry state tracking to prevent loops
+  // Telemetry state tracking to prevent loops and chatter
   private lateralState: "clear" | "left" | "right" | "three" = "clear";
   private lateralSince = 0;
   private clearCandidateSince = 0;
@@ -150,7 +171,11 @@ class SpotterEngine {
   private hadBlue = false;
   private lastPenalties = 0;
   private lastSpeedLimiter = false;
+  private speedLimiterTicks = 0;
   private lastInPits: boolean | null = null;
+  private wasInPitStop = false;
+  private wasRecentlyInPits = false;
+  private lastPitExitTime = 0;
   private warnedFuelLow = false;
   private warnedBoxNow = false;
   private lastDentsMax = 0;
@@ -159,6 +184,14 @@ class SpotterEngine {
   private lastBestLap = 0;
   private calledLastLap = false;
   private calledFinish = false;
+  private calledRaceStart = false;
+  private calledHalfRace = false;
+  private calledDnf = false;
+  private lastPhase: number | null = null;
+  private lastTrackPlace: number | null = null;
+  private aheadCloseTicks = 0;
+  private behindCloseTicks = 0;
+  private lastRain: number | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -214,7 +247,7 @@ class SpotterEngine {
   }
 
   /** Trigger a spotter event respecting priority, cooldowns, and anti-loop rules. */
-  trigger(folder: string, force = false) {
+  trigger(folder: string, force = false, context?: { place?: number; classPlace?: number }) {
     const cfg = config.value.spotter;
     if (!force && !cfg?.enabled) return;
 
@@ -245,7 +278,7 @@ class SpotterEngine {
 
       if (canInterrupt) {
         this.stopCurrent();
-        this.playNow(def);
+        this.playNow(def, context);
         return;
       }
 
@@ -254,13 +287,13 @@ class SpotterEngine {
 
       // Replace or append in short priority queue (max 2 items)
       this.queue = this.queue.filter((q) => q.event.folder !== def.folder && now - q.enqueuedAt < 3000);
-      this.queue.push({ event: def, enqueuedAt: now });
+      this.queue.push({ event: def, enqueuedAt: now, context });
       this.queue.sort((a, b) => a.event.priority - b.event.priority);
       if (this.queue.length > 2) this.queue.length = 2;
       return;
     }
 
-    this.playNow(def);
+    this.playNow(def, context);
   }
 
   private stopCurrent() {
@@ -282,17 +315,24 @@ class SpotterEngine {
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
       if (now - next.enqueuedAt <= 3200) {
-        this.playNow(next.event);
+        this.playNow(next.event, next.context);
         return;
       }
     }
   }
 
-  private playNow(def: SpotterEventDef) {
+  private playNow(def: SpotterEventDef, context?: { place?: number; classPlace?: number }) {
     const cfg = config.value.spotter;
     const profile = cfg?.profile || "Sara";
     const volume = Math.max(0, Math.min(1, cfg?.volume ?? 0.85));
     const useRadio = cfg?.radioEffect ?? true;
+
+    // Substitute dynamic tokens in default TTS string
+    let ttsText = def.ttsDefault;
+    const pos = context?.classPlace || context?.place;
+    if (pos) {
+      ttsText = ttsText.replace(/\{place\}/g, String(pos));
+    }
 
     this.lastEvent = `${profile}: ${def.folder}`;
     this.playing = true;
@@ -320,17 +360,16 @@ class SpotterEngine {
       };
       audio.onended = done;
       audio.onerror = () => {
-        if (cfg?.ttsFallback) this.speakFallback(def.ttsDefault, profile, volume, done);
+        if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
         else done();
       };
       audio.play().catch(() => {
-        if (cfg?.ttsFallback) this.speakFallback(def.ttsDefault, profile, volume, done);
+        if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
         else done();
       });
       return;
     }
 
-    // Also try conventional filenames Audio1.wav..Audio3.wav or 1.wav..3.wav before TTS fallback
     const candidates = ["Audio1.wav", "Audio2.wav", "Audio3.wav"];
     const randomCandidate = candidates[Math.floor(Math.random() * candidates.length)];
     const directUrl = `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(def.folder)}/${randomCandidate}`;
@@ -352,14 +391,14 @@ class SpotterEngine {
     probeAudio.onended = done;
     probeAudio.onerror = () => {
       if (cfg?.ttsFallback ?? true) {
-        this.speakFallback(def.ttsDefault, profile, volume, done);
+        this.speakFallback(ttsText, profile, volume, done);
       } else {
         done();
       }
     };
     probeAudio.play().catch(() => {
       if (cfg?.ttsFallback ?? true) {
-        this.speakFallback(def.ttsDefault, profile, volume, done);
+        this.speakFallback(ttsText, profile, volume, done);
       } else {
         done();
       }
@@ -423,8 +462,6 @@ class SpotterEngine {
         const wz = v.pos[2] - p.pos[2];
         const distSq = wx * wx + wz * wz;
         if (distSq > 64) continue;
-        // Transform to player-local coordinates:
-        // player forward unit vector = (-sin(yaw), -cos(yaw)), right = (cos(yaw), -sin(yaw))
         const cos = Math.cos(p.yaw);
         const sin = Math.sin(p.yaw);
         const dx = wx * cos - wz * sin;
@@ -452,7 +489,6 @@ class SpotterEngine {
         if (this.clearCandidateSince === 0) {
           this.clearCandidateSince = now;
         } else if (now - this.clearCandidateSince > 420) {
-          // Only call "Libre" if a car was alongside for at least 350ms
           if (now - this.lateralSince > 350) {
             this.trigger("Libre");
           }
@@ -465,8 +501,18 @@ class SpotterEngine {
     }
 
     // -------------------------------------------------------------------------
-    // 2. PRIORITY 2: Flags & Track Safety
+    // 2. PRIORITY 2: Flags, Race Start & Track Safety
     // -------------------------------------------------------------------------
+    // Green flag race start
+    if (s.kind === "race") {
+      const isGreen = s.phase === 5;
+      if (isGreen && this.lastPhase != null && this.lastPhase >= 2 && this.lastPhase <= 4 && !this.calledRaceStart) {
+        this.calledRaceStart = true;
+        this.trigger("Salida Carrera");
+      }
+      this.lastPhase = s.phase;
+    }
+
     const isFcy = s.phase === 6 || s.yellowFlagState > 0;
     if (isFcy && !this.hadFcy) {
       this.trigger("Full Course Yellow");
@@ -493,16 +539,41 @@ class SpotterEngine {
     }
     this.lastPenalties = curPenalties;
 
+    // Weather change: Rain start or track drying
+    const rain = s.weather?.raining ?? 0;
+    const wet = s.weather?.avgWetness ?? 0;
+    if (this.lastRain != null) {
+      if (this.lastRain < 0.05 && rain >= 0.05) {
+        this.trigger("Lluvia Inminente");
+      } else if (this.lastRain >= 0.1 && rain < 0.02 && wet > 0.15) {
+        this.trigger("Pista Secandose");
+      }
+    }
+    this.lastRain = rain;
+
     // -------------------------------------------------------------------------
     // 3. PRIORITY 3: Fuel / Energy, Pit Entry/Exit & Pit Limiter
     // -------------------------------------------------------------------------
     if (this.lastInPits !== null && p.inPits !== this.lastInPits) {
-      if (p.inPits) this.trigger("Entrada Boxes");
-      else this.trigger("Salida Boxes");
+      if (p.inPits) {
+        this.trigger("Entrada Boxes");
+        this.wasInPitStop = true;
+      } else {
+        if (this.wasInPitStop) {
+          this.trigger("Parada Exitosa");
+          this.wasInPitStop = false;
+        } else {
+          this.trigger("Salida Boxes");
+        }
+        this.lastPitExitTime = now;
+        this.wasRecentlyInPits = true;
+        setTimeout(() => {
+          this.wasRecentlyInPits = false;
+        }, 15000);
+      }
     }
     this.lastInPits = p.inPits;
 
-    // Trigger pit limiter voice after limiter is active for >1 tick (filters 50ms gear cut spikes)
     if (p.speedLimiter) {
       this.speedLimiterTicks = (this.speedLimiterTicks ?? 0) + 1;
     } else {
@@ -530,7 +601,7 @@ class SpotterEngine {
     }
 
     // -------------------------------------------------------------------------
-    // 4. PRIORITY 4: Car Damage & Tyre Temps
+    // 4. PRIORITY 4: Car Damage, DNF & Tyre Temps
     // -------------------------------------------------------------------------
     const maxDent = Math.max(0, ...p.dents);
     const hasNewDamage = maxDent > this.lastDentsMax || (p.detached && !this.lastDetached);
@@ -539,6 +610,16 @@ class SpotterEngine {
     }
     this.lastDentsMax = maxDent;
     this.lastDetached = p.detached;
+
+    // DNF detection
+    const isDnf =
+      me?.finishStatus === 2 ||
+      me?.finishStatus === 3 ||
+      (p.engineState === 0 && maxDent > 0.6 && !p.inPits && p.speed < 1);
+    if (isDnf && !this.calledDnf && s.kind === "race" && p.lapNumber >= 1) {
+      this.calledDnf = true;
+      this.trigger("Abandono DNF");
+    }
 
     if (!p.inPits && p.speed > 25 && p.wheels.length === 4) {
       const avgTemp =
@@ -550,11 +631,54 @@ class SpotterEngine {
       }
     }
 
+    // Lucha directa y presión
+    if (s.kind === "race" && me && !p.inPits && p.speed > 35) {
+      // Rival ahead within 0.8s
+      if (me.timeBehindNext > 0.05 && me.timeBehindNext <= 0.8) {
+        this.aheadCloseTicks = (this.aheadCloseTicks ?? 0) + 1;
+        if (this.aheadCloseTicks >= 40) {
+          this.trigger("Coche Delante Cerca");
+          this.aheadCloseTicks = 0;
+        }
+      } else {
+        this.aheadCloseTicks = 0;
+      }
+
+      // Rival behind within 0.65s
+      const rivalBehind = snap.vehicles.find((v) => v.place === me.place + 1);
+      if (rivalBehind && !rivalBehind.inPits) {
+        const gapBehind = rivalBehind.timeBehindLeader - me.timeBehindLeader;
+        if (gapBehind > 0.05 && gapBehind <= 0.65) {
+          this.behindCloseTicks = (this.behindCloseTicks ?? 0) + 1;
+          if (this.behindCloseTicks >= 40) {
+            this.trigger("Presion Detras");
+            this.behindCloseTicks = 0;
+          }
+        } else {
+          this.behindCloseTicks = 0;
+        }
+      } else {
+        this.behindCloseTicks = 0;
+      }
+
+      // Traffic ahead from different class or lapped
+      const rivalAhead = snap.vehicles.find((v) => v.place === me.place - 1);
+      if (rivalAhead && !rivalAhead.inPits && me.timeBehindNext > 0.05 && me.timeBehindNext < 1.4) {
+        const isDifferentClass = rivalAhead.class && me.class && rivalAhead.class !== me.class;
+        const isLapped = rivalAhead.totalLaps < me.totalLaps;
+        if (isDifferentClass || isLapped) {
+          this.trigger("Trafico Delante");
+        }
+      }
+    }
+
     // -------------------------------------------------------------------------
-    // 5. PRIORITY 5: Lap Records & Session Milestones
+    // 5. PRIORITY 5: Lap Records, Overtakes, Mid-Race & Finish Result
     // -------------------------------------------------------------------------
     const completedLaps = me?.totalLaps ?? p.lapNumber;
     const pb = snap.timing.personalBest;
+
+    // Lap milestone checks
     if (this.lastCompletedLaps >= 0 && completedLaps > this.lastCompletedLaps) {
       if (pb > 0 && (this.lastBestLap === 0 || pb < this.lastBestLap - 0.001)) {
         this.lastBestLap = pb;
@@ -568,11 +692,55 @@ class SpotterEngine {
     this.lastCompletedLaps = completedLaps;
     if (pb > 0 && this.lastBestLap === 0) this.lastBestLap = pb;
 
-    const isCheckered = s.phase === 8;
+    // Mid-race milestone
+    if (s.kind === "race" && !this.calledHalfRace) {
+      if (s.maxLaps > 4 && completedLaps >= Math.floor(s.maxLaps / 2)) {
+        this.calledHalfRace = true;
+        this.trigger("Mitad Carrera");
+      } else if (s.endEt > 0 && s.currentEt >= s.endEt / 2 && s.endEt >= 300) {
+        this.calledHalfRace = true;
+        this.trigger("Mitad Carrera");
+      }
+    }
+
+    // Overtakes / position change on track (filtering pit stop artifacts)
+    if (s.kind === "race" && me && !p.inPits && p.speed > 25 && p.lapNumber >= 1) {
+      const curPlace = me.place;
+      if (this.lastTrackPlace !== null && this.lastTrackPlace > 0) {
+        const diff = this.lastTrackPlace - curPlace;
+        if (!this.wasRecentlyInPits && now - this.lastPitExitTime > 15000) {
+          const ctx = { place: curPlace, classPlace: me.classPlace || curPlace };
+          if (diff > 0) {
+            if (curPlace === 1 || me.classPlace === 1) {
+              this.trigger("Lider Carrera", false, ctx);
+            } else {
+              this.trigger("Posicion Ganada", false, ctx);
+            }
+          } else if (diff < 0) {
+            this.trigger("Posicion Perdida", false, ctx);
+          }
+        }
+      }
+      this.lastTrackPlace = curPlace;
+    }
+
+    // Contextual Finish according to position
+    const isCheckered = s.phase === 8 || (me?.finishStatus != null && me.finishStatus === 1);
     if (isCheckered && !this.calledFinish) {
       this.calledFinish = true;
-      this.trigger("Final Carrera");
-    } else if (!isCheckered) {
+      const finalPos = me?.classPlace && me.classPlace > 0 ? me.classPlace : (me?.place ?? 1);
+      const ctx = { place: me?.place ?? finalPos, classPlace: finalPos };
+
+      if (finalPos === 1) {
+        this.trigger("Victoria", false, ctx);
+      } else if (finalPos <= 3) {
+        this.trigger("Podio", false, ctx);
+      } else if (finalPos <= 10) {
+        this.trigger("Top 10", false, ctx);
+      } else {
+        this.trigger("Final Dificil", false, ctx);
+      }
+    } else if (!isCheckered && s.phase < 7) {
       this.calledFinish = false;
     }
   }
