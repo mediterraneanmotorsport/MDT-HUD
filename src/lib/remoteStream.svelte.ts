@@ -25,6 +25,19 @@ const BROKER_FALLBACK = "wss://broker.emqx.io:8084/mqtt";
 const SESSIONS_TOPIC = "mdt-hud/v1/sessions/announcements";
 const TELEMETRY_TOPIC_PREFIX = "mdt-hud/v1/telemetry/";
 
+function getPersistentClientId(): string {
+  try {
+    let id = localStorage.getItem("mdt_pubsub_client_id");
+    if (!id) {
+      id = "mdt_" + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem("mdt_pubsub_client_id", id);
+    }
+    return id;
+  } catch {
+    return "mdt_" + Math.random().toString(36).slice(2, 10);
+  }
+}
+
 class RemoteStreamStore {
   connected = $state(false);
   error = $state("");
@@ -35,25 +48,30 @@ class RemoteStreamStore {
   viewersCount = $state(0);
 
   private client: MqttClient | null = null;
-  private myId = "mdt_" + Math.random().toString(36).slice(2, 10);
+  private myId = getPersistentClientId();
   private lastBroadcastAt = 0;
   private lastAnnounceAt = 0;
+  private lastDriverName = "";
   private cleanupInterval?: ReturnType<typeof setInterval>;
   private originalLocalSnap: Snapshot | null = null;
   private usingFallback = false;
+
+  getLocalDriverName(): string {
+    return this.lastDriverName || config.value.broadcast?.driverName?.trim() || "";
+  }
 
   init() {
     if (this.client) return;
     this.connect(BROKER_PRIMARY);
 
-    // Prune stale sessions every 2 seconds
+    // Prune stale sessions every 1.5 seconds (prune if silent for > 5s)
     this.cleanupInterval = setInterval(() => {
       const now = Date.now();
-      this.sessions = this.sessions.filter((s) => now - s.updatedAt < 8000);
+      this.sessions = this.sessions.filter((s) => now - s.updatedAt < 5000);
       if (this.spectatingId && !this.sessions.some((s) => s.id === this.spectatingId)) {
         // Driver stopped transmitting: keep last received state
       }
-    }, 2000);
+    }, 1500);
   }
 
   private connect(url: string) {
@@ -105,14 +123,27 @@ class RemoteStreamStore {
         const item: ActiveLiveSession = JSON.parse(text);
         if (!item || !item.id || item.id === this.myId) return;
 
-        const idx = this.sessions.findIndex((s) => s.id === item.id);
+        // Descartar si el anuncio pertenece al propio piloto local
+        const myDriver = this.getLocalDriverName().toLowerCase().trim();
+        const itemDriver = (item.driver || "").toLowerCase().trim();
+        if (myDriver && itemDriver && itemDriver === myDriver) {
+          return;
+        }
+
+        // Buscar si ya existe la sesión por ID o por nombre del piloto (evita duplicados si el piloto reconecta o emite desde otra instancia)
+        const idx = this.sessions.findIndex(
+          (s) =>
+            s.id === item.id ||
+            (s.driver && item.driver && s.driver.toLowerCase().trim() === itemDriver)
+        );
+
         if (idx >= 0) {
           this.sessions[idx] = { ...this.sessions[idx], ...item, updatedAt: Date.now() };
         } else {
           this.sessions = [...this.sessions, { ...item, updatedAt: Date.now() }];
         }
 
-        if (this.spectatingId === item.id) {
+        if (this.spectatingId === item.id || (this.spectatingSession?.driver && this.spectatingSession.driver.toLowerCase().trim() === itemDriver)) {
           this.spectatingSession = this.sessions.find((s) => s.id === item.id) || item;
         }
       } else if (this.spectatingId && topic === `${TELEMETRY_TOPIC_PREFIX}${this.spectatingId}`) {
@@ -168,6 +199,7 @@ class RemoteStreamStore {
         driverName = "Piloto MDT";
       }
     }
+    this.lastDriverName = driverName;
 
     const inTrack = Boolean(snap.inRealtime || live.status.demo);
     const inPits = Boolean(!inTrack || snap.player?.inPits || !snap.player);

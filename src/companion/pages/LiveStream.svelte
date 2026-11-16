@@ -9,7 +9,17 @@
   let filterClass = $state<string>("all");
   let showLocalPitwall = $state(false);
 
-  const sessions = $derived(remoteStream.sessions);
+  const sessions = $derived.by(() => {
+    const list = remoteStream.sessions;
+    const uniqueMap = new Map<string, ActiveLiveSession>();
+    for (const s of list) {
+      const key = (s.driver || s.id).toLowerCase().trim();
+      if (!uniqueMap.has(key) || s.updatedAt > (uniqueMap.get(key)!.updatedAt || 0)) {
+        uniqueMap.set(key, s);
+      }
+    }
+    return Array.from(uniqueMap.values());
+  });
   const filteredSessions = $derived(
     filterClass === "all"
       ? sessions

@@ -82,8 +82,8 @@ export async function startLive() {
     if (!remoteStream.spectatingId) {
       live.snap = e.payload;
     }
-    remoteStream.onLocalTelemetry(e.payload);
     if (!isRemoteView && !isOverlayWindow) {
+      remoteStream.onLocalTelemetry(e.payload);
       spotter.update(e.payload);
       if (!isNativeTauri()) {
         wheelControl.pushSnapshotToMobile(e.payload);
@@ -125,7 +125,7 @@ export async function startLive() {
   await listen<boolean>("demo-mode", (e) => {
     live.status = { ...live.status, demo: e.payload };
   });
-  if (!isRemoteView) {
+  if (!isRemoteView && !isOverlayWindow) {
     const [snap, status] = await Promise.all([api.getSnapshot(), api.getStatus()]);
     live.snap ??= snap;
     live.status = status;
