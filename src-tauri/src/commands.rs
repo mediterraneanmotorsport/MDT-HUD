@@ -361,7 +361,17 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
             if path.is_dir() {
                 copy_dir_recursive(&path, &dest);
             } else if path.is_file() {
-                if !dest.exists() {
+                let should_copy = match std::fs::metadata(&dest) {
+                    Ok(dm) => {
+                        if let Ok(sm) = std::fs::metadata(&path) {
+                            sm.len() != dm.len()
+                        } else {
+                            false
+                        }
+                    }
+                    Err(_) => true,
+                };
+                if should_copy {
                     let _ = std::fs::copy(&path, &dest);
                 }
             }
@@ -373,29 +383,23 @@ pub fn ensure_spotter_profiles(data_dir: &Path) {
     let spotter_dir = data_dir.join("Perfil");
     let _ = std::fs::create_dir_all(&spotter_dir);
 
-    // If Sara or Antonio folders don't exist yet, copy from app assets/resources
-    let has_sara = spotter_dir.join("Sara").is_dir();
-    let has_antonio = spotter_dir.join("Antonio").is_dir();
+    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()));
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(ref ed) = exe_dir {
+        candidates.push(ed.join("Perfil"));
+        candidates.push(ed.join("resources").join("Perfil"));
+        candidates.push(ed.join("resources").join("public").join("Perfil"));
+        candidates.push(ed.join("_up_").join("public").join("Perfil"));
+    }
+    candidates.push(PathBuf::from("public/Perfil"));
+    candidates.push(PathBuf::from("../public/Perfil"));
+    candidates.push(PathBuf::from("Perfil"));
+    candidates.push(PathBuf::from("../Perfil"));
 
-    if !has_sara || !has_antonio {
-        let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()));
-        let mut candidates: Vec<PathBuf> = Vec::new();
-        if let Some(ref ed) = exe_dir {
-            candidates.push(ed.join("Perfil"));
-            candidates.push(ed.join("resources").join("Perfil"));
-            candidates.push(ed.join("resources").join("public").join("Perfil"));
-            candidates.push(ed.join("_up_").join("public").join("Perfil"));
-        }
-        candidates.push(PathBuf::from("public/Perfil"));
-        candidates.push(PathBuf::from("../public/Perfil"));
-        candidates.push(PathBuf::from("Perfil"));
-        candidates.push(PathBuf::from("../Perfil"));
-
-        for src in candidates {
-            if src.join("Sara").is_dir() {
-                copy_dir_recursive(&src, &spotter_dir);
-                break;
-            }
+    for src in candidates {
+        if src.join("Sara").is_dir() || src.join("Antonio").is_dir() {
+            copy_dir_recursive(&src, &spotter_dir);
+            break;
         }
     }
 

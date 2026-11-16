@@ -718,11 +718,19 @@ fn handle_client(
     // Check if custom audio exists on disk in %APPDATA%/MDT-HUD/Perfil/
     if clean_path.starts_with("/Perfil/") {
         let state = app.state::<AppState>();
-        let rel = clean_path.trim_start_matches("/Perfil/");
-        let disk_file = state.data_dir.join("Perfil").join(rel);
+        let rel_raw = clean_path.trim_start_matches("/Perfil/");
+        let rel = url_decode(rel_raw);
+        let disk_file = state.data_dir.join("Perfil").join(&rel);
         if disk_file.is_file() {
             if let Ok(bytes) = std::fs::read(&disk_file) {
-                return send_response(&mut stream, "200 OK", "audio/wav", &bytes);
+                let mime = if rel.ends_with(".mp3") {
+                    "audio/mpeg"
+                } else if rel.ends_with(".ogg") {
+                    "audio/ogg"
+                } else {
+                    "audio/wav"
+                };
+                return send_response(&mut stream, "200 OK", mime, &bytes);
             }
         }
     }

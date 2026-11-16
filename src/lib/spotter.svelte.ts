@@ -243,12 +243,18 @@ class SpotterEngine {
   }
 
   getFilesFor(profile: string, folder: string): string[] {
-    const dynamic = this.manifest[profile]?.[folder];
-    if (dynamic && dynamic.length > 0) return dynamic;
-    if (profile === "Sara" || profile === "Antonio") {
-      return [1, 2, 3].map(
-        (n) => `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(folder)}/Audio${n}.wav`,
-      );
+    const profObj = this.manifest[profile];
+    if (profObj) {
+      if (profObj[folder] && profObj[folder].length > 0) {
+        return profObj[folder];
+      }
+      // Case-insensitive lookup (e.g. "Bandera Amarilla" vs "Bandera amarilla")
+      const targetLower = folder.toLowerCase().trim();
+      for (const [k, v] of Object.entries(profObj)) {
+        if (k.toLowerCase().trim() === targetLower && v.length > 0) {
+          return v;
+        }
+      }
     }
     return [];
   }
@@ -256,7 +262,13 @@ class SpotterEngine {
   /** Picks a random file from the folder without repeating the immediately previous one. */
   private pickRandomUrl(profile: string, folder: string): string | null {
     const files = this.getFilesFor(profile, folder);
-    if (files.length === 0) return null;
+    if (files.length === 0) {
+      const candidates = [
+        ...[1, 2, 3].map((n) => `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(folder)}/Audio${n}.wav`),
+        ...[1, 2, 3, 4, 5, 6].map((n) => `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(folder)}/${n}.wav`),
+      ];
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
     if (files.length === 1) return files[0];
     const key = `${profile}::${folder}`;
     const prev = this.lastPlayedFile.get(key);

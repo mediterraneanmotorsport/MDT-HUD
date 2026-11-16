@@ -161,7 +161,7 @@
 
       <details class="group">
         <summary class="flex cursor-pointer items-center justify-between px-4 py-2.5 text-xs font-semibold text-accent hover:bg-surface-2">
-          <span>Ver las 17 carpetas de audio de "Perfil/{sp.profile}" y probar sonidos</span>
+          <span>Ver las carpetas de eventos de "Perfil/{sp.profile}" ({SPOTTER_EVENTS.length} eventos) y probar sonidos</span>
           <span class="text-muted group-open:rotate-180">▼</span>
         </summary>
         <div class="max-h-72 overflow-y-auto border-t border-line bg-surface-2/40 p-3">

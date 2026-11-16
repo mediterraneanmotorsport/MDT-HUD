@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.1.0...v1.1.1) (2026-11-17) - Corrección de Carga de Audios y Sincronización Automática de Perfiles
+
+### Bug Fixes & Improvements
+* **Sincronización Automática de Nuevas Carpetas de Voz en %APPDATA%**: Solucionada la condición que impedía a la aplicación volcar nuevos eventos de audio al actualizar cuando la carpeta del piloto ya existía en el equipo. A partir de ahora, cada actualización sincroniza e incorpora automáticamente las nuevas carpetas de eventos sin sobreescribir los audios personalizados del usuario.
+* **Soporte de Decodificación URL en Servidor Local de Audios**: Incorporada decodificación de espacios (`%20`) en las rutas HTTP de `/Perfil/`, permitiendo que todos los archivos dentro de carpetas compuestas (p. ej. `Salida Pit Lane`, `Sector Purpura`, `Sector Verde`, etc.) se sirvan y reproduzcan al instante.
+* **Búsqueda Insensible a Mayúsculas/Minúsculas en Manifiesto**: El motor del spotter localiza ahora los clips de audio independientemente de si la carpeta o archivo se guardó con mayúsculas o minúsculas (`Bandera amarilla` vs `Bandera Amarilla`, `1.wav` vs `Audio1.wav`).
+
 ## [1.1.0](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.0.9...v1.1.0) (2026-11-17) - Radio de Spotter Animada & Triggers de Competición
 
 ### Features & Improvements
