@@ -14,7 +14,7 @@
   import { live, startLive } from "../lib/live.svelte";
   import Logo from "../lib/Logo.svelte";
   import { initStarPrompt } from "../lib/star.svelte";
-  import { initUpdater, installUpdate, updater } from "../lib/updater.svelte";
+  import { downloadLatestRelease, initUpdater, installUpdate, updater } from "../lib/updater.svelte";
   import { wheelControl } from "../lib/wheelControl.svelte";
   import { nav, type Page } from "./nav.svelte";
   import ChangelogDialog from "./components/ChangelogDialog.svelte";
@@ -217,7 +217,10 @@
         {#if updater.phase === "outdated"}
           <div class="mx-2 mb-2 rounded-lg border border-line bg-surface-2 p-3 text-xs">
             <div class="font-medium text-fg">Actualización disponible</div>
-            <div class="mt-0.5 text-muted">La versión {updater.available} está disponible. Actualiza MDT-HUD con tu gestor de paquetes.</div>
+            <div class="mt-0.5 text-muted">La versión {updater.available} está lista para descargar.</div>
+            <button class="btn btn-primary mt-2 w-full flex items-center justify-center gap-1.5 font-bold" onclick={downloadLatestRelease}>
+              <span>⬇️ Descargar e Instalar v{updater.available}</span>
+            </button>
           </div>
         {/if}
         <div class="border-t border-line px-4 py-3 text-xs">

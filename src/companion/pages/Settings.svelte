@@ -5,7 +5,7 @@
   import { live } from "../../lib/live.svelte";
   import { SPOTTER_EVENTS, spotter } from "../../lib/spotter.svelte";
   import { REPO_URL, starOnGitHub } from "../../lib/star.svelte";
-  import { checkForUpdate, installUpdate, updater } from "../../lib/updater.svelte";
+  import { checkForUpdate, downloadLatestRelease, installUpdate, updater } from "../../lib/updater.svelte";
   import { testDiscordWebhook } from "../../lib/discord";
   import Toggle from "../components/Toggle.svelte";
 
@@ -497,7 +497,9 @@
       <div class="flex shrink-0 flex-wrap justify-end gap-2">
         <button class="btn" disabled={!updater.version} onclick={() => (updater.changelogOpen = true)}>Ver novedades</button>
         {#if updater.phase === "available"}
-          <button class="btn btn-primary" onclick={installUpdate}>Instalar y reiniciar</button>
+          <button class="btn btn-primary font-bold" onclick={installUpdate}>Instalar y reiniciar</button>
+        {:else if updater.phase === "outdated"}
+          <button class="btn btn-primary font-bold" onclick={downloadLatestRelease}>⬇️ Descargar e Instalar v{updater.available}</button>
         {:else}
           <button class="btn" disabled={updater.phase === "checking" || updater.phase === "downloading"} onclick={checkForUpdate}>
             Buscar actualizaciones

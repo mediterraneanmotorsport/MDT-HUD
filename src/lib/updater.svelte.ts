@@ -1,5 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import changelog from "../../CHANGELOG.md?raw";
 import { compareVersions, parseChangelog, type ChangelogRelease } from "./changelog";
@@ -26,7 +27,7 @@ let pending: Update | null = null;
 
 const inTauri = () => isNativeTauri();
 
-/** Native Linux packages can't self-update; only report whether a newer release exists. */
+/** Native Linux packages or direct GitHub releases fallback. */
 async function checkLatestRelease() {
   const latest = await api.latestRelease();
   if (compareVersions(latest.version, updater.version) > 0) {
@@ -35,6 +36,17 @@ async function checkLatestRelease() {
     updater.phase = "outdated";
   } else {
     updater.phase = "upToDate";
+  }
+}
+
+/** Direct download & launch of the release installer in case auto-update bundle signature is bypassed. */
+export async function downloadLatestRelease() {
+  const v = updater.available || "1.0.6";
+  const url = `https://github.com/mediterraneanmotorsport/MDT-HUD/releases/download/v${v}/MDT-HUD_${v}_x64-setup.exe`;
+  try {
+    await openUrl(url);
+  } catch {
+    await openUrl(`https://github.com/mediterraneanmotorsport/MDT-HUD/releases/tag/v${v}`);
   }
 }
 
