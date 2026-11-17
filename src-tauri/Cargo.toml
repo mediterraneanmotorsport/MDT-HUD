@@ -1,7 +1,7 @@
 [package]
 name = "lm-overlay"
 # The app version lives in package.json (tauri.conf.json reads it from there).
-version = "1.1.1"
+version = "1.1.2"
 description = "Mulsanne: overlay and telemetry companion for Le Mans Ultimate"
 authors = ["Szymon Polny"]
 license = "MIT"
