@@ -286,16 +286,21 @@ class SpotterEngine {
   getFilesFor(profile: string, folder: string): string[] {
     const profObj = this.manifest[profile];
     if (profObj) {
+      let list: string[] = [];
       if (profObj[folder] && profObj[folder].length > 0) {
-        return profObj[folder];
-      }
-      // Case-insensitive lookup (e.g. "Bandera Amarilla" vs "Bandera amarilla")
-      const targetLower = folder.toLowerCase().trim();
-      for (const [k, v] of Object.entries(profObj)) {
-        if (k.toLowerCase().trim() === targetLower && v.length > 0) {
-          return v;
+        list = profObj[folder];
+      } else {
+        // Case-insensitive lookup (e.g. "Bandera Amarilla" vs "Bandera amarilla")
+        const targetLower = folder.toLowerCase().trim();
+        for (const [k, v] of Object.entries(profObj)) {
+          if (k.toLowerCase().trim() === targetLower && v.length > 0) {
+            list = v;
+            break;
+          }
         }
       }
+      // Filtrar y excluir estrictamente cualquier archivo residual "Audio(n).wav"
+      return list.filter((url) => !/\/audio\d+/i.test(decodeURIComponent(url)));
     }
     return [];
   }

@@ -74,7 +74,7 @@
         <div>
           <div class="font-semibold text-fg">Spotter de Voz e Ingeniero de Pista (Sistema Aleatorio Anti-Bucle)</div>
           <div class="text-xs text-muted">
-            Ruta de carpetas: <code>Perfil/{sp.profile}/&lt;Evento&gt;/Audio1.wav, 2.wav...</code>
+            Ruta de carpetas: <code>Perfil/{sp.profile}/&lt;Evento&gt;/1.wav, 2.wav, 3.wav...</code>
           </div>
         </div>
       </div>

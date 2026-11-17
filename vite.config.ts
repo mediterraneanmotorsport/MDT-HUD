@@ -60,6 +60,7 @@ function spotterAudioPlugin(): Plugin {
           const eventDir = path.join(profileDir, eventName);
           for (const fileEntry of fs.readdirSync(eventDir, { withFileTypes: true })) {
             if (!fileEntry.isFile()) continue;
+            if (/^audio\d+/i.test(fileEntry.name)) continue;
             if (!/\.(wav|mp3|ogg)$/i.test(fileEntry.name)) continue;
             const url = `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(eventName)}/${encodeURIComponent(fileEntry.name)}`;
             if (!manifest[profile][eventName].includes(url)) {

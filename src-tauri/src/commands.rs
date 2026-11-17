@@ -403,9 +403,32 @@ pub fn sync_dir_recursive(src: &Path, dst: &Path) {
     }
 }
 
+/// Recursively deletes any legacy audio file named Audio*.wav or starting with "audio"
+pub fn purge_legacy_audio_files(dir: &Path) {
+    if !dir.exists() {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                purge_legacy_audio_files(&path);
+            } else if path.is_file() {
+                let name = entry.file_name().to_string_lossy().to_lowercase();
+                if name.starts_with("audio") && (name.ends_with(".wav") || name.ends_with(".mp3") || name.ends_with(".ogg")) {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+}
+
 pub fn ensure_spotter_profiles(data_dir: &Path) {
     let spotter_dir = data_dir.join("Perfil");
     let _ = std::fs::create_dir_all(&spotter_dir);
+
+    // Clean up any legacy Audio*.wav in the user's Perfil folder
+    purge_legacy_audio_files(&spotter_dir);
 
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()));
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -496,6 +519,10 @@ pub fn scan_spotter_manifest(spotter_dir: &Path) -> serde_json::Value {
                             if fp.is_file() {
                                 let fname = f.file_name().to_string_lossy().to_string();
                                 let fname_lower = fname.to_lowercase();
+                                if fname_lower.starts_with("audio") {
+                                    let _ = std::fs::remove_file(&fp);
+                                    continue;
+                                }
                                 if fname_lower.ends_with(".wav") || fname_lower.ends_with(".mp3") || fname_lower.ends_with(".ogg") {
                                     let url = format!(
                                         "/Perfil/{}/{}/{}",
