@@ -379,6 +379,30 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
     }
 }
 
+/// Copies new/modified files and removes orphan files from dst that no longer exist in src.
+pub fn sync_dir_recursive(src: &Path, dst: &Path) {
+    if !src.exists() {
+        return;
+    }
+    copy_dir_recursive(src, dst);
+
+    if let Ok(entries) = std::fs::read_dir(dst) {
+        for entry in entries.flatten() {
+            let dest_path = entry.path();
+            let src_path = src.join(entry.file_name());
+            if !src_path.exists() {
+                if dest_path.is_file() {
+                    let _ = std::fs::remove_file(&dest_path);
+                } else if dest_path.is_dir() {
+                    let _ = std::fs::remove_dir_all(&dest_path);
+                }
+            } else if dest_path.is_dir() && src_path.is_dir() {
+                sync_dir_recursive(&src_path, &dest_path);
+            }
+        }
+    }
+}
+
 pub fn ensure_spotter_profiles(data_dir: &Path) {
     let spotter_dir = data_dir.join("Perfil");
     let _ = std::fs::create_dir_all(&spotter_dir);
@@ -409,6 +433,13 @@ pub fn ensure_spotter_profiles(data_dir: &Path) {
 
     for src in candidates {
         if src.is_dir() && (src.join("Sara").is_dir() || src.join("Antonio").is_dir()) {
+            for built_in in ["Sara", "Antonio"] {
+                let src_prof = src.join(built_in);
+                let dst_prof = spotter_dir.join(built_in);
+                if src_prof.is_dir() {
+                    sync_dir_recursive(&src_prof, &dst_prof);
+                }
+            }
             copy_dir_recursive(&src, &spotter_dir);
             break;
         }

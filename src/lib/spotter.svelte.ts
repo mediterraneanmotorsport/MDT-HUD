@@ -303,13 +303,7 @@ class SpotterEngine {
   /** Picks a random file from the folder without repeating the immediately previous one. */
   private pickRandomUrl(profile: string, folder: string): string | null {
     const files = this.getFilesFor(profile, folder);
-    if (files.length === 0) {
-      const candidates = [
-        ...[1, 2, 3].map((n) => `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(folder)}/Audio${n}.wav`),
-        ...[1, 2, 3, 4, 5, 6].map((n) => `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(folder)}/${n}.wav`),
-      ];
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
+    if (files.length === 0) return null;
     if (files.length === 1) return files[0];
     const key = `${profile}::${folder}`;
     const prev = this.lastPlayedFile.get(key);
@@ -441,7 +435,8 @@ class SpotterEngine {
     const url = this.pickRandomUrl(profile, def.folder);
 
     if (url) {
-      const audio = new Audio(url);
+      const buster = url.includes("?") ? `&t=${Date.now()}` : `?t=${Date.now()}`;
+      const audio = new Audio(`${url}${buster}`);
       audio.crossOrigin = "anonymous";
       if (useRadio) this.applyRadioFilter(audio, volume);
       else audio.volume = volume;
@@ -469,41 +464,20 @@ class SpotterEngine {
       return;
     }
 
-    const candidates = ["Audio1.wav", "Audio2.wav", "Audio3.wav"];
-    const randomCandidate = candidates[Math.floor(Math.random() * candidates.length)];
-    const directUrl = `/Perfil/${encodeURIComponent(profile)}/${encodeURIComponent(def.folder)}/${randomCandidate}`;
+    // No hay archivos de audio para este evento en el perfil -> Fallback a TTS o fin
+    const fallbackDone = () => {
+      this.playing = false;
+      this.currentPriority = null;
+      this.broadcastState();
+      finishTransmission();
+      this.playNextInQueue();
+    };
 
-    const probeAudio = new Audio(directUrl);
-    probeAudio.crossOrigin = "anonymous";
-    if (useRadio) this.applyRadioFilter(probeAudio, volume);
-    else probeAudio.volume = volume;
-    this.currentAudio = probeAudio;
-    const done = () => {
-      if (this.currentAudio === probeAudio) {
-        if (useRadio) this.playRadioClick(false, volume);
-        this.currentAudio = null;
-        this.playing = false;
-        this.currentPriority = null;
-        this.broadcastState();
-        finishTransmission();
-        this.playNextInQueue();
-      }
-    };
-    probeAudio.onended = done;
-    probeAudio.onerror = () => {
-      if (cfg?.ttsFallback ?? true) {
-        this.speakFallback(ttsText, profile, volume, done);
-      } else {
-        done();
-      }
-    };
-    probeAudio.play().catch(() => {
-      if (cfg?.ttsFallback ?? true) {
-        this.speakFallback(ttsText, profile, volume, done);
-      } else {
-        done();
-      }
-    });
+    if (cfg?.ttsFallback ?? true) {
+      this.speakFallback(ttsText, profile, volume, fallbackDone);
+    } else {
+      fallbackDone();
+    }
   }
 
   private speakFallback(text: string, profile: string, volume: number, onDone: () => void) {
