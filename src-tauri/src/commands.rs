@@ -386,18 +386,29 @@ pub fn ensure_spotter_profiles(data_dir: &Path) {
     let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf()));
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(ref ed) = exe_dir {
-        candidates.push(ed.join("Perfil"));
-        candidates.push(ed.join("resources").join("Perfil"));
+        // Tauri v2 NSIS bundle resource structures
+        candidates.push(ed.join("resources").join("_up_").join("public").join("Perfil"));
+        candidates.push(ed.join("resources").join("_up_").join("Perfil"));
         candidates.push(ed.join("resources").join("public").join("Perfil"));
+        candidates.push(ed.join("resources").join("Perfil"));
         candidates.push(ed.join("_up_").join("public").join("Perfil"));
+        candidates.push(ed.join("_up_").join("Perfil"));
+        candidates.push(ed.join("public").join("Perfil"));
+        candidates.push(ed.join("Perfil"));
     }
+    // Development and local paths
     candidates.push(PathBuf::from("public/Perfil"));
     candidates.push(PathBuf::from("../public/Perfil"));
     candidates.push(PathBuf::from("Perfil"));
     candidates.push(PathBuf::from("../Perfil"));
 
+    // Also check parent AppData (for dev builds to inherit from main AppData)
+    if let Some(parent) = data_dir.parent() {
+        candidates.push(parent.join("Perfil"));
+    }
+
     for src in candidates {
-        if src.join("Sara").is_dir() || src.join("Antonio").is_dir() {
+        if src.is_dir() && (src.join("Sara").is_dir() || src.join("Antonio").is_dir()) {
             copy_dir_recursive(&src, &spotter_dir);
             break;
         }
@@ -453,7 +464,8 @@ pub fn scan_spotter_manifest(spotter_dir: &Path) -> serde_json::Value {
                             let fp = f.path();
                             if fp.is_file() {
                                 let fname = f.file_name().to_string_lossy().to_string();
-                                if fname.ends_with(".wav") || fname.ends_with(".mp3") || fname.ends_with(".ogg") {
+                                let fname_lower = fname.to_lowercase();
+                                if fname_lower.ends_with(".wav") || fname_lower.ends_with(".mp3") || fname_lower.ends_with(".ogg") {
                                     let url = format!(
                                         "/Perfil/{}/{}/{}",
                                         percent_encode(&profile_name),
@@ -465,7 +477,11 @@ pub fn scan_spotter_manifest(spotter_dir: &Path) -> serde_json::Value {
                             }
                         }
                     }
-                    events_map.insert(event_name, serde_json::Value::Array(file_urls));
+                    let norm = event_name.to_lowercase().trim().to_string();
+                    events_map.insert(event_name.clone(), serde_json::Value::Array(file_urls.clone()));
+                    if norm != event_name {
+                        events_map.insert(norm, serde_json::Value::Array(file_urls));
+                    }
                 }
             }
             map.insert(profile_name, serde_json::Value::Object(events_map));

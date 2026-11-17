@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { api } from "../../lib/api";
   import { config, createMdtTemplateProfile, HUD_THEMES, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
   import type { MonitorInfo } from "../../lib/types";
@@ -17,6 +18,10 @@
 
   let starError = $state(false);
   const star = () => starOnGitHub().catch(() => (starError = true));
+
+  onMount(() => {
+    void spotter.refreshManifest();
+  });
 
   let testingDiscord = $state(false);
   let discordMsg = $state("");

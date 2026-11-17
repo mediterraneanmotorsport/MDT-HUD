@@ -37,7 +37,8 @@
   "bundle": {
     "active": true,
     "resources": [
-      "../public/Perfil/**/*"
+      "../public/Perfil/**/*",
+      "../Perfil/**/*"
     ],
     "targets": ["nsis", "appimage", "deb"],
     "createUpdaterArtifacts": true,
