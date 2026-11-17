@@ -21,8 +21,9 @@
     startedAt: 0,
   };
 
-  const active = $derived(edit ? previewTransmission : spotter.currentTransmission);
-  const isTransmitting = $derived(edit ? true : spotter.playing);
+  const isPreview = $derived(edit || (typeof window !== "undefined" && !location.hash.includes("overlay")));
+  const active = $derived(spotter.currentTransmission ?? (isPreview ? previewTransmission : null));
+  const isTransmitting = $derived(spotter.playing || (isPreview && !spotter.currentTransmission));
 
   function getBadgeColor(ev: ActiveSpotterTransmission): { bg: string; text: string; border: string; glow: string } {
     if (ev.folder.includes("Purpura")) {

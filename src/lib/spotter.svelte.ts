@@ -1,4 +1,6 @@
+import { emit, listen } from "@tauri-apps/api/event";
 import { config } from "./config.svelte";
+import { api, isNativeTauri } from "./api";
 import type { Snapshot } from "./types";
 
 export type SpotterPriority = 1 | 2 | 3 | 4 | 5;
@@ -212,11 +214,50 @@ class SpotterEngine {
   private wasDriving = false;
   private lastSector: number | null = null;
   private lastLapInvalidated = false;
+  private broadcastChannel: BroadcastChannel | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
       void this.refreshManifest();
+
+      // Sincronización entre ventanas (Companion <-> Overlay)
+      if (isNativeTauri()) {
+        void listen<{ transmission: ActiveSpotterTransmission | null; playing: boolean }>(
+          "spotter-transmission-change",
+          (event) => {
+            if (event.payload) {
+              this.currentTransmission = event.payload.transmission;
+              this.playing = event.payload.playing;
+            }
+          }
+        );
+      }
+
+      if (typeof BroadcastChannel !== "undefined") {
+        try {
+          this.broadcastChannel = new BroadcastChannel("mdt-spotter-sync");
+          this.broadcastChannel.onmessage = (event) => {
+            if (event.data && typeof event.data === "object") {
+              this.currentTransmission = event.data.transmission;
+              this.playing = event.data.playing;
+            }
+          };
+        } catch {}
+      }
     }
+  }
+
+  private broadcastState() {
+    const payload = {
+      transmission: this.currentTransmission,
+      playing: this.playing,
+    };
+    if (isNativeTauri()) {
+      void emit("spotter-transmission-change", payload);
+    }
+    try {
+      this.broadcastChannel?.postMessage(payload);
+    } catch {}
   }
 
   async refreshManifest() {
@@ -341,6 +382,7 @@ class SpotterEngine {
     this.playing = false;
     this.currentPriority = null;
     this.currentTransmission = null;
+    this.broadcastState();
   }
 
   private playNextInQueue() {
@@ -383,6 +425,7 @@ class SpotterEngine {
       category: def.category,
       startedAt: this.currentStartedAt,
     };
+    this.broadcastState();
 
     if (useRadio) this.playRadioClick(true, volume);
 
@@ -390,6 +433,7 @@ class SpotterEngine {
       setTimeout(() => {
         if (!this.playing) {
           this.currentTransmission = null;
+          this.broadcastState();
         }
       }, 1200);
     };
@@ -408,6 +452,7 @@ class SpotterEngine {
           this.currentAudio = null;
           this.playing = false;
           this.currentPriority = null;
+          this.broadcastState();
           finishTransmission();
           this.playNextInQueue();
         }
@@ -439,6 +484,7 @@ class SpotterEngine {
         this.currentAudio = null;
         this.playing = false;
         this.currentPriority = null;
+        this.broadcastState();
         finishTransmission();
         this.playNextInQueue();
       }

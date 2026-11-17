@@ -3,6 +3,7 @@
   import { api } from "../lib/api";
   import { config, loadConfig, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS } from "../lib/config.svelte";
   import { live, startLive } from "../lib/live.svelte";
+  import { spotter } from "../lib/spotter.svelte";
   import SoftwareRepaint from "./SoftwareRepaint.svelte";
   import Logo from "../lib/Logo.svelte";
   import WidgetFrame from "./WidgetFrame.svelte";
@@ -60,7 +61,8 @@
   const onTrack = $derived(!!live.snap?.player && live.snap.inRealtime);
   const trackOk = $derived(!config.value.general.onlyOnTrack || onTrack || isBroadcast);
   const focusOk = $derived(!config.value.general.hideUnfocused || live.status.gameFocused || live.status.demo || isBroadcast);
-  const show = $derived(config.loaded && (edit || (trackOk && focusOk)));
+  const isSpotterSpeaking = $derived(Boolean(spotter.currentTransmission));
+  const show = $derived(config.loaded && (edit || (trackOk && focusOk) || isSpotterSpeaking));
   const batteryFull = $derived(
     !!live.snap?.player && live.snap.player.electricMotorState > 0 && live.snap.player.battery >= 0.975,
   );
@@ -126,9 +128,13 @@
     {@const cfg = config.revision >= 0 ? config.value.widgets[meta.id] : config.value.widgets[meta.id]}
     {#if cfg && cfg.enabled}
       {@const Widget = COMPONENTS[meta.id]}
-      <WidgetFrame id={meta.id} name={meta.name} {edit}>
-        <Widget opts={cfg.options} units={config.value.general.units} {edit} />
-      </WidgetFrame>
+      {@const isSpotter = meta.id === "spotter"}
+      {@const shouldRender = edit || (trackOk && focusOk) || (isSpotter && isSpotterSpeaking)}
+      {#if shouldRender}
+        <WidgetFrame id={meta.id} name={meta.name} {edit}>
+          <Widget opts={cfg.options} units={config.value.general.units} {edit} />
+        </WidgetFrame>
+      {/if}
     {/if}
   {/each}
 {/if}
