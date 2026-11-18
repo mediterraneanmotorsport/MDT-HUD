@@ -2,10 +2,11 @@
   import { api } from "../../lib/api";
   import type { Units } from "../../lib/config.svelte";
   import { classColor, gap, shortName, speed, speedUnit } from "../../lib/format";
-  import { useLive } from "../../lib/live.svelte";
+  import { live as globalLive, useLive } from "../../lib/live.svelte";
   import type { Vehicle } from "../../lib/types";
 
   const live = useLive();
+  const isBroadcast = typeof window !== "undefined" && window.location.hash.includes("broadcast");
 
   let { opts, units, edit }: { opts: Record<string, any>; units: Units; edit: boolean } = $props();
 
@@ -108,19 +109,23 @@
     }
     const snap = live.snap;
     if (!snap || !snap.vehicles || snap.vehicles.length < 2) return null;
+    // CRITICAL: Only detect battles when actively driving on track in real time!
+    if (!snap.inRealtime) return null;
 
     const vehicles = [...snap.vehicles].sort((a, b) => a.place - b.place);
 
     // If there's a player, check battles involving player first
     const pIdx = vehicles.findIndex((v) => v.isPlayer);
     if (pIdx >= 0) {
+      const me = vehicles[pIdx];
+      if (me.inPits || me.inGarage) return null;
+
       // Check ahead
       if (pIdx > 0) {
         const ahead = vehicles[pIdx - 1];
-        const me = vehicles[pIdx];
         if (!sameClassOnly || ahead.class === me.class) {
           const diff = Math.max(0, me.timeBehindLeader - ahead.timeBehindLeader);
-          if (diff > 0.05 && diff <= threshold && !ahead.inPits && !me.inPits) {
+          if (diff > 0.05 && diff <= threshold && !ahead.inPits && !ahead.inGarage) {
             return { ahead, chaser: me, diff, place: ahead.place };
           }
         }
@@ -128,14 +133,21 @@
       // Check behind
       if (pIdx < vehicles.length - 1) {
         const behind = vehicles[pIdx + 1];
-        const me = vehicles[pIdx];
         if (!sameClassOnly || behind.class === me.class) {
           const diff = Math.max(0, behind.timeBehindLeader - me.timeBehindLeader);
-          if (diff > 0.05 && diff <= threshold && !behind.inPits && !me.inPits) {
+          if (diff > 0.05 && diff <= threshold && !behind.inPits && !behind.inGarage) {
             return { ahead: me, chaser: behind, diff, place: me.place };
           }
         }
       }
+
+      // If in driving mode (not broadcast), do NOT trigger for random AI battles across the field
+      if (!isBroadcast) {
+        return null;
+      }
+    } else if (!isBroadcast) {
+      // In player overlay mode, if player is not driving on track, do not trigger
+      return null;
     }
 
     // Broadcast mode / global scan for the tightest battle in field
@@ -145,7 +157,7 @@
     for (let i = 0; i < vehicles.length - 1; i++) {
       const a = vehicles[i];
       const b = vehicles[i + 1];
-      if (a.inPits || b.inPits) continue;
+      if (a.inPits || b.inPits || a.inGarage || b.inGarage) continue;
       if (sameClassOnly && a.class !== b.class) continue;
 
       const diff = Math.max(0, b.timeBehindLeader - a.timeBehindLeader);
@@ -163,7 +175,16 @@
 
   $effect(() => {
     const hasBattle = Boolean(activeBattle);
-    if (hasBattle && !prevHadBattle && !edit) {
+    const canPlaySound =
+      hasBattle &&
+      !prevHadBattle &&
+      !edit &&
+      !globalLive.status.demo &&
+      !globalLive.status.editMode &&
+      Boolean(live.snap?.inRealtime) &&
+      (globalLive.status.gameFocused || isBroadcast);
+
+    if (canPlaySound) {
       const now = Date.now();
       if (opts.soundAlert !== false && now - lastBattleSoundTime > 20000) {
         lastBattleSoundTime = now;

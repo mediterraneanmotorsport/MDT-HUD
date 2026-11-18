@@ -107,6 +107,14 @@ pub fn save_config(app: AppHandle, state: State<AppState>, config: Value) -> Cmd
     if let Some(hz) = config.pointer("/general/updateHz").and_then(Value::as_u64) {
         state.shared.emit_hz.store(hz as u32, Ordering::Relaxed);
     }
+    if let Some(sc_val) = config.pointer("/general/shortcuts") {
+        if let Ok(parsed_sc) = serde_json::from_value::<crate::AppShortcuts>(sc_val.clone()) {
+            if let Ok(mut lock) = state.configured_shortcuts.lock() {
+                *lock = parsed_sc.clone();
+            }
+            crate::update_global_shortcuts(&app, &parsed_sc);
+        }
+    }
     let monitor = config.pointer("/general/monitor").and_then(Value::as_str).unwrap_or_default();
     let moved = *state.overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()) != monitor;
     if moved {

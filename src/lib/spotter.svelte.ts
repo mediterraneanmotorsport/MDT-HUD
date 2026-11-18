@@ -121,7 +121,8 @@ class SpotterEngine {
 
   /** Public tester for the mic beep from Settings. */
   public playMicBeep(opening: boolean) {
-    this.playRadioClick(opening, config.value.spotter?.volume ?? 0.85);
+    const vol = config.value.widgets?.spotter?.options?.beepsVolume ?? config.value.spotter?.beepsVolume ?? config.value.spotter?.volume ?? 0.85;
+    this.playRadioClick(opening, vol);
   }
 
   /** Plays a short WEC race-radio mic click/chirp on PTT open or close. */
@@ -432,16 +433,17 @@ class SpotterEngine {
     this.broadcastState();
 
     const wSpotter = config.value.widgets?.spotter?.options;
+    const beepsVol = Math.max(0, Math.min(1, wSpotter?.beepsVolume ?? cfg?.beepsVolume ?? volume));
 
     const playStartBeep = () => {
       const s = wSpotter?.startSound ?? cfg?.startSound ?? "1.mp3";
       if (!s || s === "none") return;
       if (s === "mic_click") {
-        if (useRadio) this.playRadioClick(true, volume);
+        if (useRadio) this.playRadioClick(true, beepsVol);
         return;
       }
       const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
-      audio.volume = volume;
+      audio.volume = beepsVol;
       audio.play().catch(() => {});
     };
 
@@ -449,11 +451,11 @@ class SpotterEngine {
       const s = wSpotter?.endSound ?? cfg?.endSound ?? "f1-radio-end.mp3";
       if (!s || s === "none") return;
       if (s === "mic_click") {
-        if (useRadio) this.playRadioClick(false, volume);
+        if (useRadio) this.playRadioClick(false, beepsVol);
         return;
       }
       const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
-      audio.volume = volume;
+      audio.volume = beepsVol;
       audio.play().catch(() => {});
     };
 

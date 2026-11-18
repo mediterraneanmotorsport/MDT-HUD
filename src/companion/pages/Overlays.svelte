@@ -115,14 +115,16 @@
       spotter.playMicBeep(true);
       return;
     }
+    const vol = cfg?.options?.beepsVolume ?? config.value.spotter?.beepsVolume ?? config.value.spotter?.volume ?? 0.85;
     const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(file)}?t=${Date.now()}`);
-    audio.volume = config.value.spotter?.volume ?? 0.85;
+    audio.volume = Math.max(0, Math.min(1, vol));
     audio.play().catch(() => {});
   }
 
   function playBattleTestSound() {
+    const vol = cfg?.options?.soundVolume ?? 0.8;
     const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${Date.now()}`);
-    audio.volume = cfg?.options?.soundVolume ?? 0.8;
+    audio.volume = Math.max(0, Math.min(1, vol));
     audio.play().catch(() => {});
   }
 </script>
@@ -513,6 +515,58 @@
           </div>
 
           <div class="mt-4 grid max-w-xl gap-3">
+            <!-- Slider: Volumen de Voz del Spotter -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Volumen de Voz del Spotter / Ingeniero</div>
+                <div class="text-[11px] text-muted">Intensidad de locución de los archivos de audio (.wav)</div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={Math.round((config.value.spotter?.volume ?? 0.85) * 100)}
+                  oninput={(e) => {
+                    config.value.spotter.volume = Number(e.currentTarget.value) / 100;
+                    saveConfig();
+                  }}
+                  class="accent-accent w-28 sm:w-36 cursor-pointer"
+                />
+                <span class="w-10 text-right font-mono text-xs font-bold text-fg">
+                  {Math.round((config.value.spotter?.volume ?? 0.85) * 100)}%
+                </span>
+              </div>
+            </div>
+
+            <!-- Slider: Volumen de Pitidos de Radio -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Volumen de Pitidos y Tonos de Radio</div>
+                <div class="text-[11px] text-muted">Intensidad de los efectos sonoros de apertura y cierre de radio</div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={Math.round((cfg.options.beepsVolume ?? config.value.spotter?.beepsVolume ?? 0.85) * 100)}
+                  oninput={(e) => {
+                    const v = Number(e.currentTarget.value) / 100;
+                    cfg.options.beepsVolume = v;
+                    if (config.value.spotter) config.value.spotter.beepsVolume = v;
+                    saveConfig();
+                  }}
+                  class="accent-accent w-28 sm:w-36 cursor-pointer"
+                />
+                <span class="w-10 text-right font-mono text-xs font-bold text-fg">
+                  {Math.round((cfg.options.beepsVolume ?? config.value.spotter?.beepsVolume ?? 0.85) * 100)}%
+                </span>
+              </div>
+            </div>
+
             <!-- Sonido al empezar a hablar (Inicio) -->
             <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
               <div class="min-w-0">
@@ -583,28 +637,55 @@
             </div>
           </div>
 
-          <div class="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
-            <div class="min-w-0">
-              <div class="text-xs font-semibold text-fg">Sonido de Batalla (Battle.mp3)</div>
-              <div class="text-[11px] text-muted">Se reproduce al activarse la alerta de batalla en pantalla</div>
+          <div class="mt-4 grid max-w-xl gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Sonido de Batalla (Battle.mp3)</div>
+                <div class="text-[11px] text-muted">Se reproduce al activarse la alerta de batalla en pantalla</div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <Toggle
+                  checked={cfg.options.soundAlert ?? true}
+                  label="Activar alerta sonora"
+                  onchange={(v) => {
+                    cfg.options.soundAlert = v;
+                    saveConfig();
+                  }}
+                />
+                <button
+                  type="button"
+                  class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
+                  onclick={playBattleTestSound}
+                  title="Probar sonido de batalla"
+                >
+                  ⚔️ ▶ Probar audio
+                </button>
+              </div>
             </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <Toggle
-                checked={cfg.options.soundAlert ?? true}
-                label="Activar alerta sonora"
-                onchange={(v) => {
-                  cfg.options.soundAlert = v;
-                  saveConfig();
-                }}
-              />
-              <button
-                type="button"
-                class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
-                onclick={playBattleTestSound}
-                title="Probar sonido de batalla"
-              >
-                ⚔️ ▶ Probar audio
-              </button>
+
+            <!-- Slider: Volumen de la Alerta de Batalla -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Volumen de la Alerta de Batalla</div>
+                <div class="text-[11px] text-muted">Intensidad del efecto sonoro al entrar en duelo directo</div>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={Math.round((cfg.options.soundVolume ?? 0.8) * 100)}
+                  oninput={(e) => {
+                    cfg.options.soundVolume = Number(e.currentTarget.value) / 100;
+                    saveConfig();
+                  }}
+                  class="accent-accent w-28 sm:w-36 cursor-pointer"
+                />
+                <span class="w-10 text-right font-mono text-xs font-bold text-fg">
+                  {Math.round((cfg.options.soundVolume ?? 0.8) * 100)}%
+                </span>
+              </div>
             </div>
           </div>
         </div>

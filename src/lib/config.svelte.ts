@@ -30,6 +30,24 @@ export interface WidgetConfig {
   options: Record<string, any>;
 }
 
+export interface AppShortcutsConfig {
+  editMode: string;
+  toggleOverlay: string;
+  toggleSpotter: string;
+  nextProfile: string;
+  toggleBroadcast: string;
+  resetFocus: string;
+}
+
+export const DEFAULT_SHORTCUTS: AppShortcutsConfig = {
+  editMode: "Ctrl+Shift+F9",
+  toggleOverlay: "Ctrl+Shift+F10",
+  toggleSpotter: "Ctrl+Shift+F8",
+  nextProfile: "Ctrl+Shift+F7",
+  toggleBroadcast: "Ctrl+Shift+F6",
+  resetFocus: "Ctrl+Shift+F5",
+};
+
 export interface AppConfig {
   version: 1;
   general: {
@@ -71,6 +89,8 @@ export interface AppConfig {
     broadcastProfileId?: string;
     /** ID del perfil de overlay para cuando el usuario está pilotando en pista. */
     drivingProfileId?: string;
+    /** Atajos de teclado globales */
+    shortcuts?: AppShortcutsConfig;
   };
   /** Lap rankings and car setup sharing. Off until the user opts in. */
   online: {
@@ -88,6 +108,7 @@ export interface AppConfig {
     enabled: boolean;
     profile: string;
     volume: number;
+    beepsVolume?: number;
     radioEffect: boolean;
     ttsFallback: boolean;
     startSound?: string;
@@ -745,6 +766,7 @@ export const WIDGETS: WidgetMeta[] = [
       showCategoryBadge: true,
       startSound: "1.mp3",
       endSound: "f1-radio-end.mp3",
+      beepsVolume: 0.85,
     },
   },
 ];
@@ -783,12 +805,14 @@ function defaults(): AppConfig {
       hudBorderOpacity: 0.65,
       teammates: "MDT, Mediterranean",
       broadcastMode: false,
+      shortcuts: { ...DEFAULT_SHORTCUTS },
     },
     online: { enabled: false, lapUpload: "manual", anonymous: false, uploadTraces: true },
     spotter: {
       enabled: true,
       profile: "Sara",
       volume: 0.85,
+      beepsVolume: 0.85,
       radioEffect: true,
       ttsFallback: true,
       startSound: "1.mp3",
@@ -1470,4 +1494,13 @@ export function toggleBroadcastMode(forceState?: boolean) {
 
   saveConfig();
   api.setBroadcastMode(next);
+}
+
+/** Cambia cíclicamente al siguiente perfil de overlay configurado. */
+export function cycleNextProfile() {
+  const profileIds = Object.keys(config.value.profiles);
+  if (profileIds.length <= 1) return;
+  const currentIdx = profileIds.indexOf(config.value.activeProfile);
+  const nextIdx = (currentIdx + 1) % profileIds.length;
+  switchProfile(profileIds[nextIdx]);
 }

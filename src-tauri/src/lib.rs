@@ -17,8 +17,68 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AppShortcuts {
+    #[serde(default = "default_edit_mode_sc")]
+    pub edit_mode: String,
+    #[serde(default = "default_toggle_overlay_sc")]
+    pub toggle_overlay: String,
+    #[serde(default = "default_toggle_spotter_sc")]
+    pub toggle_spotter: String,
+    #[serde(default = "default_next_profile_sc")]
+    pub next_profile: String,
+    #[serde(default = "default_toggle_broadcast_sc")]
+    pub toggle_broadcast: String,
+    #[serde(default = "default_reset_focus_sc")]
+    pub reset_focus: String,
+}
+
+fn default_edit_mode_sc() -> String { "Ctrl+Shift+F9".into() }
+fn default_toggle_overlay_sc() -> String { "Ctrl+Shift+F10".into() }
+fn default_toggle_spotter_sc() -> String { "Ctrl+Shift+F8".into() }
+fn default_next_profile_sc() -> String { "Ctrl+Shift+F7".into() }
+fn default_toggle_broadcast_sc() -> String { "Ctrl+Shift+F6".into() }
+fn default_reset_focus_sc() -> String { "Ctrl+Shift+F5".into() }
+
+impl Default for AppShortcuts {
+    fn default() -> Self {
+        Self {
+            edit_mode: default_edit_mode_sc(),
+            toggle_overlay: default_toggle_overlay_sc(),
+            toggle_spotter: default_toggle_spotter_sc(),
+            next_profile: default_next_profile_sc(),
+            toggle_broadcast: default_toggle_broadcast_sc(),
+            reset_focus: default_reset_focus_sc(),
+        }
+    }
+}
+
+pub fn update_global_shortcuts(app: &tauri::AppHandle, shortcuts: &AppShortcuts) {
+    let global_shortcut = app.global_shortcut();
+    let _ = global_shortcut.unregister_all();
+    let sc_list = [
+        &shortcuts.edit_mode,
+        &shortcuts.toggle_overlay,
+        &shortcuts.toggle_spotter,
+        &shortcuts.next_profile,
+        &shortcuts.toggle_broadcast,
+        &shortcuts.reset_focus,
+    ];
+    for s in sc_list {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Ok(sc) = trimmed.parse::<Shortcut>() {
+            if let Err(e) = global_shortcut.register(sc) {
+                eprintln!("[MDT] No se pudo registrar el atajo global '{trimmed}': {e}");
+            }
+        }
+    }
+}
 
 pub struct AppState {
     pub shared: Arc<engine::Shared>,
@@ -35,6 +95,8 @@ pub struct AppState {
     pub overlay_monitor: Mutex<String>,
     /// Shared state for the mobile/tablet LAN server.
     pub mobile: Arc<Mutex<mobile_server::MobileRelayState>>,
+    /// Dynamic global keyboard shortcuts
+    pub configured_shortcuts: Mutex<AppShortcuts>,
 }
 
 /// Detect the non-composited GTK path before constructing the overlay. Keep
@@ -169,9 +231,6 @@ pub fn run() {
         std::env::set_var("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
     }
 
-    let edit_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::F9);
-    let visibility_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::F10);
-
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol(car_render::SCHEME, car_render::handle)
         .plugin(tauri_plugin_opener::init())
@@ -184,12 +243,47 @@ pub fn run() {
                         return;
                     }
                     let state = app.state::<AppState>();
-                    if shortcut == &edit_shortcut {
-                        let enabled = !state.edit_mode.load(Ordering::Acquire);
-                        commands::apply_edit_mode(app, enabled);
-                    } else if shortcut == &visibility_shortcut {
-                        let visible = !state.overlay_visible.load(Ordering::Acquire);
-                        commands::apply_overlay_visible(app, visible);
+                    let sc_map = match state.configured_shortcuts.lock() {
+                        Ok(guard) => (*guard).clone(),
+                        Err(_) => return,
+                    };
+                    if let Ok(edit_sc) = sc_map.edit_mode.parse::<Shortcut>() {
+                        if shortcut == &edit_sc {
+                            let enabled = !state.edit_mode.load(Ordering::Acquire);
+                            commands::apply_edit_mode(app, enabled);
+                            return;
+                        }
+                    }
+                    if let Ok(vis_sc) = sc_map.toggle_overlay.parse::<Shortcut>() {
+                        if shortcut == &vis_sc {
+                            let visible = !state.overlay_visible.load(Ordering::Acquire);
+                            commands::apply_overlay_visible(app, visible);
+                            return;
+                        }
+                    }
+                    if let Ok(sp_sc) = sc_map.toggle_spotter.parse::<Shortcut>() {
+                        if shortcut == &sp_sc {
+                            let _ = app.emit("shortcut-toggle-spotter", ());
+                            return;
+                        }
+                    }
+                    if let Ok(prof_sc) = sc_map.next_profile.parse::<Shortcut>() {
+                        if shortcut == &prof_sc {
+                            let _ = app.emit("shortcut-next-profile", ());
+                            return;
+                        }
+                    }
+                    if let Ok(bc_sc) = sc_map.toggle_broadcast.parse::<Shortcut>() {
+                        if shortcut == &bc_sc {
+                            let _ = app.emit("shortcut-toggle-broadcast", ());
+                            return;
+                        }
+                    }
+                    if let Ok(foc_sc) = sc_map.reset_focus.parse::<Shortcut>() {
+                        if shortcut == &foc_sc {
+                            let _ = app.emit("shortcut-reset-focus", ());
+                            return;
+                        }
                     }
                 })
                 .build(),
@@ -246,6 +340,12 @@ pub fn run() {
                 }
             }
 
+            let initial_shortcuts: AppShortcuts = stored
+                .as_ref()
+                .and_then(|c| c.pointer("/general/shortcuts"))
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+
             app.manage(AppState {
                 shared: shared.clone(),
                 db: db.clone(),
@@ -257,16 +357,12 @@ pub fn run() {
                 uploads: uploads.clone(),
                 overlay_monitor: Mutex::new(String::new()),
                 mobile: mobile.clone(),
+                configured_shortcuts: Mutex::new(initial_shortcuts.clone()),
             });
 
             create_overlay(app, &monitor)?;
 
-            let shortcuts = app.global_shortcut();
-            for sc in [edit_shortcut, visibility_shortcut] {
-                if let Err(e) = shortcuts.register(sc) {
-                    eprintln!("could not register shortcut {sc:?}: {e}");
-                }
-            }
+            update_global_shortcuts(app.handle(), &initial_shortcuts);
 
             engine::spawn(app.handle().clone(), shared, db);
             online::spawn_uploader(app.handle().clone(), uploads);

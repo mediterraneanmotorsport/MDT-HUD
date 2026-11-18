@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getContext, setContext } from "svelte";
 import { api, isNativeTauri } from "./api";
-import { applyRemoteConfig, config } from "./config.svelte";
+import { applyRemoteConfig, config, cycleNextProfile, saveConfig, toggleBroadcastMode } from "./config.svelte";
 import { sendSessionToDiscord } from "./discord";
 import { remoteStream } from "./remoteStream.svelte";
 import { spotter } from "./spotter.svelte";
@@ -146,6 +146,23 @@ export async function startLive() {
       lastLapNumber = 0;
     }
     live.status = { ...live.status, demo: e.payload };
+  });
+  await listen("shortcut-toggle-spotter", () => {
+    config.value.spotter.enabled = !config.value.spotter.enabled;
+    saveConfig();
+  });
+  await listen("shortcut-next-profile", () => {
+    cycleNextProfile();
+  });
+  await listen("shortcut-toggle-broadcast", () => {
+    toggleBroadcastMode();
+  });
+  await listen("shortcut-reset-focus", () => {
+    if (live.snap?.vehicles) {
+      for (const v of live.snap.vehicles) {
+        v.isFocused = v.isPlayer;
+      }
+    }
   });
   if (!isRemoteView && !isOverlayWindow) {
     const [snap, status] = await Promise.all([api.getSnapshot(), api.getStatus()]);

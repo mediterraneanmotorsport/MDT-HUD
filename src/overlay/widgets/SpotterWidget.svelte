@@ -1,6 +1,9 @@
 <script lang="ts">
   import { config, type Units } from "../../lib/config.svelte";
+  import { useLive } from "../../lib/live.svelte";
   import { spotter, type ActiveSpotterTransmission } from "../../lib/spotter.svelte";
+
+  const live = useLive();
 
   let { opts, edit }: { opts: Record<string, any>; units: Units; edit: boolean } = $props();
 
@@ -9,6 +12,24 @@
   const showEqualizer = $derived(opts.showEqualizer ?? true);
   const showProfile = $derived(opts.showProfile ?? true);
   const showCategoryBadge = $derived(opts.showCategoryBadge ?? true);
+
+  const playerVehicle = $derived.by(() => {
+    const snap = live.snap;
+    if (!snap || !snap.vehicles) return null;
+    return snap.vehicles.find((v) => v.isPlayer) ?? snap.vehicles.find((v) => v.isFocused) ?? snap.vehicles[0] ?? null;
+  });
+
+  const carNumber = $derived.by(() => {
+    if (edit) return "1";
+    return playerVehicle?.number || "1";
+  });
+
+  const driverLastName = $derived.by(() => {
+    if (edit) return "VERSTAPPEN";
+    const name = playerVehicle?.driverName || config.value.broadcast?.driverName || config.value.general?.teammates?.split(",")[0]?.trim() || "VERSTAPPEN";
+    const parts = name.trim().split(/\s+/);
+    return (parts.length > 0 ? parts[parts.length - 1] : "PILOTO").toUpperCase();
+  });
 
   // Simulated transmission in Edit Mode so the user can drag and preview the widget
   const previewTransmission: ActiveSpotterTransmission = {
@@ -78,7 +99,7 @@
 {#if active}
   {@const colors = getBadgeColor(active)}
 
-  <!-- 1. ESTILO FÓRMULA 1 (TV BROADCAST GRAPHIC) -->
+  <!-- 1. ESTILO FÓRMULA 1 (TV BROADCAST GRAPHIC - EXACT REPLICA CON LOGO MDT) -->
   {#if style === "f1"}
     <div
       class={[
@@ -86,36 +107,59 @@
         isTransmitting ? "scale-100 opacity-100" : "scale-[0.98] opacity-90",
       ]}
     >
-      <!-- Slanted F1 Header Banner -->
-      <div class="flex items-stretch -skew-x-12 overflow-hidden rounded-t-lg bg-black/90 border-t-2 border-r-2 border-l-2 border-red-600/80 shadow-[0_0_15px_rgba(239,68,68,0.35)]">
-        <div class="flex items-center gap-2 bg-red-600 px-3 py-1 font-display text-[11px] font-black uppercase text-white tracking-widest">
-          <span class="skew-x-12">📻 RADIO</span>
-        </div>
-        <div class="flex items-center justify-between flex-1 px-3 py-1 bg-gradient-to-r from-zinc-900 via-black to-zinc-900 border-l border-red-500/40">
-          <div class="skew-x-12 flex items-center gap-2">
-            <span class="font-mono text-[11px] font-bold text-white uppercase tracking-wider">
-              {active.profile || "SPOTTER"}
-            </span>
-            {#if isTransmitting}
-              <span class="inline-flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
-            {/if}
-          </div>
-          {#if showEqualizer}
-            <div class="skew-x-12 flex items-end gap-1 h-3.5 px-1">
-              <div class={["w-1 rounded-sm bg-red-500", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
-              <div class={["w-1 rounded-sm bg-red-400", isTransmitting ? "eq-bar-2" : "h-1.5 opacity-40"]}></div>
-              <div class={["w-1 rounded-sm bg-amber-400", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
-              <div class={["w-1 rounded-sm bg-amber-300", isTransmitting ? "eq-bar-4" : "h-1 opacity-40"]}></div>
-              <div class={["w-1 rounded-sm bg-red-500", isTransmitting ? "eq-bar-5" : "h-2.5 opacity-40"]}></div>
+      <!-- TV Broadcast Radio Badge (Exact replica de la gráfica televisiva F1 con logo MDT) -->
+      <div class="relative overflow-hidden rounded-xl border border-blue-500/30 bg-[#070e1c]/95 p-3.5 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.85)]">
+        <!-- Main Badge Header Row -->
+        <div class="flex items-center justify-between gap-4">
+          <!-- Left: Big Number + (Driver Surname / RADIO) -->
+          <div class="flex items-center gap-3.5">
+            <!-- Big Electric Blue Car Number -->
+            <div class="flex items-center justify-center min-w-[38px]">
+              <span class="font-display text-4xl md:text-5xl font-black text-[#1e75ff] leading-none drop-shadow-[0_2px_10px_rgba(30,117,255,0.45)]">
+                {carNumber}
+              </span>
             </div>
-          {/if}
-        </div>
-      </div>
 
-      <!-- F1 Content Body -->
-      <div class="rounded-b-lg border-b-2 border-r-2 border-l-2 border-white/20 bg-black/95 p-3 backdrop-blur-md">
+            <!-- Driver Surname & RADIO -->
+            <div class="flex flex-col justify-center">
+              <span class="font-display text-base font-black tracking-wider text-[#1e75ff] uppercase leading-tight drop-shadow-sm">
+                {driverLastName}
+              </span>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="font-display text-lg font-black tracking-widest text-white uppercase leading-none">
+                  RADIO
+                </span>
+                {#if isTransmitting}
+                  <span class="inline-flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
+                {/if}
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Audio Wave Equalizer (Top) + MDT Logo (Bottom) -->
+          <div class="flex flex-col items-end justify-between self-stretch shrink-0 min-h-[46px]">
+            {#if showEqualizer}
+              <div class="flex items-end gap-1 h-3.5 pt-0.5">
+                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
+                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-2" : "h-1.5 opacity-40"]}></div>
+                <div class={["w-1 rounded-sm bg-white", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
+                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-4" : "h-1 opacity-40"]}></div>
+                <div class={["w-1 rounded-sm bg-white", isTransmitting ? "eq-bar-5" : "h-2.5 opacity-40"]}></div>
+              </div>
+            {:else}
+              <div></div>
+            {/if}
+
+            <!-- Logo de MDT añadido al team radio -->
+            <div class="mt-2 flex items-center justify-end">
+              <img src="/mdt-logo.png" alt="MDT" class="h-6 w-auto max-w-[80px] object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Optional Category Badge -->
         {#if showCategoryBadge}
-          <div class="mb-1.5 flex items-center justify-between">
+          <div class="mt-2.5 flex items-center justify-between border-t border-white/10 pt-1.5">
             <span class={["inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-display text-[10px] font-black tracking-wider uppercase border", colors.bg, colors.text, colors.border]}>
               {active.folder}
             </span>
@@ -124,8 +168,10 @@
             {/if}
           </div>
         {/if}
+
+        <!-- Radio Transcription Text Subtitle -->
         {#if showText && active.text}
-          <div class="font-sans text-[13px] font-bold leading-snug text-white tracking-wide uppercase italic">
+          <div class="mt-2 rounded bg-black/50 border border-white/10 p-2 font-sans text-[12.5px] font-bold leading-snug text-white tracking-wide uppercase italic">
             "{active.text}"
           </div>
         {/if}

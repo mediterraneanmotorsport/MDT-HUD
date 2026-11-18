@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../../lib/api";
-  import { config, createMdtTemplateProfile, HUD_THEMES, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
+  import { config, createMdtTemplateProfile, DEFAULT_SHORTCUTS, HUD_THEMES, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
   import type { MonitorInfo } from "../../lib/types";
   import { live } from "../../lib/live.svelte";
   import { SPOTTER_EVENTS, spotter } from "../../lib/spotter.svelte";
@@ -15,6 +15,18 @@
   const sp = $derived(config.value.spotter);
   const dc = $derived(config.value.discord);
   const bc = $derived(config.value.broadcast);
+
+  const sc = $derived.by(() => {
+    if (!g.shortcuts) {
+      g.shortcuts = { ...DEFAULT_SHORTCUTS };
+    }
+    return g.shortcuts;
+  });
+
+  function resetShortcuts() {
+    g.shortcuts = { ...DEFAULT_SHORTCUTS };
+    saveConfig();
+  }
 
   let starError = $state(false);
   const star = () => starOnGitHub().catch(() => (starError = true));
@@ -99,7 +111,7 @@
     </div>
 
     <div class="divide-y divide-line">
-      <div class="grid grid-cols-1 gap-4 p-4 sm:grid-cols-3">
+      <div class="grid grid-cols-1 gap-4 p-4 sm:grid-cols-4">
         <label class="flex flex-col gap-1">
           <span class="text-xs font-semibold text-muted uppercase">Perfil de Voz</span>
           <select class="field" bind:value={sp.profile} onchange={saveConfig}>
@@ -110,11 +122,11 @@
         </label>
 
         <label class="flex flex-col gap-1">
-          <span class="text-xs font-semibold text-muted uppercase">Volumen ({Math.round(sp.volume * 100)}%)</span>
+          <span class="text-xs font-semibold text-muted uppercase">Vol. Voz ({Math.round(sp.volume * 100)}%)</span>
           <div class="flex h-9 items-center gap-2">
             <input
               type="range"
-              min="0.1"
+              min="0.05"
               max="1"
               step="0.05"
               bind:value={sp.volume}
@@ -124,10 +136,28 @@
           </div>
         </label>
 
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-semibold text-muted uppercase">Vol. Pitidos ({Math.round((sp.beepsVolume ?? 0.85) * 100)}%)</span>
+          <div class="flex h-9 items-center gap-2">
+            <input
+              type="range"
+              min="0.05"
+              max="1"
+              step="0.05"
+              value={sp.beepsVolume ?? 0.85}
+              oninput={(e) => {
+                sp.beepsVolume = Number(e.currentTarget.value);
+                saveConfig();
+              }}
+              class="w-full accent-accent"
+            />
+          </div>
+        </label>
+
         <div class="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
           <div>
-            <div class="text-xs font-semibold">Efecto Radio WEC (Walkie-Talkie)</div>
-            <div class="text-[11px] text-muted">Filtro de radio de carreras y distorsión analógica</div>
+            <div class="text-xs font-semibold">Efecto Radio WEC</div>
+            <div class="text-[11px] text-muted">Filtro analógico</div>
           </div>
           <Toggle
             checked={sp.radioEffect}
@@ -373,6 +403,128 @@
         </div>
       </div>
     {/if}
+  </div>
+
+  <!-- =========================================================================
+       ATAJOS DE TECLADO GLOBALES (CONFIGURABLES)
+       ========================================================================= -->
+  <div class="mb-6 card overflow-hidden text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-3">
+      <div class="flex items-center gap-2.5">
+        <span class="text-base">⌨️</span>
+        <div>
+          <div class="font-semibold text-fg">Atajos de Teclado Globales (Configurables)</div>
+          <div class="text-xs text-muted">
+            Funcionan en caliente incluso con Le Mans Ultimate en primer plano a pantalla completa.
+          </div>
+        </div>
+      </div>
+      <button
+        class="btn text-xs bg-surface-3 hover:bg-line text-fg"
+        onclick={resetShortcuts}
+        title="Restablece las combinaciones de teclas a sus valores recomendados por defecto"
+      >
+        ↺ Restablecer atajos por defecto
+      </button>
+    </div>
+
+    <div class="p-4 grid gap-4 sm:grid-cols-2">
+      <!-- 1. Modo Edición -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Modo Edición del HUD</span>
+          <span class="text-[10px] font-mono text-muted">Mover y redimensionar</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F9"
+          bind:value={sc.editMode}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Activa o desactiva el arrastre y reposicionamiento de widgets.</span>
+      </div>
+
+      <!-- 2. Mostrar / Ocultar Overlay -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Mostrar / Ocultar Overlay</span>
+          <span class="text-[10px] font-mono text-muted">Visibilidad en juego</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F10"
+          bind:value={sc.toggleOverlay}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Oculta o muestra instantáneamente todos los widgets en pantalla.</span>
+      </div>
+
+      <!-- 3. Silenciar / Activar Spotter -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Silenciar / Activar Spotter</span>
+          <span class="text-[10px] font-mono text-muted">Radio de voz</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F8"
+          bind:value={sc.toggleSpotter}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Silencia o activa temporalmente las locuciones de voz del spotter.</span>
+      </div>
+
+      <!-- 4. Siguiente Perfil de HUD -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Cambiar al Siguiente Perfil</span>
+          <span class="text-[10px] font-mono text-muted">Rotación de perfiles</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F7"
+          bind:value={sc.nextProfile}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Alterna en caliente entre tus perfiles de HUD guardados.</span>
+      </div>
+
+      <!-- 5. Alternar Modo Broadcast -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Alternar Modo Broadcast</span>
+          <span class="text-[10px] font-mono text-muted">Retransmisión TV / Stream</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F6"
+          bind:value={sc.toggleBroadcast}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Cambia al perfil de broadcast y mantiene el HUD activo para OBS.</span>
+      </div>
+
+      <!-- 6. Reenfocar al Coche del Jugador -->
+      <div class="flex flex-col gap-1.5 rounded-lg border border-line bg-surface-2/40 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-fg">Reenfocar al Coche del Jugador</span>
+          <span class="text-[10px] font-mono text-muted">Reset foco de telemetría</span>
+        </div>
+        <input
+          type="text"
+          class="field font-mono text-xs text-accent font-bold"
+          placeholder="Ctrl+Shift+F5"
+          bind:value={sc.resetFocus}
+          oninput={saveConfig}
+        />
+        <span class="text-[10px] text-muted">Devuelve el foco del HUD a tu vehículo si estabas inspeccionando a un rival.</span>
+      </div>
+    </div>
   </div>
 
   <div class="divide-y divide-line card text-sm">
