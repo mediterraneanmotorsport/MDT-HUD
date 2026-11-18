@@ -271,6 +271,20 @@ export interface MonitorInfo {
   x: number;
   y: number;
   primary: boolean;
+  scaleFactor?: number;
+}
+
+export interface OverlayLayoutInfo {
+  isMultiMonitor: boolean;
+  primaryOffsetX: number;
+  primaryOffsetY: number;
+  primaryWidth: number;
+  primaryHeight: number;
+  boundsX: number;
+  boundsY: number;
+  boundsWidth: number;
+  boundsHeight: number;
+  scaleFactor: number;
 }
 
 export interface SessionSummary {

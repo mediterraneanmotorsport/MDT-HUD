@@ -145,18 +145,20 @@ pub fn apply_edit_mode(app: &AppHandle, enabled: bool) {
     if let Some(overlay) = app.get_webview_window("overlay") {
         let broadcast = state.shared.broadcast_mode.load(Ordering::Acquire);
         let _ = overlay.set_ignore_cursor_events(!enabled && !broadcast);
-        if enabled {
-            // Span across all monitors in edit mode so widgets can be moved to any display
+        let mon = state.overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if mon == "__all__" {
+            // Span across all monitors ONLY if the user explicitly configured "__all__"
             if let Some((pos, size)) = crate::get_all_monitors_bounds(app) {
                 let _ = overlay.set_position(pos);
                 let _ = overlay.set_size(size);
             }
+        } else {
+            // Stay strictly on the chosen monitor (Primary); NEVER hijack or block other displays!
+            let _ = crate::place_overlay(app, &mon);
+        }
+        if enabled {
             let _ = overlay.show();
             let _ = overlay.set_focus();
-        } else {
-            // Restore overlay placement based on configured monitor
-            let mon = state.overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()).clone();
-            let _ = crate::place_overlay(app, &mon);
         }
     }
     let _ = app.emit("edit-mode", enabled);
@@ -187,7 +189,7 @@ pub fn set_demo_mode(app: AppHandle, state: State<AppState>, enabled: bool) {
     let _ = app.emit("demo-mode", enabled);
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorInfo {
     /// Id stored in `general.monitor`.
@@ -197,6 +199,22 @@ pub struct MonitorInfo {
     x: i32,
     y: i32,
     primary: bool,
+    scale_factor: f64,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayLayoutInfo {
+    pub is_multi_monitor: bool,
+    pub primary_offset_x: i32,
+    pub primary_offset_y: i32,
+    pub primary_width: u32,
+    pub primary_height: u32,
+    pub bounds_x: i32,
+    pub bounds_y: i32,
+    pub bounds_width: u32,
+    pub bounds_height: u32,
+    pub scale_factor: f64,
 }
 
 /// Connected monitors the overlay can be placed on.
@@ -214,10 +232,56 @@ pub fn list_monitors(app: AppHandle) -> CmdResult<Vec<MonitorInfo>> {
                 height: m.size().height,
                 x: m.position().x,
                 y: m.position().y,
+                scale_factor: m.scale_factor(),
                 name,
             })
         })
         .collect())
+}
+
+#[tauri::command]
+pub fn get_overlay_layout(app: AppHandle, state: State<'_, AppState>) -> CmdResult<OverlayLayoutInfo> {
+    let mon = state.overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let is_multi = mon == "__all__";
+    let window = app.get_webview_window("overlay");
+    let scale_factor = window.as_ref().and_then(|w| w.scale_factor().ok()).unwrap_or(1.0);
+
+    let primary = app.primary_monitor().ok().flatten();
+    let (p_x, p_y, p_w, p_h) = primary
+        .map(|m| (m.position().x, m.position().y, m.size().width, m.size().height))
+        .unwrap_or((0, 0, 1920, 1080));
+
+    if is_multi {
+        if let Some((pos, size)) = crate::get_all_monitors_bounds(&app) {
+            let offset_x = p_x - pos.x;
+            let offset_y = p_y - pos.y;
+            return Ok(OverlayLayoutInfo {
+                is_multi_monitor: true,
+                primary_offset_x: offset_x,
+                primary_offset_y: offset_y,
+                primary_width: p_w,
+                primary_height: p_h,
+                bounds_x: pos.x,
+                bounds_y: pos.y,
+                bounds_width: size.width,
+                bounds_height: size.height,
+                scale_factor,
+            });
+        }
+    }
+
+    Ok(OverlayLayoutInfo {
+        is_multi_monitor: false,
+        primary_offset_x: 0,
+        primary_offset_y: 0,
+        primary_width: p_w,
+        primary_height: p_h,
+        bounds_x: p_x,
+        bounds_y: p_y,
+        bounds_width: p_w,
+        bounds_height: p_h,
+        scale_factor,
+    })
 }
 
 /// Next frame of the companion's preview-only demo data (see `PreviewSim`).

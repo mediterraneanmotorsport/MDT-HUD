@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/api";
-  import { config, loadConfig, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS } from "../lib/config.svelte";
+  import { config, loadConfig, recoverWidgetsToPrimaryScreen, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS } from "../lib/config.svelte";
   import { live, startLive } from "../lib/live.svelte";
+  import { overlayLayout } from "../lib/overlayLayout.svelte";
   import { spotter } from "../lib/spotter.svelte";
   import SoftwareRepaint from "./SoftwareRepaint.svelte";
   import Logo from "../lib/Logo.svelte";
@@ -15,6 +16,7 @@
   onMount(() => {
     startLive();
     loadConfig();
+    overlayLayout.init();
   });
 
   const edit = $derived(live.status.editMode);
@@ -95,7 +97,10 @@
     style="background-image: linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px); background-size: 40px 40px; background-color: rgb(0 0 0 / 0.25);"
   ></div>
   <div
-    class="hud fixed top-1/2 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-4 px-4 py-3 text-sm shadow-2xl"
+    class="hud fixed z-20 flex items-center gap-4 px-4 py-3 text-sm shadow-2xl"
+    style:left="{overlayLayout.info.isMultiMonitor ? overlayLayout.logicalOffsetX + (overlayLayout.logicalPrimaryWidth / 2) : (typeof window !== 'undefined' ? window.innerWidth / 2 : 960)}px"
+    style:top="{overlayLayout.info.isMultiMonitor ? overlayLayout.logicalOffsetY + (overlayLayout.logicalPrimaryHeight / 2) : (typeof window !== 'undefined' ? window.innerHeight / 2 : 540)}px"
+    style:transform="translate(-50%, -50%)"
   >
     <Logo size={22} />
     <div class="h-8 w-px bg-white/10"></div>
@@ -130,6 +135,17 @@
       }}
     >
       {saveMessage || "💾 Guardar perfil"}
+    </button>
+    <button
+      class="btn bg-accent/20 border border-accent/40 text-accent font-bold px-3! py-1.5! text-xs! hover:bg-accent hover:text-white transition-colors"
+      title="Si algún widget se ha salido de la pantalla o se ha perdido en un punto muerto, haz clic para devolver todos los widgets visibles a la pantalla principal"
+      onclick={() => {
+        recoverWidgetsToPrimaryScreen(overlayLayout.logicalPrimaryWidth, overlayLayout.logicalPrimaryHeight);
+        saveMessage = "✓ Reubicados";
+        setTimeout(() => (saveMessage = ""), 2500);
+      }}
+    >
+      🎯 Reubicar en pantalla principal
     </button>
     <button class="btn px-3! py-1.5! text-xs!" onclick={resetLayout}>Restablecer</button>
     <button class="btn btn-primary px-4! py-1.5! text-xs!" onclick={finishEditing}>Listo</button>

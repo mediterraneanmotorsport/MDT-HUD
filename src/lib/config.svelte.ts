@@ -1504,3 +1504,24 @@ export function cycleNextProfile() {
   const nextIdx = (currentIdx + 1) % profileIds.length;
   switchProfile(profileIds[nextIdx]);
 }
+
+/** Devuelve todos los widgets activos al área visible de la pantalla principal si se quedaron fuera o en puntos muertos */
+export function recoverWidgetsToPrimaryScreen(screenWidth = 1920, screenHeight = 1080) {
+  const w = config.value.widgets;
+  for (const [id, cfg] of Object.entries(w)) {
+    if (!cfg.enabled) continue;
+    // Si el widget está fuera de los márgenes de la pantalla principal
+    if (cfg.x < 0 || cfg.x > screenWidth - 100 || cfg.y < 0 || cfg.y > screenHeight - 60) {
+      const def = WIDGETS.find((m) => m.id === id)?.defaults;
+      if (def) {
+        cfg.x = def.x;
+        cfg.y = def.y;
+      } else {
+        cfg.x = Math.max(20, Math.min(screenWidth - 300, cfg.x));
+        cfg.y = Math.max(20, Math.min(screenHeight - 150, cfg.y));
+      }
+    }
+  }
+  syncActiveProfile();
+  saveConfig();
+}

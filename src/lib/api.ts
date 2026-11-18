@@ -12,6 +12,7 @@ import type {
   Leaderboard,
   MonitorInfo,
   OnlineMe,
+  OverlayLayoutInfo,
   PersonalBest,
   SessionSummary,
   Snapshot,
@@ -127,6 +128,7 @@ export const api = {
     }
   },
   listMonitors: () => invoke<MonitorInfo[]>("list_monitors"),
+  getOverlayLayout: () => invoke<OverlayLayoutInfo>("get_overlay_layout"),
   getPreviewSnapshot: () => invoke<Snapshot>("get_preview_snapshot"),
   listSessions: (opts: { track?: string | null; car?: string | null; limit?: number; offset?: number } = {}) =>
     invoke<SessionSummary[]>("list_sessions", opts),

@@ -134,8 +134,8 @@ fn create_overlay(app: &tauri::App, monitor: &str) -> tauri::Result<()> {
         .visible_on_all_workspaces(false)
         .initialization_script(format!("window.__MULSANNE_FULL_REPAINT__ = {full_repaint};"))
         .skip_taskbar(true)
-        // GTK ignores programmatic resize requests for non-resizable windows.
-        .resizable(cfg!(target_os = "linux"))
+        // Must be resizable so Windows and GTK allow multi-monitor programmatic sizing
+        .resizable(true)
         .focused(false)
         .visible(false)
         .build()?;
@@ -196,6 +196,7 @@ pub(crate) fn place_overlay(app: &tauri::AppHandle, monitor: &str) -> tauri::Res
             window.set_position(pos)?;
             window.set_size(size)?;
             *app.state::<AppState>().overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()) = monitor.to_string();
+            let _ = app.emit("overlay-layout-changed", ());
             return Ok(());
         }
     }
@@ -210,6 +211,7 @@ pub(crate) fn place_overlay(app: &tauri::AppHandle, monitor: &str) -> tauri::Res
     // Sized after the move: crossing to a monitor with a different DPI rescales the window.
     window.set_size(PhysicalSize::new(size.width, size.height))?;
     *app.state::<AppState>().overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()) = monitor.to_string();
+    let _ = app.emit("overlay-layout-changed", ());
     Ok(())
 }
 
@@ -415,6 +417,7 @@ pub fn run() {
             commands::set_broadcast_mode,
             commands::get_spotter_manifest,
             commands::open_spotter_folder,
+            commands::get_overlay_layout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

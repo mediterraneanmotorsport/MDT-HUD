@@ -396,9 +396,22 @@ export async function install() {
           return { demo: true, editMode, overlayVisible: true, gameFocused: false, experimentalLinux: false, dataDir: "C:\\mock" };
         case "list_monitors":
           return [
-            { name: "\\\\.\\DISPLAY1", width: 2560, height: 1440, x: 0, y: 0, primary: true },
-            { name: "\\\\.\\DISPLAY2", width: 1920, height: 1080, x: 2560, y: 0, primary: false },
+            { name: "\\\\.\\DISPLAY1", width: 2560, height: 1440, x: 0, y: 0, primary: true, scaleFactor: 1.0 },
+            { name: "\\\\.\\DISPLAY2", width: 1920, height: 1080, x: 2560, y: 0, primary: false, scaleFactor: 1.0 },
           ];
+        case "get_overlay_layout":
+          return {
+            isMultiMonitor: false,
+            primaryOffsetX: 0,
+            primaryOffsetY: 0,
+            primaryWidth: 2560,
+            primaryHeight: 1440,
+            boundsX: 0,
+            boundsY: 0,
+            boundsWidth: 2560,
+            boundsHeight: 1440,
+            scaleFactor: 1.0,
+          };
         case "get_config":
           return config;
         case "save_config":

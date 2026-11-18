@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { config, saveConfig, type WidgetConfig } from "../lib/config.svelte";
+  import { overlayLayout } from "../lib/overlayLayout.svelte";
 
   let {
     id,
@@ -37,9 +38,24 @@
   });
 
   const scaleVal = $derived(g.scale * cfg.size);
-  // Allow multi-monitor free positioning (including negative coordinates or spanning across screens)
-  const clampedX = $derived(cfg.x);
-  const clampedY = $derived(cfg.y);
+
+  // Posicionamiento consistente anclado siempre al Monitor Principal:
+  // En modo multimonitor ("__all__"), sumamos el desplazamiento del monitor principal dentro de la ventana global.
+  const isMulti = $derived(overlayLayout.info.isMultiMonitor);
+  const rawX = $derived((isMulti ? overlayLayout.logicalOffsetX : 0) + cfg.x);
+  const rawY = $derived((isMulti ? overlayLayout.logicalOffsetY : 0) + cfg.y);
+
+  // En modo monitor individual ("Monitor principal"), evitamos que los widgets se pierdan fuera de pantalla
+  const clampedX = $derived(
+    isMulti || edit
+      ? rawX
+      : Math.max(10, Math.min(vpW - 100, rawX))
+  );
+  const clampedY = $derived(
+    isMulti || edit
+      ? rawY
+      : Math.max(10, Math.min(vpH - 40, rawY))
+  );
 
   function snap(v: number) {
     const s = config.value.general.snap || 1;
