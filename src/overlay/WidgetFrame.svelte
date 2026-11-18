@@ -2,9 +2,21 @@
   import type { Snippet } from "svelte";
   import { config, saveConfig, type WidgetConfig } from "../lib/config.svelte";
 
-  let { id, name, edit, children }: { id: string; name: string; edit: boolean; children: Snippet } = $props();
+  let {
+    id,
+    name,
+    edit,
+    customWidgets,
+    children,
+  }: {
+    id: string;
+    name: string;
+    edit: boolean;
+    customWidgets?: Record<string, WidgetConfig>;
+    children: Snippet;
+  } = $props();
 
-  const cfg: WidgetConfig = $derived(config.value.widgets[id]);
+  const cfg: WidgetConfig = $derived(customWidgets ? (customWidgets[id] ?? config.value.widgets[id]) : config.value.widgets[id]);
   const g = $derived(config.value.general);
 
   let dragging = $state(false);
@@ -25,18 +37,9 @@
   });
 
   const scaleVal = $derived(g.scale * cfg.size);
-  const clampedX = $derived.by(() => {
-    if (dragging) return cfg.x;
-    const w = (frameEl?.offsetWidth || 180) * scaleVal;
-    const maxX = Math.max(0, vpW - Math.min(w, vpW - 20));
-    return Math.max(0, Math.min(cfg.x, maxX));
-  });
-  const clampedY = $derived.by(() => {
-    if (dragging) return cfg.y;
-    const h = (frameEl?.offsetHeight || 60) * scaleVal;
-    const maxY = Math.max(0, vpH - Math.min(h, vpH - 20));
-    return Math.max(0, Math.min(cfg.y, maxY));
-  });
+  // Allow multi-monitor free positioning (including negative coordinates or spanning across screens)
+  const clampedX = $derived(cfg.x);
+  const clampedY = $derived(cfg.y);
 
   function snap(v: number) {
     const s = config.value.general.snap || 1;
@@ -46,8 +49,6 @@
   function onPointerDown(e: PointerEvent) {
     if (!edit || e.button !== 0) return;
     dragging = true;
-    cfg.x = clampedX;
-    cfg.y = clampedY;
     start = { px: e.clientX, py: e.clientY, x: cfg.x, y: cfg.y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -55,8 +56,8 @@
 
   function onPointerMove(e: PointerEvent) {
     if (!dragging) return;
-    cfg.x = Math.max(0, snap(start.x + e.clientX - start.px));
-    cfg.y = Math.max(0, snap(start.y + e.clientY - start.py));
+    cfg.x = snap(start.x + e.clientX - start.px);
+    cfg.y = snap(start.y + e.clientY - start.py);
   }
 
   function onPointerUp() {

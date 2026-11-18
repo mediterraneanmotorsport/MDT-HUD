@@ -119,6 +119,11 @@ class SpotterEngine {
     return this.audioCtx;
   }
 
+  /** Public tester for the mic beep from Settings. */
+  public playMicBeep(opening: boolean) {
+    this.playRadioClick(opening, config.value.spotter?.volume ?? 0.85);
+  }
+
   /** Plays a short WEC race-radio mic click/chirp on PTT open or close. */
   private playRadioClick(opening: boolean, volume: number) {
     const ctx = this.getAudioContext();
@@ -426,7 +431,31 @@ class SpotterEngine {
     };
     this.broadcastState();
 
-    if (useRadio) this.playRadioClick(true, volume);
+    const playStartBeep = () => {
+      const s = cfg?.startSound ?? "1.mp3";
+      if (!s || s === "none") return;
+      if (s === "mic_click") {
+        if (useRadio) this.playRadioClick(true, volume);
+        return;
+      }
+      const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
+      audio.volume = volume;
+      audio.play().catch(() => {});
+    };
+
+    const playEndBeep = () => {
+      const s = cfg?.endSound ?? "f1-radio-end.mp3";
+      if (!s || s === "none") return;
+      if (s === "mic_click") {
+        if (useRadio) this.playRadioClick(false, volume);
+        return;
+      }
+      const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
+      audio.volume = volume;
+      audio.play().catch(() => {});
+    };
+
+    playStartBeep();
 
     const finishTransmission = () => {
       setTimeout(() => {
@@ -448,7 +477,7 @@ class SpotterEngine {
       this.currentAudio = audio;
       const done = () => {
         if (this.currentAudio === audio) {
-          if (useRadio) this.playRadioClick(false, volume);
+          playEndBeep();
           this.currentAudio = null;
           this.playing = false;
           this.currentPriority = null;
@@ -471,6 +500,7 @@ class SpotterEngine {
 
     // No hay archivos de audio para este evento en el perfil -> Fallback a TTS o fin
     const fallbackDone = () => {
+      playEndBeep();
       this.playing = false;
       this.currentPriority = null;
       this.broadcastState();

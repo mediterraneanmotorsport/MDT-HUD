@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream, UdpSocket};
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -731,6 +732,38 @@ fn handle_client(
                     "audio/wav"
                 };
                 return send_response(&mut stream, "200 OK", mime, &bytes);
+            }
+        }
+    }
+
+    if clean_path.starts_with("/Sound/") {
+        let state = app.state::<AppState>();
+        let rel_raw = clean_path.trim_start_matches("/Sound/");
+        let rel = url_decode(rel_raw);
+        let mut candidates = Vec::new();
+        candidates.push(state.data_dir.join("Sound").join(&rel));
+        candidates.push(PathBuf::from("public/Sound").join(&rel));
+        candidates.push(PathBuf::from("Sound").join(&rel));
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                candidates.push(parent.join("Sound").join(&rel));
+                candidates.push(parent.join("public").join("Sound").join(&rel));
+                candidates.push(parent.join("resources").join("public").join("Sound").join(&rel));
+                candidates.push(parent.join("resources").join("Sound").join(&rel));
+            }
+        }
+        for cand in candidates {
+            if cand.is_file() {
+                if let Ok(bytes) = std::fs::read(&cand) {
+                    let mime = if rel.ends_with(".mp3") {
+                        "audio/mpeg"
+                    } else if rel.ends_with(".ogg") {
+                        "audio/ogg"
+                    } else {
+                        "audio/wav"
+                    };
+                    return send_response(&mut stream, "200 OK", mime, &bytes);
+                }
             }
         }
     }

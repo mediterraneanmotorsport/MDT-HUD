@@ -52,6 +52,46 @@
     const n = m.name.match(/DISPLAY(\d+)$/i)?.[1];
     return `${n ? `Pantalla ${n}` : m.name} · ${m.width}×${m.height}${m.primary ? " (principal)" : ""}`;
   };
+
+  const SPOTTER_ALERT_SOUNDS = [
+    { value: "1.mp3", label: "Tono 1 (1.mp3)" },
+    { value: "2.mp3", label: "Tono 2 (2.mp3)" },
+    { value: "3.mp3", label: "Tono 3 (3.mp3)" },
+    { value: "4.mp3", label: "Tono 4 (4.mp3)" },
+    { value: "5.mp3", label: "Tono 5 (5.mp3)" },
+    { value: "6.mp3", label: "Tono 6 (6.mp3)" },
+    { value: "7.mp3", label: "Tono 7 (7.mp3)" },
+    { value: "8.mp3", label: "Tono 8 (8.mp3)" },
+    { value: "9.mp3", label: "Tono 9 (9.mp3)" },
+    { value: "10.mp3", label: "Tono 10 (10.mp3)" },
+    { value: "11.mp3", label: "Tono 11 (11.mp3)" },
+    { value: "12.mp3", label: "Tono 12 (12.mp3)" },
+    { value: "13.mp3", label: "Tono 13 (13.mp3)" },
+    { value: "14.mp3", label: "Tono 14 (14.mp3)" },
+    { value: "15.mp3", label: "Tono 15 (15.mp3)" },
+    { value: "16.mp3", label: "Tono 16 (16.mp3)" },
+    { value: "17.mp3", label: "Tono 17 (17.mp3)" },
+    { value: "f1-radio-end.mp3", label: "F1 Radio End (f1-radio-end.mp3)" },
+    { value: "mic_click", label: "Pitido sintético walkie-talkie" },
+    { value: "none", label: "Ninguno (Silencioso)" },
+  ];
+
+  function playSpotterTestSound(file?: string) {
+    if (!file || file === "none") return;
+    if (file === "mic_click") {
+      spotter.playMicBeep(true);
+      return;
+    }
+    const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(file)}?t=${Date.now()}`);
+    audio.volume = config.value.spotter.volume ?? 0.85;
+    audio.play().catch(() => {});
+  }
+
+  function playBattleTestSound() {
+    const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${Date.now()}`);
+    audio.volume = 0.85;
+    audio.play().catch(() => {});
+  }
 </script>
 
 <div class="mx-auto max-w-3xl p-6">
@@ -127,7 +167,7 @@
         <div class="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
           <div>
             <div class="text-xs font-semibold">Efecto Radio WEC (Walkie-Talkie)</div>
-            <div class="text-[11px] text-muted">Filtro de radio de carreras y clic de micrófono</div>
+            <div class="text-[11px] text-muted">Filtro de radio de carreras y distorsión analógica</div>
           </div>
           <Toggle
             checked={sp.radioEffect}
@@ -137,6 +177,76 @@
               saveConfig();
             }}
           />
+        </div>
+
+        <!-- Selector de Sonido al empezar a hablar -->
+        <div class="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold">Sonido al empezar a hablar (Pitido Spotter)</div>
+            <div class="text-[11px] text-muted">Tono de alerta de radio previo a la locución</div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <select
+              class="field py-1 text-xs"
+              bind:value={sp.startSound}
+              onchange={saveConfig}
+            >
+              {#each SPOTTER_ALERT_SOUNDS as snd}
+                <option value={snd.value}>{snd.label}</option>
+              {/each}
+            </select>
+            <button
+              type="button"
+              class="rounded bg-surface-3 px-2 py-1 text-[11px] font-semibold text-fg hover:bg-accent hover:text-white"
+              onclick={() => playSpotterTestSound(sp.startSound ?? "1.mp3")}
+              title="Probar sonido de inicio"
+            >
+              ▶ Probar
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector de Sonido al terminar de hablar (opcional / puede dejarse vacío) -->
+        <div class="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold">Sonido al terminar de hablar</div>
+            <div class="text-[11px] text-muted">Pitido de fin de transmisión (puede dejarse vacío/ninguno)</div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <select
+              class="field py-1 text-xs"
+              bind:value={sp.endSound}
+              onchange={saveConfig}
+            >
+              {#each SPOTTER_ALERT_SOUNDS as snd}
+                <option value={snd.value}>{snd.label}</option>
+              {/each}
+            </select>
+            <button
+              type="button"
+              class="rounded bg-surface-3 px-2 py-1 text-[11px] font-semibold text-fg hover:bg-accent hover:text-white"
+              onclick={() => playSpotterTestSound(sp.endSound ?? "f1-radio-end.mp3")}
+              title="Probar sonido de finalización"
+            >
+              ▶ Probar
+            </button>
+          </div>
+        </div>
+
+        <!-- Prueba de Sonido de Batalla por Posición -->
+        <div class="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold">Alerta de Batalla por Posición (Battle.mp3)</div>
+            <div class="text-[11px] text-muted">Sonido especial emitido cuando entras en duelo a menos de 1s</div>
+          </div>
+          <button
+            type="button"
+            class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white"
+            onclick={playBattleTestSound}
+            title="Probar sonido de batalla"
+          >
+            ⚔️ ▶ Probar Batalla
+          </button>
         </div>
       </div>
 
@@ -444,6 +554,7 @@
       </div>
       <select class="field" bind:value={g.monitor} onchange={saveConfig} onfocus={refreshMonitors}>
         <option value="">Monitor principal</option>
+        <option value="__all__">🖥️ Todos los monitores (Multi-pantalla)</option>
         {#each monitors as m (m.name)}
           <option value={m.name}>{monitorLabel(m)}</option>
         {/each}

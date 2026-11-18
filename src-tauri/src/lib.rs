@@ -94,10 +94,50 @@ fn create_overlay(app: &tauri::App, monitor: &str) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Computes the bounding rectangle enclosing all connected monitors.
+pub(crate) fn get_all_monitors_bounds(app: &tauri::AppHandle) -> Option<(PhysicalPosition<i32>, PhysicalSize<u32>)> {
+    let window = app.get_webview_window("overlay").or_else(|| app.get_webview_window("main"))?;
+    let monitors = window.available_monitors().ok()?;
+    if monitors.is_empty() {
+        return None;
+    }
+    let mut min_x = i32::MAX;
+    let mut min_y = i32::MAX;
+    let mut max_x = i32::MIN;
+    let mut max_y = i32::MIN;
+
+    for m in &monitors {
+        let pos = m.position();
+        let size = m.size();
+        min_x = min_x.min(pos.x);
+        min_y = min_y.min(pos.y);
+        max_x = max_x.max(pos.x + size.width as i32);
+        max_y = max_y.max(pos.y + size.height as i32);
+    }
+
+    if min_x < max_x && min_y < max_y {
+        let w = (max_x - min_x) as u32;
+        let h = (max_y - min_y) as u32;
+        Some((PhysicalPosition::new(min_x, min_y), PhysicalSize::new(w, h)))
+    } else {
+        None
+    }
+}
+
 /// Moves the overlay to cover the monitor named `monitor` (`general.monitor`),
 /// falling back to the primary monitor when it's empty or not connected.
+/// If `monitor == "__all__"`, spans across all available monitors.
 pub(crate) fn place_overlay(app: &tauri::AppHandle, monitor: &str) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("overlay") else { return Ok(()) };
+    if monitor == "__all__" {
+        if let Some((pos, size)) = get_all_monitors_bounds(app) {
+            window.set_position(pos)?;
+            window.set_size(size)?;
+            *app.state::<AppState>().overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()) = monitor.to_string();
+            return Ok(());
+        }
+    }
+
     let chosen = match monitor {
         "" => None,
         name => window.available_monitors()?.into_iter().find(|m| m.name().is_some_and(|n| n == name)),

@@ -56,8 +56,12 @@ export async function startLive() {
   let lastLapNumber = 0;
   let lastExportedSessionId: number | null = null;
   let exitGarageTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastDemoOrEditExit = 0;
 
   async function triggerAutoDiscordExport() {
+    if (live.status.demo || live.status.editMode || Date.now() - lastDemoOrEditExit < 15000) {
+      return;
+    }
     if (!config.value.discord?.enabled || !config.value.discord?.autoExport || !config.value.discord?.webhookUrl) {
       return;
     }
@@ -89,31 +93,41 @@ export async function startLive() {
         wheelControl.pushSnapshotToMobile(e.payload);
       }
 
-      // Check for session completion / transitions
-      const s = e.payload.session;
-      const p = e.payload.player;
-      if (s) {
-        if (lastPhase >= 0 && lastPhase < 7 && s.phase >= 7) {
-          setTimeout(triggerAutoDiscordExport, 1500);
+      // Check for session completion / transitions (ignored during demo or edit mode)
+      if (!live.status.demo && !live.status.editMode && Date.now() - lastDemoOrEditExit >= 15000) {
+        const s = e.payload.session;
+        const p = e.payload.player;
+        if (s) {
+          if (lastPhase >= 0 && lastPhase < 7 && s.phase >= 7) {
+            setTimeout(triggerAutoDiscordExport, 1500);
+          }
+          if (lastSessionCode !== -1 && (s.code !== lastSessionCode || (lastSessionTrack && s.track !== lastSessionTrack))) {
+            setTimeout(triggerAutoDiscordExport, 1000);
+          }
+          lastSessionCode = s.code;
+          lastSessionTrack = s.track;
+          lastPhase = s.phase;
         }
-        if (lastSessionCode !== -1 && (s.code !== lastSessionCode || (lastSessionTrack && s.track !== lastSessionTrack))) {
-          setTimeout(triggerAutoDiscordExport, 1000);
+        if (p) {
+          if (lastInRealtime && !e.payload.inRealtime && lastLapNumber > 0) {
+            clearTimeout(exitGarageTimer);
+            exitGarageTimer = setTimeout(triggerAutoDiscordExport, 3000);
+          }
+          lastInRealtime = e.payload.inRealtime;
+          lastLapNumber = p.lapNumber;
         }
-        lastSessionCode = s.code;
-        lastSessionTrack = s.track;
-        lastPhase = s.phase;
-      }
-      if (p) {
-        if (lastInRealtime && !e.payload.inRealtime && lastLapNumber > 0) {
-          clearTimeout(exitGarageTimer);
-          exitGarageTimer = setTimeout(triggerAutoDiscordExport, 3000);
-        }
-        lastInRealtime = e.payload.inRealtime;
-        lastLapNumber = p.lapNumber;
       }
     }
   });
   await listen<boolean>("edit-mode", (e) => {
+    if (live.status.editMode && !e.payload) {
+      lastDemoOrEditExit = Date.now();
+      clearTimeout(exitGarageTimer);
+      lastSessionCode = -1;
+      lastPhase = -1;
+      lastInRealtime = false;
+      lastLapNumber = 0;
+    }
     live.status = { ...live.status, editMode: e.payload };
   });
   await listen<boolean>("overlay-visible", (e) => {
@@ -123,6 +137,14 @@ export async function startLive() {
     live.status = { ...live.status, gameFocused: e.payload };
   });
   await listen<boolean>("demo-mode", (e) => {
+    if (live.status.demo && !e.payload) {
+      lastDemoOrEditExit = Date.now();
+      clearTimeout(exitGarageTimer);
+      lastSessionCode = -1;
+      lastPhase = -1;
+      lastInRealtime = false;
+      lastLapNumber = 0;
+    }
     live.status = { ...live.status, demo: e.payload };
   });
   if (!isRemoteView && !isOverlayWindow) {

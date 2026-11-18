@@ -105,6 +105,88 @@
     }
   });
 
+  // Track pit duration per vehicle
+  interface PitInfo {
+    inPits: boolean;
+    pitStartMs: number;
+    lastDurationSec: number;
+  }
+  const pitTracker = new Map<number, PitInfo>();
+
+  $effect(() => {
+    if (!snap?.vehicles) return;
+    const now = Date.now();
+    for (const v of snap.vehicles) {
+      let info = pitTracker.get(v.id);
+      if (!info) {
+        info = { inPits: v.inPits, pitStartMs: v.inPits ? now : 0, lastDurationSec: 0 };
+        pitTracker.set(v.id, info);
+      } else {
+        if (v.inPits && !info.inPits) {
+          info.inPits = true;
+          info.pitStartMs = now;
+        } else if (!v.inPits && info.inPits) {
+          info.inPits = false;
+          if (info.pitStartMs > 0) {
+            info.lastDurationSec = Math.round((now - info.pitStartMs) / 100) / 10;
+          }
+        }
+      }
+    }
+  });
+
+  function getPitDurationDisplay(v: Vehicle): string {
+    const info = pitTracker.get(v.id);
+    if (v.inPits && info?.pitStartMs) {
+      const liveSec = ((Date.now() - info.pitStartMs) / 1000).toFixed(1);
+      return `${liveSec}s`;
+    }
+    if (info && info.lastDurationSec > 0) {
+      return `${info.lastDurationSec.toFixed(1)}s`;
+    }
+    return "–";
+  }
+
+  function getVehicleDamage(v: Vehicle): number | null {
+    if (v.isPlayer && snap?.player?.damage) {
+      const d = snap.player.damage;
+      const suspAvg = d.suspension.reduce((a, b) => a + b, 0) / 4;
+      return Math.round(((d.aero + suspAvg) / 2) * 100);
+    }
+    if (snap?.focusedSlot != null && (v.slotId === snap.focusedSlot || v.id === snap.focusedSlot)) {
+      if (snap?.player?.damage) {
+        const d = snap.player.damage;
+        const suspAvg = d.suspension.reduce((a, b) => a + b, 0) / 4;
+        return Math.round(((d.aero + suspAvg) / 2) * 100);
+      }
+    }
+    return null;
+  }
+
+  // WEC Position Change Animation Tracker (Green for gain, Red for loss)
+  let prevPlaces = new Map<number, number>();
+  let positionAnims = $state<Record<number, "up" | "down">>({});
+  let animTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+
+  $effect(() => {
+    if (!opts.animatePositions || !snap?.vehicles) return;
+    for (const v of snap.vehicles) {
+      const prev = prevPlaces.get(v.id);
+      if (prev !== undefined && prev !== v.place) {
+        const dir = v.place < prev ? "up" : "down";
+        positionAnims = { ...positionAnims, [v.id]: dir };
+        if (animTimeouts.has(v.id)) clearTimeout(animTimeouts.get(v.id)!);
+        const timer = setTimeout(() => {
+          const next = { ...positionAnims };
+          delete next[v.id];
+          positionAnims = next;
+        }, 2800);
+        animTimeouts.set(v.id, timer);
+      }
+      prevPlaces.set(v.id, v.place);
+    }
+  });
+
   const columns = $derived(
     [
       "22px", // position
@@ -112,9 +194,12 @@
       "36px", // number
       opts.showLogo ? "18px" : "",
       "minmax(130px,1fr)", // driver
+      opts.showDamage ? "40px" : "", // daño %
+      opts.showPenalties ? "34px" : "", // sanciones
       opts.showTyres ? "18px" : "",
       opts.showEnergy ? "40px" : "",
       opts.showPits ? "36px" : "",
+      opts.showPitDuration ? "48px" : "", // tiempo boxes
       opts.showLast ? "70px" : "",
       opts.showBest ? "70px" : "",
       "64px", // gap
@@ -215,14 +300,17 @@
     {#each g.rows as r, i (r.v.id)}
       {@const mate = isTeammate(r.v, teammates)}
       {@const isTargetFocused = live.snap?.focusedSlot != null ? (r.v.slotId === live.snap.focusedSlot || r.v.id === live.snap.focusedSlot) : r.v.isPlayer}
+      {@const anim = positionAnims[r.v.id]}
       <div
         class={[
-          "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-colors hover:ring-1 hover:ring-accent",
-          isTargetFocused
+          "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-all duration-300 relative",
+          anim === "up" && "bg-emerald-950/70 ring-2 ring-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] border-l-4 border-emerald-400 font-bold",
+          anim === "down" && "bg-rose-950/70 ring-2 ring-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)] border-l-4 border-rose-500 font-bold",
+          !anim && isTargetFocused
             ? "bg-accent text-white shadow-[0_0_12px_var(--color-accent)] ring-1 ring-white/60 font-bold"
-            : mate
+            : !anim && mate
               ? "bg-accent/20 ring-1 ring-accent/60"
-              : i % 2 === 1 && "bg-white/[0.03]",
+              : !anim && i % 2 === 1 && "bg-white/[0.03]",
           (r.v.finishStatus === 2 || r.v.finishStatus === 3) && "opacity-50",
         ]}
         style:grid-template-columns={columns}
@@ -242,7 +330,14 @@
           }
         }}
       >
-        <span class="text-right font-semibold">{r.v.classPlace}</span>
+        <span class="text-right font-semibold flex items-center justify-end gap-0.5">
+          {#if anim === "up"}
+            <span class="text-emerald-400 font-black text-[10px]">▲</span>
+          {:else if anim === "down"}
+            <span class="text-rose-400 font-black text-[10px]">▼</span>
+          {/if}
+          <span>{r.v.classPlace}</span>
+        </span>
         {#if opts.showPosGained}{@render posGainedBadge(r.v)}{/if}
         <span
           class="rounded-[4px] text-center text-[12px] leading-[18px] font-bold text-white"
@@ -266,13 +361,39 @@
           {:else if r.v.inPits}
             <span class="rounded-[4px] bg-white px-1 text-[10px] leading-4 font-bold text-black">PIT</span>
           {/if}
-          {#if r.v.numPenalties > 0 && r.v.finishStatus < 2}
+          {#if !opts.showPenalties && r.v.numPenalties > 0 && r.v.finishStatus < 2}
             <span
               class="shrink-0 rounded-[4px] bg-warn px-1 text-[10px] leading-4 font-bold text-black"
               title={penaltyTitle(r.v)}>{penaltyBadge(r.v)}</span
             >
           {/if}
         </span>
+        {#if opts.showDamage}
+          {@const dmg = getVehicleDamage(r.v)}
+          <span
+            class={[
+              "text-center font-mono text-[11px] font-bold",
+              dmg != null && dmg > 25 ? "text-bad" : dmg != null && dmg > 0 ? "text-warn" : "text-muted",
+            ]}
+            title="Daño del vehículo"
+          >
+            {dmg != null ? `${dmg}%` : "–"}
+          </span>
+        {/if}
+        {#if opts.showPenalties}
+          <span class="flex items-center justify-center">
+            {#if r.v.numPenalties > 0}
+              <span
+                class="rounded bg-warn px-1 text-[10px] leading-4 font-black text-black"
+                title={penaltyTitle(r.v)}
+              >
+                {penaltyBadge(r.v)}
+              </span>
+            {:else}
+              <span class="text-[11px] text-muted/50 font-mono">0</span>
+            {/if}
+          </span>
+        {/if}
         {#if opts.showTyres}
           <TyreBadge compounds={r.v.tyreCompounds} wear={r.v.tyreWear} laps={r.v.tyreLaps} />
         {/if}
@@ -280,6 +401,20 @@
         {#if opts.showPits}
           <span class="text-right text-[13px]"><span class="text-[10px] opacity-50">PS</span> {r.v.numPitstops}</span>
         {/if}
+        {#if opts.showPitDuration}
+          {@const pDur = getPitDurationDisplay(r.v)}
+          <span
+            class={[
+              "text-right font-mono text-[11px] font-bold tabular-nums",
+              r.v.inPits ? "text-accent animate-pulse" : "text-fg/80",
+            ]}
+            title={r.v.inPits ? "Tiempo en boxes actual" : "Última parada en boxes"}
+          >
+            {pDur}
+          </span>
+        {/if}
+        {#if opts.showLast}{@render time(r.v.lastLap, tone(r.v.lastLap, r.v, g.classBest, true), "text-[13px] opacity-75")}{/if}
+        {#if opts.showBest}{@render time(r.v.bestLap, tone(r.v.bestLap, r.v, g.classBest, false), "text-[13px] opacity-75")}{/if}
         {#if opts.showLast}{@render time(r.v.lastLap, tone(r.v.lastLap, r.v, g.classBest, true), "text-[13px] opacity-75")}{/if}
         {#if opts.showBest}{@render time(r.v.bestLap, tone(r.v.bestLap, r.v, g.classBest, false), "text-[13px] opacity-75")}{/if}
         {#if !isRace && i === 0}

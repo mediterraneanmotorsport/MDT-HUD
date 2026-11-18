@@ -38,7 +38,9 @@
     "active": true,
     "resources": [
       "../public/Perfil/**/*",
-      "../Perfil/**/*"
+      "../Perfil/**/*",
+      "../public/Sound/**/*",
+      "../Sound/**/*"
     ],
     "targets": ["nsis", "appimage", "deb"],
     "createUpdaterArtifacts": true,

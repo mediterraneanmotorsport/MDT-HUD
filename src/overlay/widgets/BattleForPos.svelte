@@ -157,6 +157,27 @@
 
     return bestBattle;
   });
+
+  let lastBattleSoundTime = 0;
+  let prevHadBattle = false;
+
+  $effect(() => {
+    const hasBattle = Boolean(activeBattle);
+    if (hasBattle && !prevHadBattle && !edit) {
+      const now = Date.now();
+      if (opts.soundAlert !== false && now - lastBattleSoundTime > 20000) {
+        lastBattleSoundTime = now;
+        try {
+          const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${now}`);
+          audio.volume = Math.max(0.05, Math.min(1.0, opts.soundVolume ?? 0.8));
+          audio.play().catch(() => {});
+        } catch {
+          // audio playback failed or user hasn't interacted
+        }
+      }
+    }
+    prevHadBattle = hasBattle;
+  });
 </script>
 
 {#if activeBattle}

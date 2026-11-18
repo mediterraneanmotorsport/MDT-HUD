@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.2.0](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.1.5...v1.2.0) (2026-11-18) - Dual Perfiles Simultáneos, Multi-Monitor, Standings WEC y Personalización de Audios
+
+### Features & Improvements
+* **Soporte de Dos Perfiles Simultáneos (Broadcast vs Overlays en Juego)**:
+  * Desacoplamiento total entre el perfil de retransmisión para OBS (`/#broadcast` o `/broadcast`) y el perfil del HUD de conducción para el piloto en juego.
+  * OBS carga de forma independiente el perfil de retransmisión configurado sin alterar ni cambiar el perfil activo de conducción en pantalla.
+* **Soporte Multi-Monitor Completo en Modo Edición y Configuración**:
+  * Los widgets del overlay ahora pueden desplazarse libremente a cualquiera de los monitores conectados (incluyendo pantallas secundarias o laterales con coordenadas negativas o extendidas).
+  * El modo edición (`Ctrl+Shift+F9`) expande la ventana del overlay para cubrir todos los monitores disponibles automáticamente.
+  * Añadida opción `🖥️ Todos los monitores (Multi-pantalla)` en el selector de pantalla de Ajustes.
+* **Standings: Nuevas Columnas y Opciones Configurables**:
+  * *Puntos / Sanciones de Penalización*: Columna opcional para visualizar penalizaciones activas (DT, SG, avisos) de cada coche.
+  * *Porcentaje de Daño*: Visualización del daño del vehículo en carrocería y suspensión.
+  * *Tiempo de Parada en Boxes*: Muestra en vivo la duración del pit stop mientras el coche está en boxes y el tiempo final de la última parada.
+* **Standings: Animación de Intercambio de Posiciones estilo WEC**:
+  * Transición visual dinámica tipo retransmisión WEC: resalte verde con brillo y flecha para los pilotos que suben posición, y resalte rojo con brillo y flecha para los pilotos que bajan posición.
+* **Team Radio Spotter: 4 Diseños Exclusivos**:
+  * *WEC Oficial*: Banner televisivo oficial con fondo glassmorphism azul oscuro, ecualizador animado e indicador ON AIR.
+  * *Fórmula 1*: Gráfico con esquinas inclinadas en ángulo, cabecera roja «RADIO», tipografía en mayúsculas TV y ecualizador F1.
+  * *Cápsula Compacta*: Barra horizontal redondeada y minimalista para habitáculos reducidos con punto de grabación y texto compacto.
+  * *Táctico Cyberpunk*: HUD técnico monospace con frecuencia de radio (`FREQ 454.025 MHz // CH-01`), bordes cian neón y retícula táctica.
+* **Gestión Personalizada de Sonidos de Spotter y Duelos**:
+  * Selector para sonido de inicio de radio con 17 tonos disponibles (`1.mp3` a `17.mp3`, pitido sintético o ninguno) con botón «▶ Probar».
+  * Selector para sonido de finalización de radio (`f1-radio-end.mp3`, tonos o dejarlo vacío/ninguno) con botón «▶ Probar».
+  * Alerta de sonido para **Batalla por Posición** (`Battle.mp3`) cuando dos coches compiten a menos de 1s, con control de volumen y botón de prueba.
+* **Corrección de Reporte a Discord en Modo Edición**:
+  * Bloqueado cualquier reporte automático de sesión a Discord cuando se desactiva el modo edición o se apagan los datos demo.
+
 ## [1.1.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.1.0...v1.1.1) (2026-11-17) - Corrección de Carga de Audios y Sincronización Automática de Perfiles
 
 ### Bug Fixes & Improvements

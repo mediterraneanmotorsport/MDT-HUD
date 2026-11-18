@@ -37,26 +37,39 @@
     }
   }
 
+  const isBroadcastUrl = typeof window !== "undefined" && (location.hash.includes("broadcast") || location.pathname.includes("broadcast"));
+  const isBroadcast = $derived(Boolean(config.value.general.broadcastMode) || isBroadcastUrl);
+
+  // Dual profile isolation: Broadcast mode uses its dedicated broadcast profile without modifying the driver's active HUD profile!
+  const effectiveProfileId = $derived(
+    isBroadcastUrl && config.value.general.broadcastProfileId && config.value.profiles[config.value.general.broadcastProfileId]
+      ? config.value.general.broadcastProfileId
+      : config.value.activeProfile
+  );
+  const effectiveProfile = $derived(config.value.profiles[effectiveProfileId]);
+  const effectiveWidgets = $derived(
+    isBroadcastUrl && effectiveProfile ? effectiveProfile.widgets : config.value.widgets
+  );
+
+  $effect(() => {
+    if (config.loaded) {
+      void api.setBroadcastMode(isBroadcast);
+    }
+  });
+
   function finishEditing() {
     if (live.status.demo) {
       demoStartedForEditing = false;
       api.setDemoMode(false);
     }
-    syncActiveProfile();
+    if (isBroadcastUrl && effectiveProfile && effectiveProfileId !== config.value.activeProfile) {
+      effectiveProfile.widgets = effectiveWidgets;
+    } else {
+      syncActiveProfile();
+    }
     saveConfig();
     api.setEditMode(false);
   }
-  const isBroadcastUrl = typeof window !== "undefined" && (location.hash.includes("broadcast") || location.pathname.includes("broadcast"));
-  const isBroadcast = $derived(Boolean(config.value.general.broadcastMode) || isBroadcastUrl);
-
-  $effect(() => {
-    if (config.loaded) {
-      if (isBroadcastUrl && config.value.general.broadcastProfileId && config.value.activeProfile !== config.value.general.broadcastProfileId) {
-        switchProfile(config.value.general.broadcastProfileId);
-      }
-      void api.setBroadcastMode(isBroadcast);
-    }
-  });
 
   const onTrack = $derived(!!live.snap?.player && live.snap.inRealtime);
   const trackOk = $derived(!config.value.general.onlyOnTrack || onTrack || isBroadcast);
@@ -125,13 +138,13 @@
 
 {#if show}
   {#each WIDGETS as meta (meta.id)}
-    {@const cfg = config.revision >= 0 ? config.value.widgets[meta.id] : config.value.widgets[meta.id]}
+    {@const cfg = effectiveWidgets[meta.id]}
     {#if cfg && cfg.enabled}
       {@const Widget = COMPONENTS[meta.id]}
       {@const isSpotter = meta.id === "spotter"}
       {@const shouldRender = edit || (trackOk && focusOk) || (isSpotter && isSpotterSpeaking)}
       {#if shouldRender}
-        <WidgetFrame id={meta.id} name={meta.name} {edit}>
+        <WidgetFrame id={meta.id} name={meta.name} {edit} customWidgets={effectiveWidgets}>
           <Widget opts={cfg.options} units={config.value.general.units} {edit} />
         </WidgetFrame>
       {/if}

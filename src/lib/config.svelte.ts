@@ -90,6 +90,8 @@ export interface AppConfig {
     volume: number;
     radioEffect: boolean;
     ttsFallback: boolean;
+    startSound?: string;
+    endSound?: string;
     traffic: boolean;
     flags: boolean;
     strategy: boolean;
@@ -363,6 +365,10 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "colorTimes", label: "Colorear tiempos (verde = mejor personal, morado = récord de clase)", type: "boolean" },
       { key: "showInterval", label: "Intervalo con el coche de delante", type: "boolean" },
       { key: "showPosGained", label: "Posiciones ganadas o perdidas (▲/▼)", type: "boolean" },
+      { key: "showPenalties", label: "Puntos / sanciones de penalización", type: "boolean" },
+      { key: "showDamage", label: "Porcentaje de daño del coche", type: "boolean" },
+      { key: "showPitDuration", label: "Tiempo de parada en boxes", type: "boolean" },
+      { key: "animatePositions", label: "Animación WEC al intercambiar posiciones (verde sube / rojo baja)", type: "boolean" },
     ],
     optionDefaults: {
       showBranding: true,
@@ -381,6 +387,10 @@ export const WIDGETS: WidgetMeta[] = [
       colorTimes: true,
       showInterval: true,
       showPosGained: false,
+      showPenalties: false,
+      showDamage: false,
+      showPitDuration: false,
+      animatePositions: true,
     },
   },
   {
@@ -673,6 +683,8 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showSpeed", label: "Mostrar velocidad en tiempo real de ambos", type: "boolean" },
       { key: "showClassBadge", label: "Mostrar placa de categoría (HY, P2, GT3)", type: "boolean" },
       { key: "sameClassOnly", label: "Solo alertar batallas de la misma categoría", type: "boolean" },
+      { key: "soundAlert", label: "Reproducir sonido de batalla por posición (Battle.mp3)", type: "boolean" },
+      { key: "soundVolume", label: "Volumen del aviso de batalla", type: "number", min: 0.1, max: 1.0, step: 0.05 },
     ],
     optionDefaults: {
       deltaThreshold: 1.0,
@@ -681,6 +693,8 @@ export const WIDGETS: WidgetMeta[] = [
       showSpeed: true,
       showClassBadge: true,
       sameClassOnly: true,
+      soundAlert: true,
+      soundVolume: 0.8,
     },
   },
   {
@@ -711,12 +725,13 @@ export const WIDGETS: WidgetMeta[] = [
     options: [
       {
         key: "style",
-        label: "Estilo visual de la radio",
+        label: "Estilo visual de la radio (4 diseños)",
         type: "select",
         choices: [
           { value: "wec", label: "Banner oficial WEC / Broadcast" },
+          { value: "f1", label: "Gráfico TV Fórmula 1 (Team Radio)" },
           { value: "compact", label: "Cápsula deportiva moderna" },
-          { value: "minimal", label: "Minimalista transparente" },
+          { value: "cyber", label: "Táctico / Cyberpunk Monospace" },
         ],
       },
       { key: "showText", label: "Mostrar texto y subtítulo de la radio", type: "boolean" },
@@ -776,6 +791,8 @@ function defaults(): AppConfig {
       volume: 0.85,
       radioEffect: true,
       ttsFallback: true,
+      startSound: "1.mp3",
+      endSound: "f1-radio-end.mp3",
       traffic: true,
       flags: true,
       strategy: true,

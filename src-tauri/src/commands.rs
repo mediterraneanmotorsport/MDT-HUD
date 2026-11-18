@@ -138,8 +138,17 @@ pub fn apply_edit_mode(app: &AppHandle, enabled: bool) {
         let broadcast = state.shared.broadcast_mode.load(Ordering::Acquire);
         let _ = overlay.set_ignore_cursor_events(!enabled && !broadcast);
         if enabled {
+            // Span across all monitors in edit mode so widgets can be moved to any display
+            if let Some((pos, size)) = crate::get_all_monitors_bounds(app) {
+                let _ = overlay.set_position(pos);
+                let _ = overlay.set_size(size);
+            }
             let _ = overlay.show();
             let _ = overlay.set_focus();
+        } else {
+            // Restore overlay placement based on configured monitor
+            let mon = state.overlay_monitor.lock().unwrap_or_else(|e| e.into_inner()).clone();
+            let _ = crate::place_overlay(app, &mon);
         }
     }
     let _ = app.emit("edit-mode", enabled);
@@ -472,8 +481,36 @@ pub fn ensure_spotter_profiles(data_dir: &Path) {
     if !readme_path.exists() {
         let _ = std::fs::write(
             readme_path,
-            "MDT-HUD · Perfiles de Voz para Spotter e Ingeniero de Pista\n\nAquí puedes añadir nuevos perfiles de voz o sustituir audios .wav.\nCrea una subcarpeta con el nombre de la voz (ej: Perfil/MiVoz/) y dentro subcarpetas de eventos (ej: yellow_flag, blue_flag, pit_limiter, low_fuel, box_this_lap, tc_up, etc.) con archivos Audio1.wav, Audio2.wav..."
+            "MDT-HUD · Perfiles de Voz para Spotter e Ingeniero de Pista\n\nAquí puedes añadir nuevos perfiles de voz o sustituir audios .wav.\nCrea una subcarpeta con el nombre de la voz (ej: Perfil/MiVoz/) y dentro subcarpetas de eventos (ej: yellow_flag, blue_flag, pit_limiter, low_fuel, box_this_lap, tc_up, etc.) con archivos 1.wav, 2.wav..."
         );
+    }
+
+    // Ensure Sound folder (Spotter alert and Batalla) is available in data_dir
+    let sound_dir = data_dir.join("Sound");
+    let _ = std::fs::create_dir_all(&sound_dir);
+    let mut sound_candidates: Vec<PathBuf> = Vec::new();
+    if let Some(ref ed) = exe_dir {
+        sound_candidates.push(ed.join("resources").join("_up_").join("public").join("Sound"));
+        sound_candidates.push(ed.join("resources").join("_up_").join("Sound"));
+        sound_candidates.push(ed.join("resources").join("public").join("Sound"));
+        sound_candidates.push(ed.join("resources").join("Sound"));
+        sound_candidates.push(ed.join("_up_").join("public").join("Sound"));
+        sound_candidates.push(ed.join("_up_").join("Sound"));
+        sound_candidates.push(ed.join("public").join("Sound"));
+        sound_candidates.push(ed.join("Sound"));
+    }
+    sound_candidates.push(PathBuf::from("public/Sound"));
+    sound_candidates.push(PathBuf::from("../public/Sound"));
+    sound_candidates.push(PathBuf::from("Sound"));
+    sound_candidates.push(PathBuf::from("../Sound"));
+    if let Some(parent) = data_dir.parent() {
+        sound_candidates.push(parent.join("Sound"));
+    }
+    for src in sound_candidates {
+        if src.is_dir() && (src.join("Batalla").is_dir() || src.join("Spotter alert").is_dir()) {
+            copy_dir_recursive(&src, &sound_dir);
+            break;
+        }
     }
 }
 
