@@ -431,8 +431,10 @@ class SpotterEngine {
     };
     this.broadcastState();
 
+    const wSpotter = config.value.widgets?.spotter?.options;
+
     const playStartBeep = () => {
-      const s = cfg?.startSound ?? "1.mp3";
+      const s = wSpotter?.startSound ?? cfg?.startSound ?? "1.mp3";
       if (!s || s === "none") return;
       if (s === "mic_click") {
         if (useRadio) this.playRadioClick(true, volume);
@@ -444,7 +446,7 @@ class SpotterEngine {
     };
 
     const playEndBeep = () => {
-      const s = cfg?.endSound ?? "f1-radio-end.mp3";
+      const s = wSpotter?.endSound ?? cfg?.endSound ?? "f1-radio-end.mp3";
       if (!s || s === "none") return;
       if (s === "mic_click") {
         if (useRadio) this.playRadioClick(false, volume);

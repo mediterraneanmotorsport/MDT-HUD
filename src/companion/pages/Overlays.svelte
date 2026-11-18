@@ -11,6 +11,7 @@
     type PresetThemeId,
   } from "../../lib/config.svelte";
   import { live } from "../../lib/live.svelte";
+  import { spotter } from "../../lib/spotter.svelte";
   import { wheelControl } from "../../lib/wheelControl.svelte";
   import ProfileBar from "../components/ProfileBar.svelte";
   import Toggle from "../components/Toggle.svelte";
@@ -84,6 +85,46 @@
     "mdt-gt3": "font-family: 'Cascadia Mono', 'Consolas', monospace; letter-spacing: 0.04em;",
     "mdt-lmp2": "font-family: 'Franklin Gothic Medium', 'Georgia', serif; letter-spacing: 0.09em;",
   };
+
+  const SPOTTER_ALERT_SOUNDS = [
+    { value: "1.mp3", label: "Tono 1 (1.mp3)" },
+    { value: "2.mp3", label: "Tono 2 (2.mp3)" },
+    { value: "3.mp3", label: "Tono 3 (3.mp3)" },
+    { value: "4.mp3", label: "Tono 4 (4.mp3)" },
+    { value: "5.mp3", label: "Tono 5 (5.mp3)" },
+    { value: "6.mp3", label: "Tono 6 (6.mp3)" },
+    { value: "7.mp3", label: "Tono 7 (7.mp3)" },
+    { value: "8.mp3", label: "Tono 8 (8.mp3)" },
+    { value: "9.mp3", label: "Tono 9 (9.mp3)" },
+    { value: "10.mp3", label: "Tono 10 (10.mp3)" },
+    { value: "11.mp3", label: "Tono 11 (11.mp3)" },
+    { value: "12.mp3", label: "Tono 12 (12.mp3)" },
+    { value: "13.mp3", label: "Tono 13 (13.mp3)" },
+    { value: "14.mp3", label: "Tono 14 (14.mp3)" },
+    { value: "15.mp3", label: "Tono 15 (15.mp3)" },
+    { value: "16.mp3", label: "Tono 16 (16.mp3)" },
+    { value: "17.mp3", label: "Tono 17 (17.mp3)" },
+    { value: "f1-radio-end.mp3", label: "F1 Radio End (f1-radio-end.mp3)" },
+    { value: "mic_click", label: "Pitido sintético walkie-talkie" },
+    { value: "none", label: "Ninguno (Silencioso)" },
+  ];
+
+  function playSpotterTestSound(file?: string) {
+    if (!file || file === "none") return;
+    if (file === "mic_click") {
+      spotter.playMicBeep(true);
+      return;
+    }
+    const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(file)}?t=${Date.now()}`);
+    audio.volume = config.value.spotter?.volume ?? 0.85;
+    audio.play().catch(() => {});
+  }
+
+  function playBattleTestSound() {
+    const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${Date.now()}`);
+    audio.volume = cfg?.options?.soundVolume ?? 0.8;
+    audio.play().catch(() => {});
+  }
 </script>
 
 <div class="mx-auto max-w-6xl p-6">
@@ -453,6 +494,117 @@
                   {/each}
                 </div>
               {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if selectedId === "spotter"}
+        <div class="mt-6 border-t border-line pt-5 text-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-fg flex items-center gap-2">
+                <span>📻 Sonidos de Transmisión de Radio (Team Radio)</span>
+              </h3>
+              <p class="text-xs text-muted">
+                Configura los pitidos y tonos que suenan al abrir y cerrar la comunicación con el spotter o ingeniero.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 grid max-w-xl gap-3">
+            <!-- Sonido al empezar a hablar (Inicio) -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Sonido al empezar a hablar (Inicio)</div>
+                <div class="text-[11px] text-muted">Pitido de radio previo a la locución del spotter</div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <select
+                  class="field py-1 text-xs"
+                  bind:value={cfg.options.startSound}
+                  onchange={saveConfig}
+                >
+                  {#each SPOTTER_ALERT_SOUNDS as snd}
+                    <option value={snd.value}>{snd.label}</option>
+                  {/each}
+                </select>
+                <button
+                  type="button"
+                  class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
+                  onclick={() => playSpotterTestSound(cfg.options.startSound ?? "1.mp3")}
+                  title="Probar sonido de inicio"
+                >
+                  ▶ Probar audio
+                </button>
+              </div>
+            </div>
+
+            <!-- Sonido al terminar de hablar (Fin - Opcional) -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Sonido al terminar de hablar (Fin)</div>
+                <div class="text-[11px] text-muted">Pitido de fin de transmisión (opcional, puede dejarse vacío/ninguno)</div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <select
+                  class="field py-1 text-xs"
+                  bind:value={cfg.options.endSound}
+                  onchange={saveConfig}
+                >
+                  {#each SPOTTER_ALERT_SOUNDS as snd}
+                    <option value={snd.value}>{snd.label}</option>
+                  {/each}
+                </select>
+                <button
+                  type="button"
+                  class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
+                  onclick={() => playSpotterTestSound(cfg.options.endSound ?? "f1-radio-end.mp3")}
+                  title="Probar sonido de finalización"
+                >
+                  ▶ Probar audio
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if selectedId === "battleforpos"}
+        <div class="mt-6 border-t border-line pt-5 text-sm">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-fg flex items-center gap-2">
+                <span>⚔️ Alerta Sonora de Duelo por Posición</span>
+              </h3>
+              <p class="text-xs text-muted">
+                Emite el sonido especial Battle.mp3 cuando entras en lucha directa a menos de 1 segundo de un rival.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+            <div class="min-w-0">
+              <div class="text-xs font-semibold text-fg">Sonido de Batalla (Battle.mp3)</div>
+              <div class="text-[11px] text-muted">Se reproduce al activarse la alerta de batalla en pantalla</div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <Toggle
+                checked={cfg.options.soundAlert ?? true}
+                label="Activar alerta sonora"
+                onchange={(v) => {
+                  cfg.options.soundAlert = v;
+                  saveConfig();
+                }}
+              />
+              <button
+                type="button"
+                class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
+                onclick={playBattleTestSound}
+                title="Probar sonido de batalla"
+              >
+                ⚔️ ▶ Probar audio
+              </button>
             </div>
           </div>
         </div>

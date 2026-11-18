@@ -683,8 +683,6 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showSpeed", label: "Mostrar velocidad en tiempo real de ambos", type: "boolean" },
       { key: "showClassBadge", label: "Mostrar placa de categoría (HY, P2, GT3)", type: "boolean" },
       { key: "sameClassOnly", label: "Solo alertar batallas de la misma categoría", type: "boolean" },
-      { key: "soundAlert", label: "Reproducir sonido de batalla por posición (Battle.mp3)", type: "boolean" },
-      { key: "soundVolume", label: "Volumen del aviso de batalla", type: "number", min: 0.1, max: 1.0, step: 0.05 },
     ],
     optionDefaults: {
       deltaThreshold: 1.0,
@@ -745,6 +743,8 @@ export const WIDGETS: WidgetMeta[] = [
       showEqualizer: true,
       showProfile: true,
       showCategoryBadge: true,
+      startSound: "1.mp3",
+      endSound: "f1-radio-end.mp3",
     },
   },
 ];

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.2.0...v1.2.1) (2026-11-18) - Reubicación de Ajustes de Audio a la Pestaña Overlays
+
+### Improvements
+* **Reubicación de Sonidos de Spotter**: Las opciones para elegir y probar el sonido de inicio y fin de locución se han trasladado a la pestaña **Overlays** dentro de la tarjeta de configuración de **Radio de Spotter (Team radio)**, acompañadas de sus botones de prueba `▶ Probar audio`.
+* **Reubicación de Alerta de Batalla**: La activación y el botón `⚔️ ▶ Probar audio` del sonido `Battle.mp3` se han integrado directamente en la pestaña **Overlays** dentro de la tarjeta de **Duelo por posición (Battle for Pos)**.
+* **Ajustes Limpios**: Eliminados los controles redundantes de la pantalla general de Ajustes.
+
 ## [1.2.0](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.1.5...v1.2.0) (2026-11-18) - Dual Perfiles Simultáneos, Multi-Monitor, Standings WEC y Personalización de Audios
 
 ### Features & Improvements
