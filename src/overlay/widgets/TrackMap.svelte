@@ -64,6 +64,26 @@
   const f = $derived(fit(outline, size, size, 10));
   const path = $derived(pathFrom(f, outline, !!stored));
 
+  // Optional ghost point showing estimated pit-rejoin location on track
+  const pitGhost = $derived.by<{ x: number; y: number } | null>(() => {
+    if (!opts.showPitRejoin || outline.length < 10) return null;
+    const snap = live.snap;
+    const me = snap?.vehicles?.find((v) =>
+      snap.focusedSlot != null ? v.slotId === snap.focusedSlot || v.id === snap.focusedSlot : v.isPlayer,
+    );
+    const trackLen = snap?.session?.trackLength ?? 0;
+    if (!me || trackLen <= 100) return null;
+    const estLap = me.estimatedLapTime > 30 ? me.estimatedLapTime : me.bestLap > 30 ? me.bestLap : 120;
+    const pitLoss = Number(opts.pitLossSec ?? 32);
+    const curFrac = ((me.lapDist % trackLen) + trackLen) % trackLen / trackLen;
+    const ghostFrac = ((curFrac - pitLoss / estLap) % 1 + 1) % 1;
+    const idx = Math.min(outline.length - 1, Math.max(0, Math.floor(ghostFrac * outline.length)));
+    const pt = outline[idx];
+    if (!pt) return null;
+    const [x, y] = project(f, pt[0], pt[1]);
+    return { x, y };
+  });
+
   const cars = $derived(
     (live.snap?.vehicles ?? [])
       .filter((v) => !v.inGarage && Array.isArray(v.pos) && v.pos.length >= 3)
@@ -122,5 +142,11 @@
         />
       {/if}
     {/each}
+    {#if pitGhost}
+      <g transform="translate({pitGhost.x}, {pitGhost.y})">
+        <circle r="7" fill="rgb(6 182 212 / 0.25)" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="3 2" />
+        <text y="-10" text-anchor="middle" fill="#22d3ee" font-size="9" font-weight="800" font-family="monospace">PIT</text>
+      </g>
+    {/if}
   </svg>
 </div>

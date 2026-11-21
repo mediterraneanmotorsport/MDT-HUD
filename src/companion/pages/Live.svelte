@@ -21,7 +21,9 @@
   import CarLogo from "../../overlay/CarLogo.svelte";
   import TrackHero from "../../lib/TrackHero.svelte";
   import LapTable from "../components/LapTable.svelte";
+  import RaceDebriefCard from "../components/RaceDebriefCard.svelte";
   import Toggle from "../components/Toggle.svelte";
+  import { toasts } from "../../lib/toasts.svelte";
   import { nav } from "../nav.svelte";
 
   const snap = $derived(live.snap);
@@ -72,6 +74,7 @@
     refresh(e.payload.sessionId);
     if (e.payload.personalBest) {
       toast = `Nuevo récord personal: ${lapTime(e.payload.lapTime)}`;
+      toasts.push(`🏆 Nuevo Récord Personal: ${lapTime(e.payload.lapTime)}`, { desc: e.payload.track, kind: "success", durationMs: 5000 });
       setTimeout(() => (toast = null), 6000);
     }
   });
@@ -136,7 +139,39 @@
     {#if toast}
       <div class="mt-3 inline-block rounded-full bg-best/15 px-3 py-1 text-sm font-semibold text-best">{toast}</div>
     {/if}
+
+    <!-- #1 Command Center Quick-Action Bar (1-click access + live LMU connection pulse) -->
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+      <div class="flex items-center gap-2 text-xs">
+        <span class={["h-2.5 w-2.5 rounded-full", snap?.source === "lmu" ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : snap?.source === "demo" ? "bg-amber-400" : "bg-white/30"]}></span>
+        <span class="font-bold text-white">
+          {snap?.source === "lmu" ? `LMU Conectado · ${snap.session.track}` : snap?.source === "demo" ? "Modo Demo Activo" : "Esperando a Le Mans Ultimate"}
+        </span>
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5 text-xs">
+        <button type="button" class="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 font-bold text-emerald-300 hover:bg-emerald-500/25 cursor-pointer" onclick={() => openMobilePreview("#pitwall")}>
+          📡 Abrir Pit Wall
+        </button>
+        <button type="button" class="rounded-lg border border-sky-400/40 bg-sky-500/15 px-2.5 py-1 font-bold text-sky-300 hover:bg-sky-500/25 cursor-pointer" onclick={() => openMobilePreview("#mobile")}>
+          📱 DDU Móvil
+        </button>
+        <button type="button" class="rounded-lg border border-fuchsia-400/40 bg-fuchsia-500/15 px-2.5 py-1 font-bold text-fuchsia-300 hover:bg-fuchsia-500/25 cursor-pointer" onclick={() => (nav.page = "dashstudio")}>
+          🎨 Dash Studio
+        </button>
+        <button type="button" class="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1 font-bold text-amber-300 hover:bg-amber-500/25 cursor-pointer" onclick={() => api.setEditMode(!live.status.editMode)}>
+          ✏️ {live.status.editMode ? "Salir Edición" : "Editar Overlay"}
+        </button>
+        <button type="button" class="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 font-bold text-white/85 hover:bg-white/20 cursor-pointer" onclick={() => api.setDemoMode(!live.status.demo)}>
+          🎮 {live.status.demo ? "Parar Demo" : "Probar Demo"}
+        </button>
+      </div>
+    </div>
   </section>
+
+  <!-- #13 Race Debrief Card de la última sesión registrada -->
+  {#if session && laps.length > 0}
+    <RaceDebriefCard {session} {laps} {units} />
+  {/if}
 
   <div class="grid gap-4 lg:grid-cols-3">
     <section class="card overflow-hidden lg:col-span-2">

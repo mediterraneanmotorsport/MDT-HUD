@@ -559,3 +559,242 @@
   background: var(--color-surface-3);
   border: 1px solid var(--color-line);
 }
+
+/* =========================================================================
+   TRANSICIONES ANIMADAS TV BROADCAST & OVERLAY (MDT-HUD)
+   ========================================================================= */
+
+/* 1. Team Radio: entrada cinematográfica slide + blur + barrido luminoso */
+@keyframes mdt-radio-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.95);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes mdt-radio-subtitle-unfold {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+    clip-path: inset(0 0 100% 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes mdt-shimmer-sweep {
+  0% {
+    transform: translateX(-140%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(240%) skewX(-20deg);
+  }
+}
+.mdt-anim-radio-enter {
+  animation: mdt-radio-enter 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mdt-anim-radio-subtitle {
+  animation: mdt-radio-subtitle-unfold 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+.mdt-shimmer-overlay {
+  position: relative;
+  overflow: hidden;
+}
+.mdt-shimmer-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+  pointer-events: none;
+  animation: mdt-shimmer-sweep 1.35s cubic-bezier(0.22, 1, 0.36, 1) 0.1s 1 both;
+}
+.mdt-shimmer-loop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  pointer-events: none;
+  animation: mdt-shimmer-sweep 2.2s ease-in-out infinite;
+}
+
+/* 2. Battle for Pos: split-wipe lateral y pulso de tensión cerrada (<0.35s) */
+@keyframes mdt-battle-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-34px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes mdt-battle-right {
+  0% {
+    opacity: 0;
+    transform: translateX(34px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes mdt-battle-tight-pulse {
+  0%, 100% {
+    box-shadow: 0 0 18px rgb(239 68 68 / 0.55), inset 0 0 12px rgb(239 68 68 / 0.2);
+    border-color: rgb(239 68 68 / 0.85);
+  }
+  50% {
+    box-shadow: 0 0 32px rgb(245 158 11 / 0.85), inset 0 0 20px rgb(245 158 11 / 0.32);
+    border-color: rgb(251 191 36 / 0.95);
+  }
+}
+.mdt-anim-battle-left {
+  animation: mdt-battle-left 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mdt-anim-battle-right {
+  animation: mdt-battle-right 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mdt-anim-battle-tight {
+  animation: mdt-battle-tight-pulse 0.85s ease-in-out infinite;
+}
+
+/* 3. Banderas: expansión desde el centro + flash verde */
+@keyframes mdt-flag-expand {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.25) scaleY(0.85);
+  }
+  65% {
+    opacity: 1;
+    transform: scaleX(1.03) scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1) scaleY(1);
+  }
+}
+.mdt-anim-flag-expand {
+  transform-origin: center;
+  animation: mdt-flag-expand 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 4. Sectores y Vuelta Rápida: pop elástico + destello morado/verde */
+@keyframes mdt-sector-pop {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.08);
+  }
+  60% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes mdt-flash-purple {
+  0% {
+    box-shadow: 0 0 0 0 rgb(184 92 255 / 0.9), inset 0 0 22px rgb(184 92 255 / 0.45);
+    border-color: #c084fc;
+  }
+  100% {
+    box-shadow: 0 0 24px 2px rgb(184 92 255 / 0.25), inset 0 0 0 rgb(184 92 255 / 0);
+  }
+}
+@keyframes mdt-flash-green {
+  0% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0.9), inset 0 0 22px rgb(34 197 94 / 0.45);
+    border-color: #4ade80;
+  }
+  100% {
+    box-shadow: 0 0 24px 2px rgb(34 197 94 / 0.25), inset 0 0 0 rgb(34 197 94 / 0);
+  }
+}
+.mdt-anim-sector-purple {
+  animation: mdt-sector-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1), mdt-flash-purple 1.8s ease-out both;
+}
+.mdt-anim-sector-green {
+  animation: mdt-sector-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1), mdt-flash-green 1.8s ease-out both;
+}
+
+/* 5. Radar: entrada suave + pulso radial en peligro rojo */
+@keyframes mdt-radar-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes mdt-radar-arc-pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgb(255 70 70 / 0.9));
+  }
+  50% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 2px rgb(255 70 70 / 0.35));
+  }
+}
+.mdt-anim-radar-in {
+  animation: mdt-radar-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mdt-anim-radar-arc-danger {
+  animation: mdt-radar-arc-pulse 0.48s ease-in-out infinite;
+}
+
+/* 6. Cambio de Perfil: entrada escalonada (staggered fade + slide) */
+@keyframes mdt-profile-stagger {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.mdt-anim-profile-stagger {
+  animation: mdt-profile-stagger 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+
+/* 7. Boxes en Standings: etiqueta deslizante PIT + destello de salida */
+@keyframes mdt-pit-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(14px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+@keyframes mdt-pit-exit-flash {
+  0% {
+    background-color: rgb(6 182 212 / 0.42);
+    box-shadow: 0 0 14px rgb(6 182 212 / 0.65);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+.mdt-anim-pit-badge {
+  animation: mdt-pit-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.mdt-anim-pit-exit {
+  animation: mdt-pit-exit-flash 1.6s ease-out both;
+}

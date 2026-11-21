@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../../lib/api";
-  import { config, createMdtTemplateProfile, DEFAULT_SHORTCUTS, HUD_THEMES, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
+  import { config, createMdtTemplateProfile, DEFAULT_SHORTCUTS, exportFullProfileJson, HUD_THEMES, importFullProfileJson, saveConfig, switchProfile, toggleBroadcastMode, type HudTheme } from "../../lib/config.svelte";
   import type { MonitorInfo } from "../../lib/types";
   import { live } from "../../lib/live.svelte";
   import { SPOTTER_EVENTS, spotter } from "../../lib/spotter.svelte";
   import { REPO_URL, starOnGitHub } from "../../lib/star.svelte";
   import { checkForUpdate, downloadLatestRelease, installUpdate, updater } from "../../lib/updater.svelte";
   import { testDiscordWebhook } from "../../lib/discord";
+  import { toasts } from "../../lib/toasts.svelte";
+  import { wheelControl, type WheelGlobalAction } from "../../lib/wheelControl.svelte";
   import Toggle from "../components/Toggle.svelte";
   import { remoteStream } from "../../lib/remoteStream.svelte";
 
@@ -15,6 +17,14 @@
   const sp = $derived(config.value.spotter);
   const dc = $derived(config.value.discord);
   const bc = $derived(config.value.broadcast);
+
+  let autoStartEnabled = $state(false);
+  const WHEEL_GLOBAL_ACTIONS: { id: WheelGlobalAction; label: string; desc: string }[] = [
+    { id: "toggleOverlay", label: "Mostrar / Ocultar Overlay (Modo Pánico)", desc: "Oculta o recupera todo el HUD al vuelo desde el volante" },
+    { id: "toggleSpotter", label: "Silenciar / Activar Spotter", desc: "Activa o silencia las voces de radio sin soltar el volante" },
+    { id: "nextProfile", label: "Cambiar Perfil de Overlay", desc: "Alterna entre tus perfiles guardados (Competición, Broadcast, etc.)" },
+    { id: "markLapNote", label: "Marcar Timestamp de Telemetría", desc: "Guarda la hora exacta para revisar un incidente o curva luego" },
+  ];
 
   const sc = $derived.by(() => {
     if (!g.shortcuts) {
@@ -33,10 +43,45 @@
 
   onMount(() => {
     void spotter.refreshManifest();
+    void api.getAutoStart().then((v) => (autoStartEnabled = v));
   });
+
+  async function toggleAutoStart(v: boolean) {
+    autoStartEnabled = await api.setAutoStart(v);
+    toasts.push(autoStartEnabled ? "Inicio automático con Windows activado" : "Inicio automático desactivado", { kind: "success" });
+  }
 
   let testingDiscord = $state(false);
   let discordMsg = $state("");
+  let profileImportInput = $state<HTMLInputElement | null>(null);
+  let profileMsg = $state("");
+
+  function handleExportProfile() {
+    const json = exportFullProfileJson();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mdt-hud-setup-${new Date().toISOString().slice(0, 10)}.mdtprofile`;
+    a.click();
+    URL.revokeObjectURL(url);
+    profileMsg = "✓ Archivo .mdtprofile exportado con todos tus perfiles y dashboards.";
+    setTimeout(() => (profileMsg = ""), 4000);
+  }
+
+  function handleImportProfile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = importFullProfileJson(String(reader.result));
+      profileMsg = res.message;
+      setTimeout(() => (profileMsg = ""), 4500);
+    };
+    reader.readAsText(file);
+    input.value = "";
+  }
 
   async function handleTestDiscord() {
     if (testingDiscord) return;
@@ -406,6 +451,65 @@
   </div>
 
   <!-- =========================================================================
+       MODO HUD LIMPIO / PÁNICO + EXPORTAR / IMPORTAR PERFIL COMPLETO (.mdtprofile)
+       ========================================================================= -->
+  <div class="mb-6 card overflow-hidden text-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-3">
+      <div class="flex items-center gap-2.5">
+        <span class="text-base">📦</span>
+        <div>
+          <div class="font-semibold text-fg">Modo HUD Limpio y Copia de Seguridad (.mdtprofile)</div>
+          <div class="text-xs text-muted">
+            Oculta temporalmente los widgets secundarios en carrera y guarda/comparte tu configuración completa en un solo archivo.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divide-y divide-line">
+      <div class="flex flex-wrap items-center justify-between gap-4 p-4">
+        <div>
+          <div class="font-medium text-fg">🛡️ Tecla Modo "HUD Limpio / Pánico"</div>
+          <div class="text-xs text-muted">
+            Pulsa esta tecla en pista para dejar solo lo esencial (Radar, Dashboard/Marcha, Banderas y Spotter). Pulsa de nuevo para restaurar todo.
+          </div>
+        </div>
+        <input
+          type="text"
+          class="field w-32 text-center font-mono text-xs font-bold"
+          value={g.panicModeKey || "F10"}
+          onkeydown={(e) => {
+            e.preventDefault();
+            g.panicModeKey = e.key === "Escape" || e.key === "Backspace" ? "F10" : e.key;
+            saveConfig();
+          }}
+        />
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-4 p-4">
+        <div>
+          <div class="font-medium text-fg">Exportar / Importar configuración completa</div>
+          <div class="text-xs text-muted">
+            Incluye todos tus perfiles de HUD, posiciones, tamaños, tema visual, spotter y todos tus diseños de Dash Studio.
+          </div>
+          {#if profileMsg}
+            <div class="mt-1.5 text-xs font-semibold text-accent">{profileMsg}</div>
+          {/if}
+        </div>
+        <div class="flex items-center gap-2">
+          <input bind:this={profileImportInput} type="file" accept=".mdtprofile,.json" class="hidden" onchange={handleImportProfile} />
+          <button type="button" class="btn btn-primary px-3 py-1.5 text-xs" onclick={handleExportProfile}>
+            ⬇️ Exportar .mdtprofile
+          </button>
+          <button type="button" class="btn px-3 py-1.5 text-xs" onclick={() => profileImportInput?.click()}>
+            ⬆️ Importar .mdtprofile
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
        ATAJOS DE TECLADO GLOBALES (CONFIGURABLES)
        ========================================================================= -->
   <div class="mb-6 card overflow-hidden text-sm">
@@ -662,6 +766,49 @@
     </div>
     <div class="flex items-center justify-between p-4">
       <div>
+        <div class="font-medium">Transición animada al cambiar de perfil</div>
+        <div class="text-muted">Efecto escalonado suave (estilo TV) al rotar perfiles de HUD o alternar Modo Broadcast.</div>
+      </div>
+      <Toggle checked={g.animateProfileSwitch ?? true} label="Transición al cambiar perfil" onchange={(v) => { g.animateProfileSwitch = v; saveConfig(); }} />
+    </div>
+    <div class="flex items-center justify-between p-4">
+      <div>
+        <div class="font-medium">Guías magnéticas de alineación (Smart Snap)</div>
+        <div class="text-muted">Muestra líneas guía cian e imanta los widgets entre sí y con el centro de pantalla al editar.</div>
+      </div>
+      <Toggle checked={g.smartGuides ?? true} label="Guías magnéticas" onchange={(v) => { g.smartGuides = v; saveConfig(); }} />
+    </div>
+    <div class="flex flex-col gap-3 p-4">
+      <div class="flex items-center justify-between gap-6">
+        <div>
+          <div class="font-medium">🌙 Modo Noche automático (Baja luminosidad)</div>
+          <div class="text-muted">Atenúa automáticamente la opacidad del HUD cuando anochece en circuito (20:30 – 06:30 en juego).</div>
+        </div>
+        <Toggle checked={Boolean(g.autoNightDim)} label="Modo Noche automático" onchange={(v) => { g.autoNightDim = v; saveConfig(); }} />
+      </div>
+      {#if g.autoNightDim}
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface-2/50 px-3 py-2 text-xs">
+          <span class="text-muted font-medium">Opacidad durante la noche</span>
+          <div class="flex items-center gap-3">
+            <input
+              type="range"
+              min="35"
+              max="95"
+              step="5"
+              value={Math.round((g.nightOpacity ?? 0.68) * 100)}
+              oninput={(e) => {
+                g.nightOpacity = Number(e.currentTarget.value) / 100;
+                saveConfig();
+              }}
+              class="accent-accent w-32 cursor-pointer"
+            />
+            <span class="w-10 text-right font-mono font-bold text-fg">{Math.round((g.nightOpacity ?? 0.68) * 100)}%</span>
+          </div>
+        </div>
+      {/if}
+    </div>
+    <div class="flex items-center justify-between p-4">
+      <div>
         <div class="font-medium">Ocultar overlay cuando el juego no está en primer plano</div>
         <div class="text-muted">Oculta los widgets al hacer Alt+Tab a otra ventana.</div>
       </div>
@@ -687,6 +834,73 @@
         <span class="w-12 text-right tnum">{g.snap} px</span>
       </div>
     </div>
+    <div class="flex items-center justify-between gap-6 p-4">
+      <div>
+        <div class="font-medium">🚀 Iniciar automáticamente con Windows</div>
+        <div class="text-muted">Arranca MDT-HUD al encender el PC para que el overlay y servidor móvil estén siempre listos.</div>
+      </div>
+      <Toggle checked={autoStartEnabled} label="Iniciar con Windows" onchange={toggleAutoStart} />
+    </div>
+    <div class="flex items-center justify-between gap-6 p-4">
+      <div>
+        <div class="font-medium">📥 Minimizar a la bandeja del sistema al cerrar</div>
+        <div class="text-muted">Al pulsar la X, la app queda en segundo plano junto al reloj de Windows (clic derecho en el icono para salir).</div>
+      </div>
+      <Toggle checked={Boolean(g.minimizeToTray)} label="Minimizar a bandeja" onchange={(v) => { g.minimizeToTray = v; saveConfig(); }} />
+    </div>
+
+    <!-- #19 Botones del Volante para Acciones Globales -->
+    <div class="p-4">
+      <div class="mb-1 flex items-center justify-between">
+        <div>
+          <div class="font-medium">🎮 Botones del Volante para Acciones Globales</div>
+          <div class="text-muted">Asigna botones físicos de tu volante (o teclado) para controlar MDT-HUD mientras conduces en pantalla completa.</div>
+        </div>
+        {#if wheelControl.learning && wheelControl.learning !== "next" && wheelControl.learning !== "prev"}
+          <button type="button" class="btn text-xs text-warn" onclick={() => wheelControl.cancelLearning()}>
+            Cancelar escucha...
+          </button>
+        {/if}
+      </div>
+      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+        {#each WHEEL_GLOBAL_ACTIONS as act (act.id)}
+          {@const isLearning = wheelControl.learning === act.id}
+          {@const currentBind = wheelControl.actionBinds[act.id]}
+          <div class="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface-2/60 p-2.5 text-xs">
+            <div class="min-w-0">
+              <div class="font-semibold text-fg">{act.label}</div>
+              <div class="truncate text-[11px] text-muted">{wheelControl.formatBinding(currentBind)}</div>
+            </div>
+            <div class="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                class={["btn px-2 py-1 text-[11px] cursor-pointer", isLearning ? "bg-warn text-black animate-pulse font-bold" : "btn-primary"]}
+                onclick={() => (isLearning ? wheelControl.cancelLearning() : wheelControl.startLearning(act.id))}
+              >
+                {isLearning ? "Pulsa botón..." : "Asignar"}
+              </button>
+              {#if currentBind}
+                <button
+                  type="button"
+                  class="rounded bg-white/10 px-1.5 py-1 text-[10px] text-muted hover:text-white cursor-pointer"
+                  title="Quitar asignación"
+                  onclick={() => wheelControl.clearActionBind(act.id)}
+                >✕</button>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+      {#if wheelControl.telemetryMarks.length > 0}
+        <div class="mt-2.5 rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-[11px]">
+          <span class="font-bold text-accent-hi">📌 Últimas marcas de volante:</span>
+          <span class="ml-2 font-mono text-muted">
+            {wheelControl.telemetryMarks.slice(0, 5).map((m) => m.time).join(" · ")}
+          </span>
+        </div>
+      {/if}
+    </div>
+
     <div class="p-4">
       <div class="font-medium">Carpeta de datos</div>
       <div class="mt-1 font-mono text-xs break-all text-muted">{live.status.dataDir}</div>

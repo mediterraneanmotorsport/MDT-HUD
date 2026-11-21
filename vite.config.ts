@@ -25,7 +25,9 @@ function getLanIps(): string[] {
 
 function spotterAudioPlugin(): Plugin {
   const appDataRoot = process.env.APPDATA ? path.join(process.env.APPDATA, "MDT-HUD", "Perfil") : "";
+  const diskConfigPath = process.env.APPDATA ? path.join(process.env.APPDATA, "MDT-HUD", "config.json") : "";
   const roots = [appDataRoot, path.resolve("Perfil"), path.resolve("public", "Perfil")].filter(Boolean);
+  let lastDiskConfigMtime = 0;
   let mobileState: {
     page: number;
     pageSeq: number;
@@ -33,6 +35,7 @@ function spotterAudioPlugin(): Plugin {
     mobileTheme: string | null;
     autoPopups: boolean;
     configSeq: number;
+    appConfig: unknown;
     snap: unknown;
   } = {
     page: 0,
@@ -41,8 +44,23 @@ function spotterAudioPlugin(): Plugin {
     mobileTheme: null,
     autoPopups: false,
     configSeq: 0,
+    appConfig: null,
     snap: null,
   };
+
+  function syncDiskConfig() {
+    if (!diskConfigPath) return;
+    try {
+      const stat = fs.statSync(diskConfigPath);
+      if (stat.mtimeMs !== lastDiskConfigMtime) {
+        lastDiskConfigMtime = stat.mtimeMs;
+        mobileState.appConfig = JSON.parse(fs.readFileSync(diskConfigPath, "utf8"));
+        mobileState.configSeq += 1;
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   function scanManifest() {
     const manifest: Record<string, Record<string, string[]>> = {};
@@ -114,71 +132,6 @@ function spotterAudioPlugin(): Plugin {
           res.end(JSON.stringify(scanManifest()));
           return;
         }
-        if (cleanUrl === "/__mobile_info" || cleanUrl === "/__mobile_state") {
-          res.setHeader("Access-Control-Allow-Origin", "*");
-          res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-          res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-          if (req.method === "OPTIONS") {
-            res.statusCode = 204;
-            res.end();
-            return;
-          }
-        }
-        if (cleanUrl === "/__mobile_info") {
-          const ips = getLanIps();
-          res.setHeader("Content-Type", "application/json");
-          res.end(
-            JSON.stringify({
-              ips,
-              port: 1420,
-              url: `http://${ips[0]}:1420/#mobile`,
-            }),
-          );
-          return;
-        }
-        if (cleanUrl === "/__mobile_state") {
-          res.setHeader("Content-Type", "application/json");
-          if (req.method === "POST") {
-            let body = "";
-            req.on("data", (chunk) => (body += chunk));
-            req.on("end", () => {
-              try {
-                const parsed = JSON.parse(body);
-                if (typeof parsed.page === "number") {
-                  mobileState.page = parsed.page;
-                  mobileState.pageSeq += 1;
-                }
-                if (Array.isArray(parsed.pages)) {
-                  mobileState.pages = parsed.pages;
-                  mobileState.configSeq += 1;
-                }
-                if (typeof parsed.mobileTheme === "string") {
-                  mobileState.mobileTheme = parsed.mobileTheme;
-                  mobileState.configSeq += 1;
-                }
-                if (typeof parsed.autoPopups === "boolean") {
-                  mobileState.autoPopups = parsed.autoPopups;
-                  mobileState.configSeq += 1;
-                }
-                if (parsed.snap !== undefined) {
-                  mobileState.snap = parsed.snap;
-                }
-              } catch {
-                // ignore malformed JSON
-              }
-              res.end(
-                JSON.stringify({
-                  page: mobileState.page,
-                  pageSeq: mobileState.pageSeq,
-                  configSeq: mobileState.configSeq,
-                }),
-              );
-            });
-            return;
-          }
-          res.end(JSON.stringify(mobileState));
-          return;
-        }
         if (cleanUrl.startsWith("/Perfil/")) {
           const rel = decodeURIComponent(cleanUrl.slice("/Perfil/".length));
           for (const root of roots) {
@@ -218,6 +171,32 @@ export default defineConfig({
         target: "http://127.0.0.1:6397",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/lmu-api/, ""),
+      },
+      "/__mobile_stream": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+        timeout: 0,
+        proxyTimeout: 0,
+      },
+      "/__mobile_snap": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+      },
+      "/__mobile_state": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+      },
+      "/__mobile_info": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+      },
+      "/__mobile_track_map": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+      },
+      "/__mobile_focus": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
       },
     },
     hmr: host

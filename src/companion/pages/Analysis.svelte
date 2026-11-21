@@ -172,25 +172,54 @@
     return { d: data.d[i], a: row(data.a), b: data.b ? row(data.b) : null, delta: data.delta?.[i] ?? null };
   });
 
-  /** Pair each braking zone of A with B's zone that starts within 80 m. */
+  /** Pair each braking zone of A with B's zone that starts within 80 m, plus throttle application diff (#11). */
   const corners = $derived(
     zonesA.map((za, k) => {
       const da = data!.d[za.start];
       const zb = zonesB.find((z) => Math.abs(data!.d[z.start] - da) < 80) ?? null;
+      const findThrottleIdx = (trace: Aligned["a"], fromIdx: number) => {
+        const end = Math.min(trace.throttle.length - 1, fromIdx + 80);
+        for (let i = fromIdx; i <= end; i++) {
+          if (trace.throttle[i] >= 0.45) return i;
+        }
+        return fromIdx;
+      };
+      const thA = data!.d[findThrottleIdx(data!.a, za.end)];
+      const thB = zb && data!.b ? data!.d[findThrottleIdx(data!.b, zb.end)] : null;
+      const brakeDiff = zb ? data!.d[zb.start] - da : null;
+      // throttleDiff > 0 means A gets on throttle later than B
+      const throttleDiff = thB != null ? thA - thB : null;
+      const deltaGain =
+        data!.delta && zb
+          ? data!.delta[Math.min(data!.d.length - 1, Math.max(za.end, zb.end) + 50)] - data!.delta[Math.max(0, Math.min(za.start, zb.start) - 25)]
+          : null;
+      const hints: string[] = [];
+      if (brakeDiff != null && Math.abs(brakeDiff) >= 3) {
+        hints.push(`frenas ${Math.abs(Math.round(brakeDiff))}m ${brakeDiff > 0 ? "antes" : "después"}`);
+      }
+      if (throttleDiff != null && Math.abs(throttleDiff) >= 3) {
+        hints.push(`aceleras ${Math.abs(Math.round(throttleDiff))}m ${throttleDiff > 0 ? "más tarde" : "antes"}`);
+      }
       return {
         n: k + 1,
         za,
         zb,
-        // Metres; positive means A starts braking before B.
-        brakeDiff: zb ? data!.d[zb.start] - da : null,
+        brakeDiff,
+        throttleDiff,
         minA: toSpeed(za.minSpeed, units),
         minB: zb ? toSpeed(zb.minSpeed, units) : null,
-        deltaGain:
-          data!.delta && zb
-            ? data!.delta[Math.min(data!.d.length - 1, Math.max(za.end, zb.end) + 50)] - data!.delta[Math.max(0, Math.min(za.start, zb.start) - 25)]
-            : null,
+        deltaGain,
+        hint: hints.join(" · "),
       };
     }),
+  );
+
+  // #11 Top 3 biggest time-loss corners for quick coaching
+  const topLossCorners = $derived(
+    corners
+      .filter((c) => c.deltaGain != null && c.deltaGain > 0.015)
+      .sort((a, b) => (b.deltaGain ?? 0) - (a.deltaGain ?? 0))
+      .slice(0, 3),
   );
 
   function lapLabel(l: LapRecord) {
@@ -347,36 +376,66 @@
     </div>
 
     {#if corners.length}
-      <h2 class="mt-6 mb-2 section-title">Zonas de frenada</h2>
+      <!-- #11 Coaching Summary: Top 3 Corners Where Time Is Lost -->
+      {#if topLossCorners.length > 0}
+        <div class="mt-6 rounded-xl border border-amber-400/35 bg-amber-950/15 p-4">
+          <div class="mb-2 flex items-center justify-between">
+            <span class="font-display text-xs font-black tracking-wider text-amber-300 uppercase">🎯 DÓNDE PIERDES MÁS TIEMPO (CURVA A CURVA vs VUELTA B)</span>
+            <span class="text-[11px] text-muted">Haz clic en una curva para inspeccionarla</span>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-3">
+            {#each topLossCorners as tc (tc.n)}
+              <button
+                type="button"
+                class="flex flex-col items-start rounded-lg border border-white/10 bg-black/35 p-2.5 text-left transition hover:border-amber-400 cursor-pointer"
+                onclick={() => (cursorIdx = tc.za.start)}
+              >
+                <div class="flex w-full items-center justify-between">
+                  <span class="font-display text-sm font-black text-white">Curva {tc.n}</span>
+                  <span class="font-mono text-xs font-black text-bad">+{tc.deltaGain?.toFixed(3)}s</span>
+                </div>
+                <div class="mt-1 text-[11px] text-amber-200/85">
+                  {tc.hint || `Vel. mín ${Math.round(tc.minA)} vs ${Math.round(tc.minB ?? tc.minA)} ${speedUnit(units)}`}
+                </div>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <h2 class="mt-6 mb-2 section-title">Comparador Curva a Curva (Frenada y Aceleración)</h2>
       <div class="overflow-hidden rounded-lg border border-line">
         <table class="w-full text-sm tnum">
           <thead class="bg-surface-2 text-left text-xs text-muted">
             <tr>
-              <th class="px-3 py-2 font-medium">#</th>
-              <th class="px-3 py-2 font-medium">Punto frenada A</th>
-              <th class="px-3 py-2 font-medium">vs B</th>
-              <th class="px-3 py-2 font-medium">Vel. entrada A</th>
-              <th class="px-3 py-2 font-medium">Vel. mín A</th>
-              <th class="px-3 py-2 font-medium">Vel. mín B</th>
+              <th class="px-3 py-2 font-medium">Curva</th>
+              <th class="px-3 py-2 font-medium">Frenada A</th>
+              <th class="px-3 py-2 font-medium">Frenada vs B</th>
+              <th class="px-3 py-2 font-medium">Aceleración vs B</th>
+              <th class="px-3 py-2 font-medium">Vel. mín A / B</th>
               <th class="px-3 py-2 font-medium">Tiempo en zona</th>
             </tr>
           </thead>
           <tbody>
             {#each corners as c (c.n)}
               <tr class="cursor-pointer border-t border-line hover:bg-surface-2" onclick={() => (cursorIdx = c.za.start)}>
-                <td class="px-3 py-1.5 font-semibold">{c.n}</td>
+                <td class="px-3 py-1.5 font-semibold">C{c.n}</td>
                 <td class="px-3 py-1.5">{Math.round(data.d[c.za.start])} m</td>
                 <td class="px-3 py-1.5">
                   {#if c.brakeDiff != null}
-                    <!-- brakeDiff > 0: B brakes further down the road, i.e. A brakes earlier. -->
                     <span class={c.brakeDiff > 0 ? "text-warn" : "text-good"}>
                       {Math.abs(Math.round(c.brakeDiff))} m {c.brakeDiff > 0 ? "antes" : "después"}
                     </span>
                   {:else}–{/if}
                 </td>
-                <td class="px-3 py-1.5">{Math.round(toSpeed(c.za.entrySpeed, units))}</td>
-                <td class="px-3 py-1.5">{Math.round(c.minA)}</td>
-                <td class="px-3 py-1.5">{c.minB != null ? Math.round(c.minB) : "–"}</td>
+                <td class="px-3 py-1.5">
+                  {#if c.throttleDiff != null}
+                    <span class={c.throttleDiff > 0 ? "text-warn" : "text-good"}>
+                      {Math.abs(Math.round(c.throttleDiff))} m {c.throttleDiff > 0 ? "más tarde" : "antes"}
+                    </span>
+                  {:else}–{/if}
+                </td>
+                <td class="px-3 py-1.5">{Math.round(c.minA)} / {c.minB != null ? Math.round(c.minB) : "–"}</td>
                 <td class="px-3 py-1.5">
                   {#if c.deltaGain != null}
                     <span class={c.deltaGain > 0 ? "text-bad" : "text-good"}>{fmtDelta(c.deltaGain)}</span>

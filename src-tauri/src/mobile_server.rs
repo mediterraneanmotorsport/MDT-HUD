@@ -330,6 +330,27 @@ pub fn spawn(app: AppHandle, relay: Arc<Mutex<MobileRelayState>>) {
         })
         .ok();
 
+    // Always bind a local loopback relay on 127.0.0.1:1422 so Vite dev server (port 1420) can proxy
+    // /__mobile_stream and /__mobile_state directly to Rust's native 30Hz telemetry thread (never throttled by WebView2).
+    {
+        let app_dev = app.clone();
+        let relay_dev = relay.clone();
+        thread::Builder::new()
+            .name("mobile-http-local".into())
+            .spawn(move || {
+                if let Ok(listener) = TcpListener::bind("127.0.0.1:1422") {
+                    for stream in listener.incoming().flatten() {
+                        let app = app_dev.clone();
+                        let relay = relay_dev.clone();
+                        thread::spawn(move || {
+                            let _ = handle_client(stream, &app, &relay);
+                        });
+                    }
+                }
+            })
+            .ok();
+    }
+
     thread::Builder::new()
         .name("mobile-http".into())
         .spawn(move || {
@@ -483,16 +504,111 @@ fn handle_client(
         return send_response(&mut stream, "200 OK", "application/json", b"{\"ok\":true}");
     }
 
+    if clean_path == "/__mobile_snap" {
+        let _ = stream.set_nodelay(true);
+        let state = app.state::<AppState>();
+
+        let mut client_cfg_seq: Option<u64> = None;
+        for kv in query_str.split('&') {
+            if let Some((k, v)) = kv.split_once('=') {
+                if k == "cfgSeq" {
+                    client_cfg_seq = v.parse::<u64>().ok();
+                }
+            }
+        }
+
+        let live_snap = state.shared.latest.read().ok().map(|s| s.clone());
+        let demo_on = state.shared.demo.load(Ordering::Acquire);
+
+        let mut st = relay.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Check if disk config.json was updated (immediately if not yet loaded, else at most every 300ms)
+        if st.app_config.is_none() || st.last_live_change.elapsed() >= Duration::from_millis(300) {
+            st.last_live_change = Instant::now();
+            if let Ok(meta) = std::fs::metadata(&state.config_path) {
+                if let Ok(mtime) = meta.modified() {
+                    if st.app_config_mtime != Some(mtime) {
+                        if let Ok(text) = std::fs::read_to_string(&state.config_path) {
+                            if let Ok(val) = serde_json::from_str::<Value>(&text) {
+                                if st.mobile_theme.is_none() {
+                                    if let Some(t) = val.pointer("/general/theme").and_then(Value::as_str) {
+                                        if t != "custom" {
+                                            st.mobile_theme = Some(t.to_string());
+                                        }
+                                    }
+                                }
+                                st.app_config = Some(val);
+                                st.app_config_mtime = Some(mtime);
+                                st.config_seq += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let is_pushed_fresh = st.pushed_at.map_or(false, |t| t.elapsed() < Duration::from_millis(2000));
+        let pushed = if is_pushed_fresh { st.pushed_snap.clone() } else { None };
+        let page = st.page;
+        let page_seq = st.page_seq;
+        let pages = st.pages.clone();
+        let mobile_theme = st.mobile_theme.clone();
+        let auto_popups = st.auto_popups;
+        let config_seq = st.config_seq;
+        let include_config = client_cfg_seq != Some(config_seq);
+        let app_config = if include_config { st.app_config.clone() } else { None };
+        drop(st);
+
+        let final_snap = if let Some(ref s) = live_snap {
+            if s.player.is_some() {
+                serde_json::to_value(s).ok()
+            } else if pushed.is_some() {
+                pushed
+            } else if demo_on {
+                let mut guard = state.preview.lock().unwrap_or_else(|e| e.into_inner());
+                let sim = guard.get_or_insert_with(|| PreviewSim::new(state.db.clone()));
+                serde_json::to_value(sim.next()).ok()
+            } else {
+                None
+            }
+        } else if pushed.is_some() {
+            pushed
+        } else if demo_on {
+            let mut guard = state.preview.lock().unwrap_or_else(|e| e.into_inner());
+            let sim = guard.get_or_insert_with(|| PreviewSim::new(state.db.clone()));
+            serde_json::to_value(sim.next()).ok()
+        } else {
+            None
+        };
+
+        let mut payload = json!({
+            "page": page,
+            "pageSeq": page_seq,
+            "pages": pages,
+            "mobileTheme": mobile_theme,
+            "autoPopups": auto_popups,
+            "configSeq": config_seq,
+            "snap": final_snap,
+        });
+        if let Some(cfg) = app_config {
+            payload["appConfig"] = cfg;
+        }
+        let body = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{}".to_vec());
+        return send_response(&mut stream, "200 OK", "application/json", &body);
+    }
+
     if clean_path == "/__mobile_stream" {
         let state = app.state::<AppState>();
         let _ = stream.set_nodelay(true);
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3600)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(8)));
 
-        let sse_init = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache, no-transform\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n\r\n";
+        let sse_init = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache, no-transform\r\nX-Accel-Buffering: no\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n\r\n";
         if stream.write_all(sse_init.as_bytes()).is_err() || stream.flush().is_err() {
             return Ok(());
         }
+
+        let mut sent_config_seq: Option<u64> = None;
 
         loop {
             let live_snap = state.shared.latest.read().ok().map(|s| s.clone());
@@ -541,7 +657,15 @@ fn handle_client(
             let mobile_theme = st.mobile_theme.clone();
             let auto_popups = st.auto_popups;
             let config_seq = st.config_seq;
-            let app_config = st.app_config.clone();
+            let include_config = sent_config_seq != Some(config_seq);
+            let app_config = if include_config {
+                st.app_config.clone()
+            } else {
+                None
+            };
+            if include_config && app_config.is_some() {
+                sent_config_seq = Some(config_seq);
+            }
             drop(st);
 
             let final_snap = if snap_val.is_some() {
@@ -556,16 +680,18 @@ fn handle_client(
                 None
             };
 
-            let payload = json!({
+            let mut payload = json!({
                 "page": page,
                 "pageSeq": page_seq,
                 "pages": pages,
                 "mobileTheme": mobile_theme,
                 "autoPopups": auto_popups,
                 "configSeq": config_seq,
-                "appConfig": app_config,
                 "snap": final_snap,
             });
+            if let Some(cfg) = app_config {
+                payload["appConfig"] = cfg;
+            }
 
             if let Ok(body) = serde_json::to_string(&payload) {
                 let chunk = format!("data: {}\n\n", body);
@@ -768,11 +894,42 @@ fn handle_client(
         }
     }
 
-    // Serve static frontend assets embedded in Tauri
+    // Serve static frontend assets (in debug/dev builds, prefer fresh dist/ on disk so mobile picks up rebuilds immediately)
     let asset_path = match clean_path {
         "/" | "/mobile" | "/dash" | "/ddu" | "/pitwall" | "/broadcast" | "/overlay" => "index.html".to_string(),
         p => p.trim_start_matches('/').to_string(),
     };
+
+    if cfg!(debug_assertions) {
+        let candidates = [
+            PathBuf::from("dist").join(&asset_path),
+            PathBuf::from("../dist").join(&asset_path),
+        ];
+        for cand in candidates {
+            if cand.is_file() {
+                if let Ok(bytes) = std::fs::read(&cand) {
+                    let mime = if asset_path.ends_with(".html") {
+                        "text/html; charset=utf-8"
+                    } else if asset_path.ends_with(".js") {
+                        "application/javascript; charset=utf-8"
+                    } else if asset_path.ends_with(".css") {
+                        "text/css; charset=utf-8"
+                    } else if asset_path.ends_with(".png") {
+                        "image/png"
+                    } else if asset_path.ends_with(".svg") {
+                        "image/svg+xml"
+                    } else if asset_path.ends_with(".woff2") {
+                        "font/woff2"
+                    } else if asset_path.ends_with(".woff") {
+                        "font/woff"
+                    } else {
+                        "application/octet-stream"
+                    };
+                    return send_response(&mut stream, "200 OK", mime, &bytes);
+                }
+            }
+        }
+    }
 
     let resolver = app.asset_resolver();
     if let Some(asset) = resolver

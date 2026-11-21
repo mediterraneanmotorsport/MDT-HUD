@@ -25,6 +25,15 @@ import Weather from "./Weather.svelte";
 import BattleForPos from "./BattleForPos.svelte";
 import BroadcastTicker from "./BroadcastTicker.svelte";
 import SpotterWidget from "./SpotterWidget.svelte";
+import PitRejoin from "./PitRejoin.svelte";
+import MulticlassTraffic from "./MulticlassTraffic.svelte";
+import BrakeLockup from "./BrakeLockup.svelte";
+import StintPace from "./StintPace.svelte";
+import DriverLowerThird from "./DriverLowerThird.svelte";
+import HeadToHead from "./HeadToHead.svelte";
+import GridPodium from "./GridPodium.svelte";
+import CustomDashWidget from "./CustomDashWidget.svelte";
+import PitBoxMeter from "./PitBoxMeter.svelte";
 
 export interface WidgetProps {
   opts: Record<string, any>;
@@ -59,4 +68,13 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   battleforpos: BattleForPos,
   broadcastticker: BroadcastTicker,
   spotter: SpotterWidget,
+  pitrejoin: PitRejoin,
+  multiclasstraffic: MulticlassTraffic,
+  brakelockup: BrakeLockup,
+  stintpace: StintPace,
+  driverlowerthird: DriverLowerThird,
+  headtohead: HeadToHead,
+  gridpodium: GridPodium,
+  customdash: CustomDashWidget,
+  pitbox: PitBoxMeter,
 };

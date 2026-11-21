@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.3.0](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.2.3...v1.3.0) (2026-11-21) - Pit Wall Pro, Dash Studio Pro, Sincronización Móvil 30Hz y Mejoras Generales
+
+### Novedades Principales
+* **Pit Wall Pro (`/#pitwall`)**:
+  * **3 Modos de Vista**: `🖥️ Lovely`, `🧠 Ingeniero` y `📱 Tablet`, con separador arrastrable y paneles reordenables.
+  * **Mapa Interactivo de Circuito**: zoom (`1x / 1.6x / 2.4x`), sectores `S1 / S2 / S3` coloreados con banderas amarillas por sector, indicador de lluvia, clics para enfocar coches y marcador fantasma **REJOIN**.
+  * **Race Control Feed** en vivo, **Tarjeta de Duelo Directo (<1.8s)**, **Predictor de Tráfico / Doblados**, **Panel de Penalizaciones & Track Limits** y **Línea Temporal de Stints**.
+  * **Mapa de Calor Térmico de Neumáticos** (3 bandas Inner/Mid/Outer) + **Degradación `%/vta`** y aviso de esquina crítica.
+  * **Animaciones Broadcast**: FLIP al adelantar, banners cinematográficos de banderas, destello morado/verde al cruzar meta y crono **IN PIT** con tiempo total + tiempo parado en box.
+  * **Modo Auto-Director** con selector de categoría, **Rivales Vigilados (`★`)**, **Columna VE/Stint**, **Registro de Vueltas + Exportar CSV/Discord**, **10 Temas de Escudería**, **Presets de Rol**, **Lock Layout (`🔒`)** y **Modo Zen (`🧘`)**.
+  * **Sectores individuales exactos** (empezando desde `0.000` en cada sector) y visibles para cualquier piloto seleccionado.
+* **MDT Dash Studio Pro**:
+  * 18 tipos de elementos (Delta Hypercar, 14 iconos motorsport, G-Meter, Volante, Relatives, Sectores, LEDs convergentes/doble barra/clásica), 5 animaciones de arranque, estilos 3D, gradientes transparentes, 5 plantillas nuevas y sincronización completa con Overlay y Móvil.
+* **Móvil DDU & Sincronización 30 Hz**:
+  * Sincronización directa a 30 Hz sin buffering, sistema **Anti-Sleep** sobre HTTP LAN, bloqueo permanente de Google Translate (`notranslate`) y cambio de páginas desde el volante incluso en pantalla completa.
+* **Aplicación General (Companion, Overlays & Windows)**:
+  * **Command Center** renovado, **Paleta de Comandos (`Ctrl+K`)**, **Barra Lateral Plegable** con mini-widget de Hz y Spotter, **Asistente de Inicio (4 pasos)** y **Centro de Toasts**.
+  * **Guía de Frenada en Boxes (`PitBoxMeter`)** y **Auto-Atenuar widgets en curvas rápidas (`👁️`)**.
+  * **Análisis Curva a Curva** (Top 3 curvas donde pierdes más tiempo en frenada y aceleración) y **Race Debrief Card** con exportación a Discord y PNG.
+  * **Botones del Volante para Acciones Globales** (Ocultar HUD, Silenciar Spotter, Cambiar Perfil, Marcar Timestamp).
+  * **Inicio Automático con Windows** e icono nativo en la **Bandeja del Sistema (System Tray)**.
+* **Seguridad en Pista & Spotter**:
+  * Detección mejorada de bandera amarilla en el Spotter.
+  * Desactivación automática del Spotter cuando el piloto principal no está en pista o cuando se enfoca otro coche.
+  * Bloqueo automático de cambio de piloto en Pit Wall y Móvil mientras el piloto principal está conduciendo en pista.
+
 ## [1.2.1](https://github.com/mediterraneanmotorsport/MDT-HUD/compare/v1.2.0...v1.2.1) (2026-11-18) - Reubicación de Ajustes de Audio a la Pestaña Overlays
 
 ### Improvements

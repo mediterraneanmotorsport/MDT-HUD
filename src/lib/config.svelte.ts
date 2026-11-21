@@ -1,5 +1,6 @@
 import { listen } from "@tauri-apps/api/event";
 import { api, isNativeTauri } from "./api";
+import { createTemplateDashboard, type CustomDashboard } from "./dashStudio.svelte";
 
 export type Units = "metric" | "imperial";
 export type HudTheme = "mdt-aura" | "mdt-f1" | "mdt-hy" | "mdt-gt3" | "mdt-lmp2" | "custom";
@@ -27,6 +28,10 @@ export interface WidgetConfig {
   size: number;
   /** Opacity for this widget, on top of the global opacity. */
   alpha: number;
+  /** Lock position in edit mode to prevent accidental drags. */
+  locked?: boolean;
+  /** Automatically fade opacity to 25% in fast corners and restore on straights/pits. */
+  autoFadeInCorners?: boolean;
   options: Record<string, any>;
 }
 
@@ -91,6 +96,18 @@ export interface AppConfig {
     drivingProfileId?: string;
     /** Atajos de teclado globales */
     shortcuts?: AppShortcutsConfig;
+    /** Transición animada escalonada al cambiar de perfil de HUD / Broadcast */
+    animateProfileSwitch?: boolean;
+    /** Guías magnéticas de alineación al arrastrar widgets en modo edición */
+    smartGuides?: boolean;
+    /** Atenuar automáticamente la opacidad del HUD durante la noche en pista */
+    autoNightDim?: boolean;
+    /** Opacidad objetivo durante la noche (0.35..0.95) */
+    nightOpacity?: number;
+    /** Tecla para alternar Modo HUD Limpio / Pánico (oculta widgets secundarios) */
+    panicModeKey?: string;
+    /** Minimizar a la bandeja del sistema de Windows en lugar de cerrar */
+    minimizeToTray?: boolean;
   };
   /** Lap rankings and car setup sharing. Off until the user opts in. */
   online: {
@@ -138,6 +155,8 @@ export interface AppConfig {
   activeProfile: string;
   /** Saved overlay setups: layout, widget options, scale and opacity. */
   profiles: Record<string, Profile>;
+  /** Custom dashboards created in MDT Dash Studio (SimHub-style visual editor). */
+  customDashboards?: CustomDashboard[];
 }
 
 /** A saved overlay setup. App-wide preferences (units, refresh rate, …) are not part of it. */
@@ -345,8 +364,9 @@ export const WIDGETS: WidgetMeta[] = [
         ],
       },
       { key: "range", label: "Rango de la barra (s)", type: "number", min: 0.5, max: 5, step: 0.5 },
+      { key: "animateSectorFlash", label: "Flash animado en sectores morado/verde y mejor vuelta", type: "boolean" },
     ],
-    optionDefaults: { reference: "pb", range: 2 },
+    optionDefaults: { reference: "pb", range: 2, animateSectorFlash: true },
   },
   {
     id: "laptiming",
@@ -390,6 +410,8 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showDamage", label: "Porcentaje de daño del coche", type: "boolean" },
       { key: "showPitDuration", label: "Tiempo de parada en boxes", type: "boolean" },
       { key: "animatePositions", label: "Animación WEC al intercambiar posiciones (verde sube / rojo baja)", type: "boolean" },
+      { key: "animateSectorFlash", label: "Destello morado/verde al marcar vuelta rápida o mejora personal", type: "boolean" },
+      { key: "animatePitAlerts", label: "Animación deslizante al entrar y salir de boxes (PIT)", type: "boolean" },
     ],
     optionDefaults: {
       showBranding: true,
@@ -412,6 +434,8 @@ export const WIDGETS: WidgetMeta[] = [
       showDamage: false,
       showPitDuration: false,
       animatePositions: true,
+      animateSectorFlash: true,
+      animatePitAlerts: true,
     },
   },
   {
@@ -482,8 +506,9 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "range", label: "Alcance del radar (m)", type: "number", min: 8, max: 25, step: 1 },
       { key: "autoHide", label: "Ocultar automáticamente si no hay coches cerca", type: "boolean" },
       { key: "showRings", label: "Anillos de distancia", type: "boolean" },
+      { key: "animateTransitions", label: "Transición suave de aparición y pulso en zona roja", type: "boolean" },
     ],
-    optionDefaults: { range: 14, autoHide: false, showRings: true },
+    optionDefaults: { range: 14, autoHide: false, showRings: true, animateTransitions: true },
   },
   {
     id: "fuel",
@@ -543,8 +568,10 @@ export const WIDGETS: WidgetMeta[] = [
     name: "Banderas y avisos",
     description: "Banderas de dirección de carrera: amarillas, FCY, bandera azul, semáforo y sanciones.",
     defaults: { enabled: true, x: 860, y: 20 },
-    options: [],
-    optionDefaults: {},
+    options: [
+      { key: "animateTransitions", label: "Animación expansiva, barrido de luz y flash de Bandera Verde", type: "boolean" },
+    ],
+    optionDefaults: { animateTransitions: true },
   },
   {
     id: "tracklimits",
@@ -575,8 +602,10 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showFrame", label: "Mostrar recuadro de fondo", type: "boolean" },
       { key: "size", label: "Tamaño (px)", type: "number", min: 120, max: 500, step: 10 },
       { key: "classColors", label: "Colorear por categoría", type: "boolean" },
+      { key: "showPitRejoin", label: "Mostrar punto fantasma de salida de boxes (PIT)", type: "boolean" },
+      { key: "pitLossSec", label: "Pérdida estimada en boxes para el punto fantasma (s)", type: "number", min: 15, max: 80, step: 1 },
     ],
-    optionDefaults: { showFrame: true, size: 240, classColors: true },
+    optionDefaults: { showFrame: true, size: 240, classColors: true, showPitRejoin: false, pitLossSec: 32 },
   },
   {
     id: "weather",
@@ -704,6 +733,7 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showSpeed", label: "Mostrar velocidad en tiempo real de ambos", type: "boolean" },
       { key: "showClassBadge", label: "Mostrar placa de categoría (HY, P2, GT3)", type: "boolean" },
       { key: "sameClassOnly", label: "Solo alertar batallas de la misma categoría", type: "boolean" },
+      { key: "animateTransitions", label: "Animación split-wipe de entrada y pulso en duelo cerrado (<0.35s)", type: "boolean" },
     ],
     optionDefaults: {
       deltaThreshold: 1.0,
@@ -714,6 +744,7 @@ export const WIDGETS: WidgetMeta[] = [
       sameClassOnly: true,
       soundAlert: true,
       soundVolume: 0.8,
+      animateTransitions: true,
     },
   },
   {
@@ -757,6 +788,7 @@ export const WIDGETS: WidgetMeta[] = [
       { key: "showEqualizer", label: "Mostrar ondas animadas de transmisión", type: "boolean" },
       { key: "showProfile", label: "Mostrar nombre del ingeniero (Sara / Antonio)", type: "boolean" },
       { key: "showCategoryBadge", label: "Mostrar insignia de evento (Banderas, PB, Tráfico)", type: "boolean" },
+      { key: "animateTransitions", label: "Animación de entrada/salida y barrido de luz al transmitir", type: "boolean" },
     ],
     optionDefaults: {
       style: "wec",
@@ -767,6 +799,165 @@ export const WIDGETS: WidgetMeta[] = [
       startSound: "1.mp3",
       endSound: "f1-radio-end.mp3",
       beepsVolume: 0.85,
+      animateTransitions: true,
+    },
+  },
+  {
+    id: "pitrejoin",
+    name: "Predicción de Salida de Boxes (Pit Rejoin)",
+    description: "Calcula en qué posición y con qué rivales saldrías a pista si entrases a boxes ahora mismo (aire limpio vs tráfico).",
+    defaults: { enabled: false, x: 1600, y: 520 },
+    options: [
+      { key: "pitLossSec", label: "Pérdida estimada por parada en boxes (segundos)", type: "number", min: 15, max: 80, step: 1 },
+      { key: "sameClassOnly", label: "Calcular posición solo dentro de mi categoría", type: "boolean" },
+      { key: "showGaps", label: "Mostrar coches estimados delante y detrás", type: "boolean" },
+    ],
+    optionDefaults: {
+      pitLossSec: 32,
+      sameClassOnly: true,
+      showGaps: true,
+    },
+  },
+  {
+    id: "multiclasstraffic",
+    name: "Alertas de Tráfico Multicategoría",
+    description: "Aviso automático cuando un Hypercar/LMP2 rápido se acerca por detrás o cuando te aproximas a un GT3 doblado.",
+    defaults: { enabled: false, x: 805, y: 150 },
+    options: [
+      { key: "showFasterBehind", label: "Alertar categoría superior acercándose por detrás", type: "boolean" },
+      { key: "behindThreshold", label: "Umbral tráfico rápido detrás (segundos)", type: "number", min: 1.0, max: 5.0, step: 0.2 },
+      { key: "showSlowerAhead", label: "Alertar categoría inferior delante", type: "boolean" },
+      { key: "aheadThreshold", label: "Umbral tráfico lento delante (segundos)", type: "number", min: 0.8, max: 4.0, step: 0.2 },
+    ],
+    optionDefaults: {
+      showFasterBehind: true,
+      behindThreshold: 2.5,
+      showSlowerAhead: true,
+      aheadThreshold: 2.0,
+    },
+  },
+  {
+    id: "brakelockup",
+    name: "Monitor de Frenos y Bloqueos (BB / Lockup)",
+    description: "Reparto de frenada (Brake Bias), temperatura de los 4 discos de freno y alertas instantáneas de bloqueo (ABS) o patinaje (TC).",
+    defaults: { enabled: false, x: 1320, y: 740 },
+    options: [
+      { key: "showBias", label: "Mostrar barra de reparto de frenada (Brake Bias)", type: "boolean" },
+      { key: "showTemps", label: "Mostrar temperatura de los 4 discos (FL/FR/RL/RR)", type: "boolean" },
+      { key: "showAlerts", label: "Mostrar avisos de ABS / Lockup y TC / Spin", type: "boolean" },
+    ],
+    optionDefaults: {
+      showBias: true,
+      showTemps: true,
+      showAlerts: true,
+    },
+  },
+  {
+    id: "stintpace",
+    name: "Ritmo de Stint y Degradación",
+    description: "Gráfica de barras de tus últimas vueltas del stint con aviso automático de caída de ritmo (Tyre Cliff).",
+    defaults: { enabled: false, x: 1590, y: 310 },
+    options: [
+      { key: "maxLaps", label: "Número de vueltas visibles en la gráfica", type: "number", min: 5, max: 12, step: 1 },
+      { key: "showTrend", label: "Mostrar etiqueta de estado (Sólido / Degradando / Cliff)", type: "boolean" },
+    ],
+    optionDefaults: {
+      maxLaps: 8,
+      showTrend: true,
+    },
+  },
+  {
+    id: "driverlowerthird",
+    name: "Tarjeta TV de Piloto Enfocado (Lower-Third)",
+    description: "Gráfico inferior estilo WEC/F1 que aparece automáticamente al enfocar a cualquier piloto en Standings o Broadcast.",
+    defaults: { enabled: false, x: 725, y: 890 },
+    options: [
+      { key: "alwaysVisible", label: "Mantener siempre visible (en lugar de auto-ocultar)", type: "boolean" },
+      { key: "displaySeconds", label: "Segundos visible al cambiar de piloto", type: "number", min: 3, max: 15, step: 1 },
+      { key: "showLogo", label: "Mostrar logo de marca del coche", type: "boolean" },
+      { key: "showStats", label: "Mostrar barra inferior (mejor vuelta, gomas, boxes, energía)", type: "boolean" },
+    ],
+    optionDefaults: {
+      alwaysVisible: false,
+      displaySeconds: 6,
+      showLogo: true,
+      showStats: true,
+    },
+  },
+  {
+    id: "headtohead",
+    name: "Comparador Cara a Cara (Head-to-Head TV)",
+    description: "Compara en directo velocidad, vueltas, sectores, neumáticos y energía virtual de dos pilotos en pista.",
+    defaults: { enabled: false, x: 740, y: 610 },
+    options: [
+      {
+        key: "mode",
+        label: "Pareja de coches a comparar",
+        type: "select",
+        choices: [
+          { value: "auto_ahead", label: "Piloto enfocado vs coche de delante" },
+          { value: "auto_leader", label: "Piloto enfocado vs líder de categoría" },
+          { value: "top2", label: "Lucha por el liderato (P1 vs P2 de clase)" },
+        ],
+      },
+      { key: "showSectors", label: "Mostrar comparativa de sectores (S1 / S2)", type: "boolean" },
+      { key: "showEnergy", label: "Mostrar compuestos, energía virtual y paradas", type: "boolean" },
+    ],
+    optionDefaults: {
+      mode: "auto_ahead",
+      showSectors: true,
+      showEnergy: true,
+    },
+  },
+  {
+    id: "gridpodium",
+    name: "Parrilla de Salida y Podio Final (TV)",
+    description: "Gráfico televisivo automático con la Parrilla de Salida antes de la carrera y el Podio Top 3 por categoría al finalizar.",
+    defaults: { enabled: false, x: 690, y: 180 },
+    options: [
+      {
+        key: "displayMode",
+        label: "Modo de visualización",
+        type: "select",
+        choices: [
+          { value: "auto", label: "Automático (Parrilla en salida / Podio en bandera a cuadros)" },
+          { value: "force_grid", label: "Forzar vista de Parrilla de Salida" },
+          { value: "force_podium", label: "Forzar vista de Podio Top 3" },
+        ],
+      },
+      { key: "showGrid", label: "Mostrar automáticamente en parrilla / salida", type: "boolean" },
+      { key: "showPodium", label: "Mostrar automáticamente al cruzar bandera a cuadros", type: "boolean" },
+      { key: "maxGridRows", label: "Máximo de pilotos en Parrilla de Salida", type: "number", min: 4, max: 24, step: 2 },
+    ],
+    optionDefaults: {
+      displayMode: "auto",
+      showGrid: true,
+      showPodium: true,
+      maxGridRows: 10,
+    },
+  },
+  {
+    id: "customdash",
+    name: "Dashboard Personalizado (MDT Dash Studio)",
+    description: "Muestra el volante o HUD diseñado al píxel por ti en la pestaña Dash Studio (estilo SimHub).",
+    defaults: { enabled: false, x: 640, y: 710 },
+    options: [],
+    optionDefaults: {
+      dashboardId: "",
+    },
+  },
+  {
+    id: "pitbox",
+    name: "Guía de Frenada en Boxes (Pit Box Meter)",
+    description: "Aparece automáticamente al entrar al pit lane con barra de aproximación, alerta de velocidad, limitador y crono de parada.",
+    defaults: { enabled: false, x: 805, y: 220 },
+    options: [
+      { key: "pitLimitKmh", label: "Límite de pit lane (km/h)", type: "number", min: 50, max: 100, step: 10 },
+      { key: "alwaysShow", label: "Mostrar siempre (incluso fuera de boxes)", type: "boolean" },
+    ],
+    optionDefaults: {
+      pitLimitKmh: 60,
+      alwaysShow: false,
     },
   },
 ];
@@ -806,6 +997,10 @@ function defaults(): AppConfig {
       teammates: "MDT, Mediterranean",
       broadcastMode: false,
       shortcuts: { ...DEFAULT_SHORTCUTS },
+      animateProfileSwitch: true,
+      smartGuides: true,
+      autoNightDim: false,
+      nightOpacity: 0.68,
     },
     online: { enabled: false, lapUpload: "manual", anonymous: false, uploadTraces: true },
     spotter: {
@@ -838,6 +1033,7 @@ function defaults(): AppConfig {
     widgets,
     activeProfile: "default",
     profiles: { default: { name: "Por defecto", scale: 1, opacity: 0.92, widgets: structuredClone(widgets) } },
+    customDashboards: [createTemplateDashboard("gt3-pro")],
   };
 }
 
@@ -897,7 +1093,11 @@ function merge(stored: any): AppConfig {
       widgets: structuredClone(widgets),
     };
   }
-  return { ...base, general, online, spotter, discord, broadcast, widgets, activeProfile, profiles };
+  const customDashboards: CustomDashboard[] =
+    Array.isArray(stored.customDashboards) && stored.customDashboards.length > 0
+      ? stored.customDashboards
+      : base.customDashboards ?? [createTemplateDashboard("gt3-pro")];
+  return { ...base, general, online, spotter, discord, broadcast, widgets, activeProfile, profiles, customDashboards };
 }
 
 class ConfigStore {
@@ -926,6 +1126,8 @@ function applyMergedInPlace(next: AppConfig) {
       config.value.widgets[id].y = wNext.y;
       config.value.widgets[id].size = wNext.size;
       config.value.widgets[id].alpha = wNext.alpha;
+      config.value.widgets[id].locked = wNext.locked;
+      config.value.widgets[id].autoFadeInCorners = wNext.autoFadeInCorners;
       Object.assign(config.value.widgets[id].options, wNext.options);
     } else {
       config.value.widgets[id] = wNext;
@@ -933,6 +1135,9 @@ function applyMergedInPlace(next: AppConfig) {
   }
   config.value.activeProfile = next.activeProfile;
   config.value.profiles = next.profiles;
+  if (Array.isArray(next.customDashboards) && next.customDashboards.length > 0) {
+    config.value.customDashboards = next.customDashboards;
+  }
   config.revision += 1;
 }
 
@@ -1524,4 +1729,34 @@ export function recoverWidgetsToPrimaryScreen(screenWidth = 1920, screenHeight =
   }
   syncActiveProfile();
   saveConfig();
+}
+
+/** Exporta la configuración completa (perfiles, posiciones, tema, spotter y dashboards) como JSON .mdtprofile */
+export function exportFullProfileJson(): string {
+  syncActiveProfile();
+  const payload = {
+    format: "mdt-hud-profile",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    config: $state.snapshot(config.value),
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+/** Importa un archivo .mdtprofile y aplica la configuración completa */
+export function importFullProfileJson(raw: string): { ok: boolean; message: string } {
+  try {
+    const parsed = JSON.parse(raw);
+    const incoming = parsed?.format === "mdt-hud-profile" && parsed?.config ? parsed.config : parsed;
+    if (!incoming || typeof incoming !== "object" || !incoming.widgets || !incoming.general) {
+      return { ok: false, message: "El archivo no es un perfil .mdtprofile válido." };
+    }
+    const merged = mergeWithDefaults(incoming);
+    config.value = merged;
+    applyThemeToDom(merged.general);
+    saveConfig();
+    return { ok: true, message: "✓ Perfil completo importado y aplicado correctamente." };
+  } catch {
+    return { ok: false, message: "Error al leer el archivo .mdtprofile (JSON inválido)." };
+  }
 }

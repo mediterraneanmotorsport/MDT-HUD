@@ -369,13 +369,83 @@ pub fn run() {
             engine::spawn(app.handle().clone(), shared, db);
             online::spawn_uploader(app.handle().clone(), uploads);
             mobile_server::spawn(app.handle().clone(), mobile);
+
+            // #20 Native System Tray icon with quick actions (Open, Toggle Overlay, Edit Overlay, Quit)
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+                if let (Ok(show_i), Ok(toggle_i), Ok(edit_i), Ok(quit_i)) = (
+                    MenuItem::with_id(app, "tray_show", "Abrir MDT-HUD", true, None::<&str>),
+                    MenuItem::with_id(app, "tray_toggle_overlay", "Mostrar / Ocultar Overlay", true, None::<&str>),
+                    MenuItem::with_id(app, "tray_edit_overlay", "Editar Overlay", true, None::<&str>),
+                    MenuItem::with_id(app, "tray_quit", "Salir", true, None::<&str>),
+                ) {
+                    if let Ok(menu) = Menu::with_items(app, &[&show_i, &toggle_i, &edit_i, &quit_i]) {
+                        let mut builder = TrayIconBuilder::new()
+                            .menu(&menu)
+                            .tooltip("MDT-HUD · Telemetría LMU")
+                            .on_menu_event(|app, event| match event.id.as_ref() {
+                                "tray_show" => {
+                                    if let Some(w) = app.get_webview_window("main") {
+                                        let _ = w.show();
+                                        let _ = w.unminimize();
+                                        let _ = w.set_focus();
+                                    }
+                                }
+                                "tray_toggle_overlay" => {
+                                    let st = app.state::<AppState>();
+                                    let next = !st.overlay_visible.load(Ordering::Acquire);
+                                    let _ = commands::set_overlay_visible(app.clone(), next);
+                                }
+                                "tray_edit_overlay" => {
+                                    let st = app.state::<AppState>();
+                                    let next = !st.edit_mode.load(Ordering::Acquire);
+                                    let _ = commands::set_edit_mode(app.clone(), next);
+                                }
+                                "tray_quit" => {
+                                    app.exit(0);
+                                }
+                                _ => {}
+                            })
+                            .on_tray_icon_event(|tray, event| {
+                                if let TrayIconEvent::Click {
+                                    button: MouseButton::Left,
+                                    button_state: MouseButtonState::Up,
+                                    ..
+                                } = event
+                                {
+                                    if let Some(w) = tray.app_handle().get_webview_window("main") {
+                                        let _ = w.show();
+                                        let _ = w.unminimize();
+                                        let _ = w.set_focus();
+                                    }
+                                }
+                            });
+                        if let Some(icon) = app.default_window_icon().cloned() {
+                            builder = builder.icon(icon);
+                        }
+                        let _ = builder.build(app);
+                    }
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing the companion app closes the overlay too.
+            // Closing the companion app minimizes to tray if enabled, otherwise exits cleanly.
             if window.label() == "main" {
-                if let WindowEvent::CloseRequested { .. } = event {
-                    window.app_handle().exit(0);
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    let st = window.app_handle().state::<AppState>();
+                    let minimize_to_tray = std::fs::read_to_string(&st.config_path)
+                        .ok()
+                        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+                        .and_then(|v| v.pointer("/general/minimizeToTray").and_then(|b| b.as_bool()))
+                        .unwrap_or(false);
+                    if minimize_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })
@@ -418,6 +488,8 @@ pub fn run() {
             commands::get_spotter_manifest,
             commands::open_spotter_folder,
             commands::get_overlay_layout,
+            commands::get_auto_start,
+            commands::set_auto_start,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -102,6 +102,8 @@ class SpotterEngine {
   private lastPlayedFile = new Map<string, string>();
   private lastTriggeredAt = new Map<string, number>();
   private currentAudio: HTMLAudioElement | null = null;
+  private currentBeepAudio: HTMLAudioElement | null = null;
+  private playGen = 0;
   private currentPriority: SpotterPriority | null = null;
   private currentStartedAt = 0;
   private queue: QueuedClip[] = [];
@@ -375,6 +377,13 @@ class SpotterEngine {
   }
 
   private stopCurrent() {
+    this.playGen++;
+    if (this.currentBeepAudio) {
+      this.currentBeepAudio.pause();
+      this.currentBeepAudio.onended = null;
+      this.currentBeepAudio.onerror = null;
+      this.currentBeepAudio = null;
+    }
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.onended = null;
@@ -432,19 +441,41 @@ class SpotterEngine {
     };
     this.broadcastState();
 
+    const gen = ++this.playGen;
+
     const wSpotter = config.value.widgets?.spotter?.options;
     const beepsVol = Math.max(0, Math.min(1, wSpotter?.beepsVolume ?? cfg?.beepsVolume ?? volume));
 
-    const playStartBeep = () => {
+    const playStartBeep = (): Promise<void> => {
       const s = wSpotter?.startSound ?? cfg?.startSound ?? "1.mp3";
-      if (!s || s === "none") return;
+      if (!s || s === "none") return Promise.resolve();
       if (s === "mic_click") {
-        if (useRadio) this.playRadioClick(true, beepsVol);
-        return;
+        if (useRadio) {
+          this.playRadioClick(true, beepsVol);
+          return new Promise((resolve) => setTimeout(resolve, 65));
+        }
+        return Promise.resolve();
       }
-      const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
-      audio.volume = beepsVol;
-      audio.play().catch(() => {});
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          if (this.currentBeepAudio === beep) {
+            this.currentBeepAudio = null;
+          }
+          resolve();
+        };
+        const beep = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
+        beep.volume = beepsVol;
+        this.currentBeepAudio = beep;
+        // Safety fallback so a broken/long clip never blocks the voice indefinitely
+        const timer = setTimeout(finish, 1800);
+        beep.onended = finish;
+        beep.onerror = finish;
+        beep.play().catch(finish);
+      });
     };
 
     const playEndBeep = () => {
@@ -459,8 +490,6 @@ class SpotterEngine {
       audio.play().catch(() => {});
     };
 
-    playStartBeep();
-
     const finishTransmission = () => {
       setTimeout(() => {
         if (!this.playing) {
@@ -473,9 +502,11 @@ class SpotterEngine {
     const url = this.pickRandomUrl(profile, def.folder);
 
     if (url) {
+      // Preload voice clip while start beep plays so there is zero gap and zero overlap
       const buster = url.includes("?") ? `&t=${Date.now()}` : `?t=${Date.now()}`;
       const audio = new Audio(`${url}${buster}`);
       audio.crossOrigin = "anonymous";
+      audio.preload = "auto";
       if (useRadio) this.applyRadioFilter(audio, volume);
       else audio.volume = volume;
       this.currentAudio = audio;
@@ -492,18 +523,24 @@ class SpotterEngine {
       };
       audio.onended = done;
       audio.onerror = () => {
+        if (gen !== this.playGen) return;
         if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
         else done();
       };
-      audio.play().catch(() => {
-        if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
-        else done();
+      void playStartBeep().then(() => {
+        if (gen !== this.playGen || this.currentAudio !== audio) return;
+        audio.play().catch(() => {
+          if (gen !== this.playGen) return;
+          if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
+          else done();
+        });
       });
       return;
     }
 
     // No hay archivos de audio para este evento en el perfil -> Fallback a TTS o fin
     const fallbackDone = () => {
+      if (gen !== this.playGen) return;
       playEndBeep();
       this.playing = false;
       this.currentPriority = null;
@@ -512,11 +549,14 @@ class SpotterEngine {
       this.playNextInQueue();
     };
 
-    if (cfg?.ttsFallback ?? true) {
-      this.speakFallback(ttsText, profile, volume, fallbackDone);
-    } else {
-      fallbackDone();
-    }
+    void playStartBeep().then(() => {
+      if (gen !== this.playGen) return;
+      if (cfg?.ttsFallback ?? true) {
+        this.speakFallback(ttsText, profile, volume, fallbackDone);
+      } else {
+        fallbackDone();
+      }
+    });
   }
 
   private speakFallback(text: string, profile: string, volume: number, onDone: () => void) {
@@ -553,7 +593,11 @@ class SpotterEngine {
   /** Evaluates a live telemetry snapshot and triggers appropriate spotter calls without looping. */
   update(snap: Snapshot | null) {
     const cfg = config.value.spotter;
-    if (!cfg?.enabled || !snap?.player) return;
+    if (!cfg?.enabled || !snap?.player) {
+      this.lateralState = "clear";
+      this.wasDriving = false;
+      return;
+    }
 
     const p = snap.player;
     const s = snap.session;
@@ -561,13 +605,33 @@ class SpotterEngine {
     const me = snap.vehicles.find((v) => v.isPlayer);
     const now = performance.now();
 
+    // Auto-disable spotter if:
+    // 1) Another driver is focused/spectated instead of the main player
+    const focusingOtherDriver =
+      (snap.focusedSlot != null && (!me || (snap.focusedSlot !== me.slotId && snap.focusedSlot !== me.id))) ||
+      (me != null && p.id !== me.id);
+    // 2) The user is NOT actively on track (disconnected, not in realtime, in garage, or AI/spectator/replay control)
+    const userOnTrack = Boolean(
+      snap.connected &&
+        snap.inRealtime &&
+        me &&
+        !me.inGarage &&
+        (me.control === 0 || snap.source === "demo"),
+    );
+
+    if (focusingOtherDriver || !userOnTrack) {
+      this.lateralState = "clear";
+      this.clearCandidateSince = 0;
+      this.wasDriving = false;
+      this.queue = [];
+      return;
+    }
+
     // Start of driving stint / leaving garage into the game
-    const isDriving = Boolean(snap.inRealtime && !me?.inGarage && p.speed > 1.2);
+    const isDriving = Boolean(p.speed > 1.2);
     if (isDriving && !this.wasDriving) {
       this.wasDriving = true;
       this.trigger("Salida a Pista");
-    } else if (!snap.inRealtime || Boolean(me?.inGarage)) {
-      this.wasDriving = false;
     }
 
     // -------------------------------------------------------------------------
@@ -642,8 +706,16 @@ class SpotterEngine {
     }
     this.hadFcy = isFcy;
 
-    const anyYellow = isFcy || Boolean(me && !me.inPits && s.sectorYellow[me.sector - 1]);
-    if (anyYellow && !this.hadYellow && !isFcy) {
+    // Local Yellow detection: check player's sector, next sector ahead, any active yellow sector, raw LMU flags (1=single, 2=double), and personal vehicle flag
+    const curSec = me?.sector && me.sector >= 1 && me.sector <= 3 ? me.sector : p.sector >= 1 && p.sector <= 3 ? p.sector : 1;
+    const curSecYellow = Boolean(s.sectorYellow?.[curSec - 1]);
+    const nextSecYellow = Boolean(s.sectorYellow?.[curSec % 3]);
+    const rawYellow = Boolean(s.sectorFlagsRaw?.some((f) => f === 1 || f === 2));
+    const personalYellow = me?.flag === 1 || me?.flag === 2;
+    const localYellow = !p.inPits && (curSecYellow || nextSecYellow || rawYellow || personalYellow);
+
+    const anyYellow = isFcy || localYellow;
+    if (localYellow && !this.hadYellow && !isFcy) {
       this.trigger("Bandera Amarilla");
     } else if (!anyYellow && this.hadYellow && s.phase === 5) {
       this.trigger("Bandera Verde");

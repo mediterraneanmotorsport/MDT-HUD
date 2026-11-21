@@ -10,7 +10,7 @@ export interface RankedLap {
   s3: number;
 }
 
-export type Page = "live" | "livestream" | "overlays" | "sessions" | "analysis" | "records" | "rankings" | "schedule" | "settings";
+export type Page = "live" | "livestream" | "overlays" | "dashstudio" | "sessions" | "analysis" | "records" | "rankings" | "schedule" | "settings";
 
 class Nav {
   page = $state<Page>("live");

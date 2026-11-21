@@ -16,6 +16,25 @@ class Live {
 
 export const live = new Live();
 
+/**
+ * Returns true when the main human player is actively driving on track in LMU.
+ * Used to lock camera/driver switching in PitWall & Mobile and to gate the spotter.
+ */
+export function isMainDriverOnTrack(snap: Snapshot | null): boolean {
+  if (!snap || !snap.connected || !snap.inRealtime || snap.source !== "lmu") return false;
+  const me = snap.vehicles?.find((v) => v.isPlayer);
+  if (!me || me.inGarage) return false;
+  return me.control === 0;
+}
+
+if (typeof window !== "undefined") {
+  (window as any).__MDT_IS_MAIN_ON_TRACK__ = () => isMainDriverOnTrack(live.snap);
+  (window as any).__MDT_MAIN_PLAYER_SLOT__ = () => {
+    const me = live.snap?.vehicles?.find((v) => v.isPlayer);
+    return me ? (me.slotId ?? me.id) : null;
+  };
+}
+
 /** Where widgets read telemetry from. */
 export interface LiveSource {
   readonly snap: Snapshot | null;
@@ -172,8 +191,9 @@ export async function startLive() {
   }
 
   // When loaded in a browser (e.g. OBS Studio Browser Source at localhost:1420),
-  // stream live telemetry from the internal MDT HTTP server (30Hz SSE)
-  if (!isNativeTauri() && typeof EventSource !== "undefined") {
+  // stream live telemetry from the internal MDT HTTP server (30Hz SSE).
+  // Mobile/Pitwall views manage their own dedicated sync loop, so skip duplicate SSE there.
+  if (!isNativeTauri() && !isRemoteView && typeof EventSource !== "undefined") {
     try {
       const sse = new EventSource("/__mobile_stream");
       sse.onmessage = (e) => {

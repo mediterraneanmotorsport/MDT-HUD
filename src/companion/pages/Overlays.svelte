@@ -6,16 +6,58 @@
     HUD_THEMES,
     resetLayout,
     saveConfig,
+    syncActiveProfile,
     WIDGETS,
     type HudTheme,
     type PresetThemeId,
   } from "../../lib/config.svelte";
   import { live } from "../../lib/live.svelte";
   import { spotter } from "../../lib/spotter.svelte";
+  import { REACTIVE_WIDGET_IDS, testAlert } from "../../lib/testAlert.svelte";
   import { wheelControl } from "../../lib/wheelControl.svelte";
+  import { nav } from "../nav.svelte";
   import ProfileBar from "../components/ProfileBar.svelte";
   import Toggle from "../components/Toggle.svelte";
   import WidgetPreview from "../components/WidgetPreview.svelte";
+
+  type WidgetCategory = "all" | "enabled" | "driving" | "strategy" | "broadcast" | "audio";
+  const CATEGORY_MAP: Record<Exclude<WidgetCategory, "all" | "enabled">, Set<string>> = {
+    driving: new Set([
+      "dashboard", "customdash", "inputs", "delta", "laptiming", "shiftlights", "radar", "tyres",
+      "brakelockup", "damage", "electronics", "tracklimits", "liftcoast", "flags",
+    ]),
+    strategy: new Set([
+      "fuel", "stintplanner", "stintpace", "pitrejoin", "pacecatch", "weather",
+      "session", "trackmap", "relative", "multiclasstraffic",
+    ]),
+    broadcast: new Set([
+      "standings", "customdash", "battleforpos", "broadcastticker", "driverlowerthird",
+      "headtohead", "gridpodium", "mdtbranding", "mfd", "spotter",
+    ]),
+    audio: new Set(["spotter", "battleforpos", "radar", "multiclasstraffic"]),
+  };
+
+  let searchQuery = $state("");
+  let activeCategory = $state<WidgetCategory>("all");
+
+  const filteredWidgets = $derived.by(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return WIDGETS.filter((w) => {
+      if (activeCategory === "enabled" && !config.value.widgets[w.id]?.enabled) return false;
+      if (activeCategory !== "all" && activeCategory !== "enabled") {
+        if (!CATEGORY_MAP[activeCategory].has(w.id)) return false;
+      }
+      if (!q) return true;
+      return w.name.toLowerCase().includes(q) || w.description.toLowerCase().includes(q) || w.id.includes(q);
+    });
+  });
+
+  let testSentMsg = $state("");
+  function fireTestAlert(id: string) {
+    testAlert.trigger(id, 4500);
+    testSentMsg = "✓ Enviada al overlay (4.5s)";
+    setTimeout(() => (testSentMsg = ""), 2500);
+  }
 
   let selectedId = $state(WIDGETS[0].id);
   const meta = $derived(WIDGETS.find((w) => w.id === selectedId)!);
@@ -235,46 +277,97 @@
     </label>
   </div>
 
-  <div class="grid grid-cols-[320px_1fr] gap-4">
-    <div class="flex flex-col gap-1 card p-2">
-      {#each WIDGETS as w (w.id)}
-        {@const wc = config.value.widgets[w.id]}
-        <div
-          class={[
-            "flex items-center gap-3 rounded-md px-3 py-2",
-            selectedId === w.id ? "bg-surface-3 shadow-[inset_3px_0_0_var(--color-accent)]" : "hover:bg-surface-2",
-          ]}
-        >
-          <button class="min-w-0 flex-1 text-left" onclick={() => (selectedId = w.id)}>
-            <div class="text-sm font-medium">{w.name}</div>
-            <div class="truncate text-xs text-muted">{w.description}</div>
-          </button>
-          <Toggle
-            checked={wc.enabled}
-            label={`Activar ${w.name}`}
-            onchange={(v) => {
-              wc.enabled = v;
-              saveConfig();
-            }}
-          />
+  <div class="grid grid-cols-[340px_1fr] gap-4">
+    <div class="flex flex-col gap-2 card p-2.5">
+      <!-- Buscador y filtros de categoría -->
+      <div class="flex flex-col gap-2 border-b border-line pb-2">
+        <input
+          type="search"
+          class="field w-full py-1.5 text-xs"
+          placeholder="🔍 Buscar entre {WIDGETS.length} widgets..."
+          bind:value={searchQuery}
+        />
+        <div class="flex flex-wrap gap-1">
+          {#each [
+            { id: "all", label: "Todos" },
+            { id: "enabled", label: "Activos" },
+            { id: "driving", label: "Pilotaje" },
+            { id: "strategy", label: "Estrategia" },
+            { id: "broadcast", label: "Broadcast TV" },
+            { id: "audio", label: "Spotter" },
+          ] as cat (cat.id)}
+            <button
+              type="button"
+              class={[
+                "rounded-md px-2 py-1 text-[11px] font-bold transition-colors cursor-pointer",
+                activeCategory === cat.id
+                  ? "bg-accent text-white"
+                  : "bg-surface-2 text-muted hover:bg-surface-3 hover:text-fg",
+              ]}
+              onclick={() => (activeCategory = cat.id as WidgetCategory)}
+            >
+              {cat.label}
+            </button>
+          {/each}
         </div>
-      {/each}
+      </div>
+
+      <div class="flex max-h-[68vh] flex-col gap-1 overflow-y-auto pr-0.5">
+        {#each filteredWidgets as w (w.id)}
+          {@const wc = config.value.widgets[w.id]}
+          <div
+            class={[
+              "flex items-center gap-3 rounded-md px-3 py-2",
+              selectedId === w.id ? "bg-surface-3 shadow-[inset_3px_0_0_var(--color-accent)]" : "hover:bg-surface-2",
+            ]}
+          >
+            <button class="min-w-0 flex-1 text-left" onclick={() => (selectedId = w.id)}>
+              <div class="text-sm font-medium">{w.name}</div>
+              <div class="truncate text-xs text-muted">{w.description}</div>
+            </button>
+            <Toggle
+              checked={wc.enabled}
+              label={`Activar ${w.name}`}
+              onchange={(v) => {
+                wc.enabled = v;
+                saveConfig();
+              }}
+            />
+          </div>
+        {:else}
+          <div class="px-3 py-6 text-center text-xs text-muted">
+            No se encontraron widgets con ese filtro.
+          </div>
+        {/each}
+      </div>
     </div>
 
     <div class="min-w-0 card p-5">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="section-title text-lg">{meta.name}</h2>
           <p class="text-sm text-muted">{meta.description}</p>
         </div>
-        <Toggle
-          checked={cfg.enabled}
-          label="Activado"
-          onchange={(v) => {
-            cfg.enabled = v;
-            saveConfig();
-          }}
-        />
+        <div class="flex items-center gap-3">
+          {#if REACTIVE_WIDGET_IDS.has(selectedId)}
+            <button
+              type="button"
+              class="btn bg-accent/20 border border-accent/40 text-accent hover:bg-accent hover:text-white text-xs font-bold transition-colors cursor-pointer"
+              onclick={() => fireTestAlert(selectedId)}
+              title="Lanza una vista previa animada de 4,5 segundos directamente en el overlay y OBS"
+            >
+              {testSentMsg || "⚡ Probar alerta en overlay"}
+            </button>
+          {/if}
+          <Toggle
+            checked={cfg.enabled}
+            label="Activado"
+            onchange={(v) => {
+              cfg.enabled = v;
+              saveConfig();
+            }}
+          />
+        </div>
       </div>
 
       <div class="mt-5">
@@ -328,6 +421,30 @@
           {/if}
         {/each}
       </div>
+
+      {#if selectedId === "customdash"}
+        <div class="mt-5 border-t border-line pt-4 text-sm">
+          <h3 class="font-bold text-fg">🎨 Plantilla de Dash Studio activa en el Overlay</h3>
+          <p class="mt-0.5 text-xs text-muted">
+            Elige qué dashboard diseñado en <strong>Dash Studio</strong> quieres mostrar en este widget.
+          </p>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              class="field max-w-sm flex-1 text-xs"
+              value={cfg.options.dashboardId ?? config.value.customDashboards?.[0]?.id ?? ""}
+              onchange={(e) => {
+                cfg.options.dashboardId = e.currentTarget.value;
+                syncActiveProfile();
+                saveConfig();
+              }}
+            >
+              {#each config.value.customDashboards ?? [] as d (d.id)}
+                <option value={d.id}>{d.name} ({d.width}×{d.height})</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+      {/if}
 
       {#if selectedId === "mdtbranding"}
         <div class="mt-6 border-t border-line pt-5 text-sm">
@@ -687,6 +804,36 @@
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if selectedId === "customdash"}
+        <div class="mt-6 border-t border-line pt-5 text-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="font-bold text-fg">🎨 Dashboard Personalizado (MDT Dash Studio)</h3>
+              <p class="text-xs text-muted">
+                Elige cuál de tus diseños creados en Dash Studio se mostrará en este widget (compatible con Overlay PC y OBS Broadcast).
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary text-xs font-bold"
+              onclick={() => (nav.page = "dashstudio")}
+            >
+              🎨 Abrir Editor Dash Studio
+            </button>
+          </div>
+
+          <div class="mt-4 flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+            <div class="text-xs font-semibold text-fg">Diseño activo a mostrar</div>
+            <select class="field py-1 text-xs" bind:value={cfg.options.dashboardId} onchange={saveConfig}>
+              <option value="">(Primero disponible)</option>
+              {#each config.value.customDashboards ?? [] as d (d.id)}
+                <option value={d.id}>{d.name} ({d.width}×{d.height})</option>
+              {/each}
+            </select>
           </div>
         </div>
       {/if}

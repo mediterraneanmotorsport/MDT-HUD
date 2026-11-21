@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scale } from "svelte/transition";
   import { api } from "../../lib/api";
   import type { Units } from "../../lib/config.svelte";
   import { classColor, gap, shortName, speed, speedUnit } from "../../lib/format";
@@ -16,6 +17,7 @@
   const showSpeed = $derived(opts.showSpeed ?? true);
   const showClassBadge = $derived(opts.showClassBadge ?? true);
   const sameClassOnly = $derived(opts.sameClassOnly ?? true);
+  const animate = $derived(opts.animateTransitions ?? true);
 
   // Demo fixture cars for edit / demo mode
   const demoAhead: Vehicle = {
@@ -206,8 +208,16 @@
   {@const cls = b.ahead.class}
   {@const cColor = classColor(cls)}
   {@const tensionPct = Math.max(10, Math.min(100, Math.round((1 - b.diff / Math.max(1, threshold)) * 100)))}
+  {@const isTight = b.diff <= 0.35}
 
-  <div class="hud relative flex flex-col overflow-hidden rounded-xl border border-white/20 bg-[#06101e]/95 p-3 shadow-2xl backdrop-blur-md select-none min-w-[340px] max-w-[420px] animate-in fade-in zoom-in-95 duration-200">
+  <div
+    transition:scale={animate ? { start: 0.9, duration: 240 } : { duration: 0 }}
+    class={[
+      "hud relative flex flex-col overflow-hidden rounded-xl border border-white/20 bg-[#06101e]/95 p-3 shadow-2xl backdrop-blur-md select-none min-w-[340px] max-w-[420px]",
+      animate && "mdt-shimmer-overlay",
+      animate && isTight && "mdt-anim-battle-tight",
+    ]}
+  >
     <!-- Header: Battle Banner -->
     <div class="mb-2 flex items-center justify-between border-b border-white/10 pb-1.5">
       <div class="flex items-center gap-2">
@@ -234,7 +244,8 @@
       <div
         class={[
           "flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors border cursor-pointer hover:border-accent",
-          b.ahead.isPlayer ? "border-accent bg-accent/25" : "border-white/10 bg-white/[0.04]"
+          b.ahead.isPlayer ? "border-accent bg-accent/25" : "border-white/10 bg-white/[0.04]",
+          animate && "mdt-anim-battle-left",
         ]}
         onclick={() => {
           const s = b.ahead.slotId ?? b.ahead.id;
@@ -284,7 +295,8 @@
       <div
         class={[
           "flex items-center justify-between rounded-lg px-2.5 py-1.5 transition-colors border cursor-pointer hover:border-accent",
-          b.chaser.isPlayer ? "border-accent bg-accent/25" : "border-white/10 bg-white/[0.04]"
+          b.chaser.isPlayer ? "border-accent bg-accent/25" : "border-white/10 bg-white/[0.04]",
+          animate && "mdt-anim-battle-right",
         ]}
         onclick={() => {
           const s = b.chaser.slotId ?? b.chaser.id;

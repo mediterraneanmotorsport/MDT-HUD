@@ -10,9 +10,10 @@
     saveConfig,
     type PresetThemeId,
   } from "../lib/config.svelte";
-  import { live, provideLive, startLive } from "../lib/live.svelte";
+  import { live, startLive } from "../lib/live.svelte";
   import type { Snapshot } from "../lib/types";
   import { MOBILE_SERVER_BASE, wheelControl, type MfdPageId } from "../lib/wheelControl.svelte";
+  import { mobileNoSleep } from "../lib/noSleep";
   import Damage from "../overlay/widgets/Damage.svelte";
   import Dashboard from "../overlay/widgets/Dashboard.svelte";
   import Electronics from "../overlay/widgets/Electronics.svelte";
@@ -25,11 +26,11 @@
   import Relative from "../overlay/widgets/Relative.svelte";
   import Standings from "../overlay/widgets/Standings.svelte";
   import StintPlanner from "../overlay/widgets/StintPlanner.svelte";
+  import CustomDashWidget from "../overlay/widgets/CustomDashWidget.svelte";
   import TrackLimits from "../overlay/widgets/TrackLimits.svelte";
   import TrackMap from "../overlay/widgets/TrackMap.svelte";
   import Tyres from "../overlay/widgets/Tyres.svelte";
 
-  let remoteSnap = $state.raw<Snapshot | null>(null);
   let fallbackDemoSnap = $state.raw<Snapshot | null>(null);
   let showHudBadge = $state(true);
   let showSettingsModal = $state(false);
@@ -77,15 +78,7 @@
     }
   }
 
-  const activeSnap = $derived(
-    remoteSnap?.player ? remoteSnap : live.snap?.player ? live.snap : (remoteSnap ?? live.snap ?? fallbackDemoSnap),
-  );
-
-  provideLive({
-    get snap() {
-      return activeSnap;
-    },
-  });
+  const activeSnap = $derived(live.snap?.player ? live.snap : (live.snap ?? fallbackDemoSnap));
 
   function triggerTemporaryPage(pageId: MfdPageId, reason: string, durationMs = 5000) {
     overridePageId = pageId;
@@ -109,7 +102,6 @@
     const p = s?.player;
     if (!p) {
       prevDentSum = -1;
-      prevInPits = null;
       prevCutPts = -1;
       prevTc = -1;
       return;
@@ -164,20 +156,9 @@
     checkAutoPopups(activeSnap);
   });
 
-  let wakeLockSentinel: any = null;
+  let wakeLockActive = $state(false);
   async function requestWakeLock() {
-    if (typeof navigator !== "undefined" && "wakeLock" in navigator) {
-      try {
-        if (!wakeLockSentinel) {
-          wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
-          wakeLockSentinel?.addEventListener("release", () => {
-            wakeLockSentinel = null;
-          });
-        }
-      } catch {
-        // Ignored
-      }
-    }
+    wakeLockActive = await mobileNoSleep.enable();
   }
 
   function registerInteraction() {
@@ -186,7 +167,7 @@
     badgeTimer = setTimeout(() => {
       if (!showSettingsModal) showHudBadge = false;
     }, 5000);
-    void requestWakeLock();
+    if (!wakeLockActive) void requestWakeLock();
   }
 
   function flashBadge() {
@@ -203,7 +184,7 @@
       const sX = (vw * 0.98) / cw;
       const sY = (vh * 0.96) / ch;
       const s = Math.min(sX, sY);
-      autoScale = Math.max(0.65, Math.min(5.5, s));
+      autoScale = Math.max(0.25, Math.min(5.5, s));
     }
   }
 
@@ -246,8 +227,6 @@
     window.addEventListener("orientationchange", recomputeScale);
 
     let mounted = true;
-    let sse: EventSource | null = null;
-    let fallbackPolling = false;
 
     const handlePayload = (data: any) => {
       if (!data) return;
@@ -255,8 +234,8 @@
         applyRemoteConfig(data.appConfig);
       }
       if (data.snap) {
-        remoteSnap = data.snap;
-        live.snap = data.snap;
+        (window as any).__MDT_STOP_DEMO__?.();
+        live.snap = data.snap as Snapshot;
       }
       if (typeof data.configSeq === "number" && data.configSeq !== lastConfigSeq) {
         lastConfigSeq = data.configSeq;
@@ -281,53 +260,38 @@
       }
     };
 
-    if (typeof EventSource !== "undefined") {
-      try {
-        sse = new EventSource(`${MOBILE_SERVER_BASE}/__mobile_stream`);
-        sse.onmessage = (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            handlePayload(data);
-          } catch {}
-        };
-        sse.onerror = () => {
-          fallbackPolling = true;
-        };
-      } catch {
-        fallbackPolling = true;
-      }
-    } else {
-      fallbackPolling = true;
-    }
-
-    const pollState = async () => {
+    // Single rock-solid sequential HTTP sync loop (~25-30 Hz):
+    // Timeout wraps BOTH headers AND res.json() body so it can NEVER hang.
+    let activeCtrl: AbortController | null = null;
+    const syncLoop = async () => {
       while (mounted) {
-        if (!sse || fallbackPolling || sse.readyState === EventSource.CLOSED) {
-          const t0 = performance.now();
-          try {
-            const ctrl = new AbortController();
-            const timeoutId = setTimeout(() => ctrl.abort(), 1200);
-            const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_state`, {
-              cache: "no-store",
-              signal: ctrl.signal,
-            });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-              const data = await res.json();
-              handlePayload(data);
-            }
-          } catch {
-            // ignore
+        const t0 = performance.now();
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        try {
+          const ctrl = new AbortController();
+          activeCtrl = ctrl;
+          timeoutId = setTimeout(() => ctrl.abort(), 1200);
+          const qs = lastConfigSeq >= 0 ? `?cfgSeq=${lastConfigSeq}` : "";
+          const res = await fetch(`${MOBILE_SERVER_BASE}/__mobile_snap${qs}`, {
+            cache: "no-store",
+            signal: ctrl.signal,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            handlePayload(data);
           }
-          const elapsed = performance.now() - t0;
-          const waitMs = Math.max(80, 250 - elapsed);
-          await new Promise((r) => setTimeout(r, waitMs));
-        } else {
-          await new Promise((r) => setTimeout(r, 1000));
+        } catch {
+          // Transient Wi-Fi drop or timeout — immediately retry on next tick
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
+          activeCtrl = null;
         }
+        const elapsed = performance.now() - t0;
+        const waitMs = Math.max(12, 33 - elapsed);
+        await new Promise((r) => setTimeout(r, waitMs));
       }
     };
-    void pollState();
+    void syncLoop();
     void requestWakeLock();
 
     const onVisChange = () => {
@@ -341,18 +305,14 @@
 
     return () => {
       mounted = false;
-      sse?.close();
+      activeCtrl?.abort();
       ro.disconnect();
       window.removeEventListener("resize", recomputeScale);
       window.removeEventListener("orientationchange", recomputeScale);
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", onVisChange);
       }
-      if (wakeLockSentinel) {
-        try {
-          wakeLockSentinel.release();
-        } catch {}
-      }
+      mobileNoSleep.disable();
     };
   });
 
@@ -471,6 +431,10 @@
     void config.revision;
     return { ...(wCfg.stintplanner?.options ?? {}) };
   });
+  const customDashOpts = $derived.by(() => {
+    void config.revision;
+    return { ...(wCfg.customdash?.options ?? {}) };
+  });
 
   // Peripheral border state: Battery 100% green flash OR Delta green/red border
   const p = $derived(activeSnap?.player);
@@ -515,13 +479,13 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={viewportEl}
+  translate="no"
   data-hud-theme={wheelControl.mobileTheme}
   onclick={handleScreenTap}
   onpointerdown={registerInteraction}
-  onpointermove={registerInteraction}
   ontouchstart={onTouchStart}
   ontouchend={onTouchEnd}
-  class={["fixed inset-0 flex h-dvh w-dvw items-center justify-center overflow-hidden text-fg select-none", peripheralBorderClass, hideBorders && "mobile-borderless"]}
+  class={["notranslate fixed inset-0 flex h-dvh w-dvw items-center justify-center overflow-hidden text-fg select-none", peripheralBorderClass, hideBorders && "mobile-borderless"]}
   style:background={activeThemeMeta.bg}
 >
   <!-- Destellos y Banners de Advertencia: Banderas Amarilla / Azul, Limitador de Velocidad y Batería 100% -->
@@ -676,10 +640,29 @@
             <Inputs opts={inputOpts} {units} edit={false} />
           {:else if effectivePageId === "stintplanner"}
             <StintPlanner opts={stintOpts} {units} edit={false} />
+          {:else if effectivePageId === "customdash"}
+            {#key customDashOpts.dashboardId}
+              <CustomDashWidget opts={customDashOpts} {units} edit={false} />
+            {/key}
           {/if}
         </div>
       </div>
     </div>
+  {/if}
+
+  <!-- Aviso de 1 toque si el navegador bloqueó el autoplay del Anti-Sleep (HTTP LAN) -->
+  {#if !wakeLockActive}
+    <button
+      type="button"
+      class="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-amber-400/70 bg-black/90 px-3.5 py-1.5 text-xs font-bold text-amber-300 shadow-2xl backdrop-blur-md animate-pulse cursor-pointer"
+      onclick={(e) => {
+        e.stopPropagation();
+        void requestWakeLock();
+      }}
+    >
+      <span>☀️</span>
+      <span>Toca aquí para evitar que se apague la pantalla</span>
+    </button>
   {/if}
 
   <!-- Barra superior (se oculta automáticamente tras 5s sin interacción y reaparece al interactuar) -->

@@ -105,13 +105,15 @@
     }
   });
 
-  // Track pit duration per vehicle
+  // Track pit duration per vehicle + pit exit flash animation
   interface PitInfo {
     inPits: boolean;
     pitStartMs: number;
     lastDurationSec: number;
   }
   const pitTracker = new Map<number, PitInfo>();
+  let pitExitFlash = $state<Record<number, boolean>>({});
+  const pitExitTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   $effect(() => {
     if (!snap?.vehicles) return;
@@ -130,8 +132,58 @@
           if (info.pitStartMs > 0) {
             info.lastDurationSec = Math.round((now - info.pitStartMs) / 100) / 10;
           }
+          if (opts.animatePitAlerts ?? true) {
+            pitExitFlash = { ...pitExitFlash, [v.id]: true };
+            if (pitExitTimers.has(v.id)) clearTimeout(pitExitTimers.get(v.id)!);
+            pitExitTimers.set(
+              v.id,
+              setTimeout(() => {
+                const next = { ...pitExitFlash };
+                delete next[v.id];
+                pitExitFlash = next;
+              }, 1800),
+            );
+          }
         }
       }
+    }
+  });
+
+  // Track fastest lap (purple) & personal best (green) flash per vehicle
+  const prevLastLaps = new Map<number, number>();
+  let lapFlash = $state<Record<number, "purple" | "green">>({});
+  const lapFlashTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  $effect(() => {
+    if (!(opts.animateSectorFlash ?? true) || !snap?.vehicles) return;
+    const classBestMap = new Map<string, number>();
+    for (const v of snap.vehicles) {
+      if (v.bestLap > 0) {
+        const cur = classBestMap.get(v.class) ?? Infinity;
+        if (v.bestLap < cur) classBestMap.set(v.class, v.bestLap);
+      }
+    }
+    for (const v of snap.vehicles) {
+      const prev = prevLastLaps.get(v.id);
+      if (prev !== undefined && v.lastLap > 0 && Math.abs(v.lastLap - prev) > 0.001) {
+        const classBest = classBestMap.get(v.class) ?? Infinity;
+        let kind: "purple" | "green" | null = null;
+        if (v.lastLap <= classBest + 0.001) kind = "purple";
+        else if (v.bestLap > 0 && v.lastLap <= v.bestLap + 0.001) kind = "green";
+        if (kind) {
+          lapFlash = { ...lapFlash, [v.id]: kind };
+          if (lapFlashTimers.has(v.id)) clearTimeout(lapFlashTimers.get(v.id)!);
+          lapFlashTimers.set(
+            v.id,
+            setTimeout(() => {
+              const next = { ...lapFlash };
+              delete next[v.id];
+              lapFlash = next;
+            }, 2400),
+          );
+        }
+      }
+      prevLastLaps.set(v.id, v.lastLap);
     }
   });
 
@@ -301,11 +353,16 @@
       {@const mate = isTeammate(r.v, teammates)}
       {@const isTargetFocused = live.snap?.focusedSlot != null ? (r.v.slotId === live.snap.focusedSlot || r.v.id === live.snap.focusedSlot) : r.v.isPlayer}
       {@const anim = positionAnims[r.v.id]}
+      {@const lFlash = lapFlash[r.v.id]}
+      {@const pExit = pitExitFlash[r.v.id]}
       <div
         class={[
           "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-all duration-300 relative",
           anim === "up" && "bg-emerald-950/70 ring-2 ring-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] border-l-4 border-emerald-400 font-bold",
           anim === "down" && "bg-rose-950/70 ring-2 ring-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)] border-l-4 border-rose-500 font-bold",
+          !anim && lFlash === "purple" && "mdt-anim-sector-purple mdt-shimmer-overlay",
+          !anim && lFlash === "green" && "mdt-anim-sector-green mdt-shimmer-overlay",
+          !anim && !lFlash && pExit && "mdt-anim-pit-exit",
           !anim && isTargetFocused
             ? "bg-accent text-white shadow-[0_0_12px_var(--color-accent)] ring-1 ring-white/60 font-bold"
             : !anim && mate
@@ -359,7 +416,7 @@
           {:else if r.v.inGarage}
             <span class="rounded-[4px] bg-white/15 px-1 text-[10px] leading-4 font-bold text-fg">GAR</span>
           {:else if r.v.inPits}
-            <span class="rounded-[4px] bg-white px-1 text-[10px] leading-4 font-bold text-black">PIT</span>
+            <span class={["rounded-[4px] bg-white px-1 text-[10px] leading-4 font-bold text-black", (opts.animatePitAlerts ?? true) && "mdt-anim-pit-badge"]}>PIT</span>
           {/if}
           {#if !opts.showPenalties && r.v.numPenalties > 0 && r.v.finishStatus < 2}
             <span
@@ -413,8 +470,6 @@
             {pDur}
           </span>
         {/if}
-        {#if opts.showLast}{@render time(r.v.lastLap, tone(r.v.lastLap, r.v, g.classBest, true), "text-[13px] opacity-75")}{/if}
-        {#if opts.showBest}{@render time(r.v.bestLap, tone(r.v.bestLap, r.v, g.classBest, false), "text-[13px] opacity-75")}{/if}
         {#if opts.showLast}{@render time(r.v.lastLap, tone(r.v.lastLap, r.v, g.classBest, true), "text-[13px] opacity-75")}{/if}
         {#if opts.showBest}{@render time(r.v.bestLap, tone(r.v.bestLap, r.v, g.classBest, false), "text-[13px] opacity-75")}{/if}
         {#if !isRace && i === 0}

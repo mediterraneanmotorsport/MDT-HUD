@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly } from "svelte/transition";
   import { config, type Units } from "../../lib/config.svelte";
   import { useLive } from "../../lib/live.svelte";
   import { spotter, type ActiveSpotterTransmission } from "../../lib/spotter.svelte";
@@ -12,6 +13,7 @@
   const showEqualizer = $derived(opts.showEqualizer ?? true);
   const showProfile = $derived(opts.showProfile ?? true);
   const showCategoryBadge = $derived(opts.showCategoryBadge ?? true);
+  const animate = $derived(opts.animateTransitions ?? true);
 
   const playerVehicle = $derived.by(() => {
     const snap = live.snap;
@@ -42,7 +44,13 @@
     startedAt: 0,
   };
 
-  const isPreview = $derived(edit || (typeof window !== "undefined" && !location.hash.includes("overlay")));
+  const isLiveOverlay =
+    typeof window !== "undefined" &&
+    (location.hash.toLowerCase().includes("overlay") ||
+      location.hash.toLowerCase().includes("broadcast") ||
+      location.pathname.toLowerCase() === "/overlay" ||
+      location.pathname.toLowerCase() === "/broadcast");
+  const isPreview = $derived(edit || !isLiveOverlay);
   const active = $derived(spotter.currentTransmission ?? (isPreview ? previewTransmission : null));
   const isTransmitting = $derived(spotter.playing || (isPreview && !spotter.currentTransmission));
 
@@ -98,6 +106,10 @@
 
 {#if active}
   {@const colors = getBadgeColor(active)}
+  <div
+    transition:fly={animate ? { x: -28, duration: 280 } : { duration: 0 }}
+    class={[animate && "mdt-anim-radio-enter mdt-shimmer-overlay rounded-xl"]}
+  >
 
   <!-- 1. ESTILO FÓRMULA 1 (TV BROADCAST GRAPHIC - EXACT REPLICA CON LOGO MDT) -->
   {#if style === "f1"}
@@ -171,7 +183,7 @@
 
         <!-- Radio Transcription Text Subtitle -->
         {#if showText && active.text}
-          <div class="mt-2 rounded bg-black/50 border border-white/10 p-2 font-sans text-[12.5px] font-bold leading-snug text-white tracking-wide uppercase italic">
+          <div class={["mt-2 rounded bg-black/50 border border-white/10 p-2 font-sans text-[12.5px] font-bold leading-snug text-white tracking-wide uppercase italic", animate && "mdt-anim-radio-subtitle"]}>
             "{active.text}"
           </div>
         {/if}
@@ -360,12 +372,13 @@
 
       <!-- Bottom: Subtitle / Spoken Transcript Text -->
       {#if showText && active.text}
-        <div class="mt-1.5 text-[12.5px] font-semibold leading-snug text-white/95 tracking-normal">
+        <div class={["mt-1.5 text-[12.5px] font-semibold leading-snug text-white/95 tracking-normal", animate && "mdt-anim-radio-subtitle"]}>
           "{active.text}"
         </div>
       {/if}
     </div>
   {/if}
+  </div>
 {/if}
 
 <style>

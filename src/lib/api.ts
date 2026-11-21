@@ -42,6 +42,13 @@ export const api = {
     return null;
   },
   focusVehicle: async (slotId: number): Promise<boolean> => {
+    // Safety guard: while the main driver is actively driving on track, block focusing any other driver
+    if (typeof window !== "undefined" && (window as any).__MDT_IS_MAIN_ON_TRACK__?.()) {
+      const mainSlot = (window as any).__MDT_MAIN_PLAYER_SLOT__?.();
+      if (mainSlot != null && slotId !== mainSlot) {
+        return false;
+      }
+    }
     console.log(`[MDT] Intentando enfocar vehículo Slot ${slotId}...`);
     // 1. Desktop Tauri IPC
     if (isNativeTauri()) {
@@ -113,6 +120,12 @@ export const api = {
   setOverlayVisible: (visible: boolean) => invoke<void>("set_overlay_visible", { visible }),
   setDemoMode: (enabled: boolean) => invoke<void>("set_demo_mode", { enabled }),
   setFocusedSlot: async (slotId: number | null) => {
+    if (slotId != null && typeof window !== "undefined" && (window as any).__MDT_IS_MAIN_ON_TRACK__?.()) {
+      const mainSlot = (window as any).__MDT_MAIN_PLAYER_SLOT__?.();
+      if (mainSlot != null && slotId !== mainSlot) {
+        return;
+      }
+    }
     if (isNativeTauri()) {
       return invoke<void>("set_focused_slot", { slotId }).catch(() => {});
     }
@@ -129,6 +142,8 @@ export const api = {
   },
   listMonitors: () => invoke<MonitorInfo[]>("list_monitors"),
   getOverlayLayout: () => invoke<OverlayLayoutInfo>("get_overlay_layout"),
+  getAutoStart: () => (isNativeTauri() ? invoke<boolean>("get_auto_start").catch(() => false) : Promise.resolve(false)),
+  setAutoStart: (enabled: boolean) => (isNativeTauri() ? invoke<boolean>("set_auto_start", { enabled }).catch(() => false) : Promise.resolve(false)),
   getPreviewSnapshot: () => invoke<Snapshot>("get_preview_snapshot"),
   listSessions: (opts: { track?: string | null; car?: string | null; limit?: number; offset?: number } = {}) =>
     invoke<SessionSummary[]>("list_sessions", opts),

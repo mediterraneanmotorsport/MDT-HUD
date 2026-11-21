@@ -759,3 +759,74 @@ pub fn open_spotter_folder(state: State<AppState>) -> CmdResult<()> {
     }
     Ok(())
 }
+
+/// Checks whether MDT-HUD is registered to start automatically with Windows (HKCU Run key).
+#[tauri::command]
+pub fn get_auto_start() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let out = std::process::Command::new("reg")
+            .args([
+                "query",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "MDT-HUD",
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        return out.is_ok_and(|o| o.status.success());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
+/// Enables or disables automatic launch on Windows startup (HKCU Run key).
+#[tauri::command]
+pub fn set_auto_start(enabled: bool) -> CmdResult<bool> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        if enabled {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let val = format!("\"{}\"", exe.display());
+            let out = std::process::Command::new("reg")
+                .args([
+                    "add",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    "MDT-HUD",
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &val,
+                    "/f",
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .map_err(|e| e.to_string())?;
+            Ok(out.status.success())
+        } else {
+            let _ = std::process::Command::new("reg")
+                .args([
+                    "delete",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                    "/v",
+                    "MDT-HUD",
+                    "/f",
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            Ok(false)
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = enabled;
+        Ok(false)
+    }
+}

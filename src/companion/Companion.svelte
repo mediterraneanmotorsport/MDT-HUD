@@ -18,20 +18,29 @@
   import { wheelControl } from "../lib/wheelControl.svelte";
   import { nav, type Page } from "./nav.svelte";
   import ChangelogDialog from "./components/ChangelogDialog.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
+  import OnboardingWizard from "./components/OnboardingWizard.svelte";
   import StarPrompt from "./components/StarPrompt.svelte";
+  import ToastHost from "./components/ToastHost.svelte";
   import Analysis from "./pages/Analysis.svelte";
   import Live from "./pages/Live.svelte";
   import LiveStream from "./pages/LiveStream.svelte";
   import Overlays from "./pages/Overlays.svelte";
+  import DashStudio from "./pages/DashStudio.svelte";
   import Rankings from "./pages/Rankings.svelte";
   import Records from "./pages/Records.svelte";
   import Schedule from "./pages/Schedule.svelte";
   import Sessions from "./pages/Sessions.svelte";
   import Settings from "./pages/Settings.svelte";
   import { remoteStream } from "../lib/remoteStream.svelte";
+  import { toasts } from "../lib/toasts.svelte";
 
   let maximized = $state(false);
   let reportIssueError = $state(false);
+  let sidebarCollapsed = $state(false);
+  let showCommandPalette = $state(false);
+  let showOnboarding = $state(false);
+  let telemetryHz = $state(0);
   const ISSUE_URL = "https://github.com/mediterraneanmotorsport/MDT-HUD/issues/new/choose";
 
   async function reportIssue(event: MouseEvent) {
@@ -50,7 +59,35 @@
     void loadConfig().then(initUpdater).then(initStarPrompt);
     watchUploads();
 
-    if (!isNativeTauri()) return;
+    try {
+      sidebarCollapsed = localStorage.getItem("mdt_sidebar_collapsed") === "true";
+      if (localStorage.getItem("mdt_onboarding_done_v1") !== "true") {
+        setTimeout(() => (showOnboarding = true), 700);
+      }
+    } catch {}
+
+    const onGlobalKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        showCommandPalette = !showCommandPalette;
+      }
+    };
+    window.addEventListener("keydown", onGlobalKey);
+
+    // Track real telemetry Hz for the sidebar mini-widget
+    let lastFrame = live.snap?.frame ?? 0;
+    const hzTimer = setInterval(() => {
+      const f = live.snap?.frame ?? 0;
+      telemetryHz = Math.max(0, Math.min(120, f - lastFrame));
+      lastFrame = f;
+    }, 1000);
+
+    if (!isNativeTauri()) {
+      return () => {
+        window.removeEventListener("keydown", onGlobalKey);
+        clearInterval(hzTimer);
+      };
+    }
 
     const appWindow = getCurrentWindow();
     void appWindow.isMaximized().then((value) => (maximized = value));
@@ -59,8 +96,19 @@
       void appWindow.isMaximized().then((value) => (maximized = value));
     }).then((unlisten) => (unlistenResize = unlisten));
 
-    return () => unlistenResize?.();
+    return () => {
+      window.removeEventListener("keydown", onGlobalKey);
+      clearInterval(hzTimer);
+      unlistenResize?.();
+    };
   });
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+    try {
+      localStorage.setItem("mdt_sidebar_collapsed", String(sidebarCollapsed));
+    } catch {}
+  }
 
   function startDragging(event: MouseEvent) {
     if (event.button === 0 && isNativeTauri()) {
@@ -84,6 +132,7 @@
     { id: "live", label: "En vivo", icon: "M3 12h4l3-8 4 16 3-8h4" },
     { id: "livestream", label: "En Directo", icon: "M4.9 19.1A10 10 0 0 1 12 2a10 10 0 0 1 7.1 17.1 M7.8 16.2A6 6 0 0 1 12 6a6 6 0 0 1 4.2 10.2 M12 12a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" },
     { id: "overlays", label: "Overlays", icon: "M4 5h16v14H4z M8 9h5 M8 13h8" },
+    { id: "dashstudio", label: "Dash Studio", icon: "M3 3h7v7H3z M14 3h7v4h-7z M14 10h7v11h-7z M3 13h7v8H3z" },
     { id: "sessions", label: "Sesiones", icon: "M4 6h16 M4 12h16 M4 18h10" },
     { id: "analysis", label: "Análisis", icon: "M4 19V5 M4 19h16 M7 15l4-5 3 3 5-7" },
     { id: "records", label: "Récords", icon: "M8 21h8 M12 17v4 M7 4h10v5a5 5 0 0 1-10 0z M17 6h3v2a3 3 0 0 1-3 3 M7 6H4v2a3 3 0 0 0 3 3" },
@@ -135,19 +184,32 @@
       {/if}
     </div>
 
-    <!-- Selector rápido de tema visual de la app y overlays -->
-    <div class="hidden items-center gap-1 px-2 sm:flex">
-      <span class="mr-1 text-[10px] font-bold tracking-wider text-muted uppercase">Tema:</span>
+    <!-- Botón Paleta Rápida (Ctrl+K) + Selector de tema -->
+    <div class="hidden items-center gap-1.5 px-2 sm:flex">
+      <button
+        type="button"
+        class="mr-1 flex items-center gap-1.5 rounded-md border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-muted transition hover:border-accent/50 hover:text-fg cursor-pointer"
+        onclick={() => (showCommandPalette = true)}
+        title="Paleta de comandos rápida (Ctrl+K)"
+      >
+        <span>⌘</span>
+        <span>Buscar...</span>
+        <kbd class="kbd text-[9px]">Ctrl+K</kbd>
+      </button>
+      <span class="mr-0.5 text-[10px] font-bold tracking-wider text-muted uppercase">Tema:</span>
       {#each Object.entries(HUD_THEMES) as [id, t] (id)}
         <button
           class={[
-            "flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-bold transition-all",
+            "flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-bold transition-all cursor-pointer",
             config.value.general.theme === id
               ? "bg-accent text-white shadow-[0_0_10px_var(--color-accent)]"
               : "bg-surface-2 text-muted hover:bg-surface-3 hover:text-fg",
           ]}
           title={`${t.label} — Fuente: ${t.fontName}`}
-          onclick={() => quickSelectTheme(id as PresetThemeId)}
+          onclick={() => {
+            quickSelectTheme(id as PresetThemeId);
+            toasts.push(`Tema cambiado a ${t.label}`, { kind: "success", durationMs: 2200 });
+          }}
         >
           <span class="h-2 w-2 rounded-full" style:background={t.accent}></span>
           {t.label.replace("MDT-", "")}
@@ -192,42 +254,63 @@
   </header>
 
   <div class="flex min-h-0 flex-1">
-    <nav class="flex w-[220px] shrink-0 flex-col border-r border-line bg-surface">
-      <div class="flex flex-col gap-0.5 px-2 pt-4">
+    <nav
+      class={[
+        "flex shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-200",
+        sidebarCollapsed ? "w-[64px]" : "w-[220px]",
+      ]}
+    >
+      <div class="flex items-center justify-end px-2 pt-2">
+        <button
+          type="button"
+          class="flex h-6 w-6 items-center justify-center rounded text-xs text-muted transition hover:bg-surface-2 hover:text-fg cursor-pointer"
+          onclick={toggleSidebar}
+          title={sidebarCollapsed ? "Expandir menú lateral" : "Contraer menú lateral (más espacio)"}
+        >
+          {sidebarCollapsed ? "▶" : "◀"}
+        </button>
+      </div>
+      <div class="flex flex-col gap-0.5 px-2 pt-1">
         {#each PAGES as p}
           <button
             class={[
-              "relative flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[14px] font-medium transition-colors",
+              "relative flex items-center rounded-lg py-2 text-left text-[14px] font-medium transition-colors cursor-pointer",
+              sidebarCollapsed ? "justify-center px-2" : "gap-3 px-3",
               nav.page === p.id
                 ? "bg-surface-3 text-fg before:absolute before:top-2 before:bottom-2 before:left-0 before:w-[3px] before:rounded-full before:bg-accent"
                 : "text-muted hover:bg-surface-2 hover:text-fg",
             ]}
+            title={p.label}
             onclick={() => (nav.page = p.id)}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={p.icon} /></svg>
-            {p.label}
+            <svg class="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={p.icon} /></svg>
+            {#if !sidebarCollapsed}
+              <span class="truncate">{p.label}</span>
+            {/if}
           </button>
         {/each}
       </div>
       <div class="mt-auto">
-        <a
-          class="mx-2 mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-accent"
-          href={ISSUE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Reportar un problema en GitHub"
-          onclick={reportIssue}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v4 M12 16h.01" /></svg>
-          Reportar problema
-          <svg class="ml-auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7 M21 3 10 14 M10 3H3v18h18v-7" /></svg>
-        </a>
-        {#if reportIssueError}
+        {#if !sidebarCollapsed}
+          <a
+            class="mx-2 mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-accent"
+            href={ISSUE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Reportar un problema en GitHub"
+            onclick={reportIssue}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 8v4 M12 16h.01" /></svg>
+            Reportar problema
+            <svg class="ml-auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7 M21 3 10 14 M10 3H3v18h18v-7" /></svg>
+          </a>
+        {/if}
+        {#if reportIssueError && !sidebarCollapsed}
           <p class="mx-4 mb-3 select-text break-words text-xs text-bad" role="alert">
             No se pudo abrir el navegador. Visita {ISSUE_URL} para reportar un problema.
           </p>
         {/if}
-        {#if updater.phase === "available" || updater.phase === "downloading"}
+        {#if !sidebarCollapsed && (updater.phase === "available" || updater.phase === "downloading")}
           <div class="mx-2 mb-2 rounded-lg border border-line bg-surface-2 p-3 text-xs">
             <div class="font-medium text-fg">Actualización disponible</div>
             <div class="mt-0.5 text-muted">La versión {updater.available} está lista para instalar.</div>
@@ -236,7 +319,7 @@
             </button>
           </div>
         {/if}
-        {#if updater.phase === "outdated"}
+        {#if !sidebarCollapsed && updater.phase === "outdated"}
           <div class="mx-2 mb-2 rounded-lg border border-line bg-surface-2 p-3 text-xs">
             <div class="font-medium text-fg">Actualización disponible</div>
             <div class="mt-0.5 text-muted">La versión {updater.available} está lista para descargar.</div>
@@ -245,11 +328,22 @@
             </button>
           </div>
         {/if}
-        <div class="border-t border-line px-4 py-3 text-xs">
-          <div class="flex items-center gap-2">
-            <span class={["h-2 w-2 rounded-full", statusColor]}></span>
-            <span class="truncate text-muted" title={statusText}>{statusText}</span>
+        <!-- #3 Mini-Widget de Estado en Vivo (LMU + Hz + Spotter) -->
+        <div class="border-t border-line px-3 py-2.5 text-xs">
+          <div class={["flex items-center", sidebarCollapsed ? "justify-center" : "gap-2"]}>
+            <span class={["h-2.5 w-2.5 shrink-0 rounded-full", statusColor, snap?.source === "lmu" && "animate-pulse"]} title={statusText}></span>
+            {#if !sidebarCollapsed}
+              <span class="truncate font-medium text-fg" title={statusText}>{statusText}</span>
+            {/if}
           </div>
+          {#if !sidebarCollapsed}
+            <div class="mt-1.5 flex items-center justify-between font-mono text-[10px] text-muted">
+              <span>{telemetryHz > 0 ? `${telemetryHz} Hz` : "Standby"}</span>
+              <span class={config.value.spotter.enabled ? "font-bold text-good" : "text-faint"}>
+                🎙️ {config.value.spotter.enabled ? "Spotter ON" : "Spotter OFF"}
+              </span>
+            </div>
+          {/if}
         </div>
       </div>
     </nav>
@@ -261,6 +355,8 @@
         <LiveStream />
       {:else if nav.page === "overlays"}
         <Overlays />
+      {:else if nav.page === "dashstudio"}
+        <DashStudio />
       {:else if nav.page === "sessions"}
         <Sessions />
       {:else if nav.page === "analysis"}
@@ -280,3 +376,6 @@
 
 <ChangelogDialog />
 <StarPrompt />
+<CommandPalette bind:open={showCommandPalette} onOpenOnboarding={() => (showOnboarding = true)} />
+<OnboardingWizard bind:open={showOnboarding} />
+<ToastHost />

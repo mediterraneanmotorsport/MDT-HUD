@@ -48,6 +48,12 @@ pub fn parse(buf: &[u8], focused_slot: Option<i32>) -> Snapshot {
         .collect();
     for v in &mut vehicles {
         if let Some(t) = telemetry.get(&v.id) {
+            // Use high-frequency TelemInfo position/speed (~90-100 Hz, same physics frame as player)
+            // instead of 5 Hz VehicleScoring position so the proximity radar never stutters.
+            if t.pos.x != 0.0 || t.pos.y != 0.0 || t.pos.z != 0.0 {
+                v.pos = [t.pos.x, t.pos.y, t.pos.z];
+                v.speed = mag(t.local_vel);
+            }
             v.model = cstr(&t.vehicle_model);
             v.tyre_compounds = telem_compounds(t);
             let wheels = t.wheels;
@@ -157,7 +163,7 @@ fn parse_session(info: &ScoringInfo) -> Session {
 /// The scoring array is indexed like `mSector` (0 = S3, 1 = S1, 2 = S2).
 /// LMU reports 11 for a green sector and 1 (rF2 convention) for a local yellow.
 fn sector_yellow(raw: [i8; 3]) -> [bool; 3] {
-    let yellow = |v: i8| v == 1;
+    let yellow = |v: i8| v == 1 || v == 2;
     [yellow(raw[1]), yellow(raw[2]), yellow(raw[0])]
 }
 

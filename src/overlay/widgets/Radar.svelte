@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { scale } from "svelte/transition";
   import type { Units } from "../../lib/config.svelte";
   import { classColor } from "../../lib/format";
   import { useLive } from "../../lib/live.svelte";
@@ -10,6 +11,7 @@
   const range = $derived(opts.range ?? 14);
   const autoHide = $derived(opts.autoHide ?? false);
   const showRings = $derived(opts.showRings ?? true);
+  const animate = $derived(opts.animateTransitions ?? true);
 
   let prevPos: [number, number] | null = null;
   let heading: [number, number] = [0, -1];
@@ -88,10 +90,74 @@
   const SIZE = 168;
   const HALF = SIZE / 2;
   const pxPerMeter = $derived((HALF - 18) / range);
+
+  // Smooth 60/144fps interpolation between telemetry snapshots (eliminates stepping at 20-30 Hz)
+  let smoothBlips = $state<Blip[]>([]);
+  const smoothedMap = new Map<number, Blip>();
+  let latestTargetBlips: Blip[] = [];
+
+  $effect(() => {
+    latestTargetBlips = state.blips;
+    const activeIds = new Set<number>();
+    for (const b of latestTargetBlips) {
+      activeIds.add(b.id);
+      const existing = smoothedMap.get(b.id);
+      if (!existing || Math.hypot(b.lat - existing.lat, b.lon - existing.lon) > 8) {
+        smoothedMap.set(b.id, { ...b });
+      } else {
+        existing.color = b.color;
+      }
+    }
+    for (const id of Array.from(smoothedMap.keys())) {
+      if (!activeIds.has(id)) smoothedMap.delete(id);
+    }
+    if (latestTargetBlips.length === 0) {
+      smoothBlips = [];
+    } else if (smoothBlips.length === 0) {
+      smoothBlips = latestTargetBlips.map((b) => ({ ...b }));
+    }
+  });
+
+  $effect(() => {
+    if (!visible || state.blips.length === 0 || typeof window === "undefined") return;
+    let rafId = 0;
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+      lastTime = now;
+      // Fast critically-damped exponential smoothing (~38ms time constant): silky at 60-144fps with minimal latency
+      const alpha = 1 - Math.exp(-26 * dt);
+      const next: Blip[] = [];
+
+      for (const target of latestTargetBlips) {
+        let cur = smoothedMap.get(target.id);
+        if (!cur) {
+          cur = { ...target };
+          smoothedMap.set(target.id, cur);
+        } else {
+          cur.lat += (target.lat - cur.lat) * alpha;
+          cur.lon += (target.lon - cur.lon) * alpha;
+          cur.color = target.color;
+        }
+        next.push({ id: cur.id, lat: cur.lat, lon: cur.lon, color: cur.color });
+      }
+      smoothBlips = next;
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  });
 </script>
 
 {#if visible}
-  <div class="hud relative grid place-items-center p-2" style:width="{SIZE}px" style:height="{SIZE}px">
+  <div
+    transition:scale={animate ? { start: 0.84, duration: 180 } : { duration: 0 }}
+    class={["hud relative grid place-items-center p-2", animate && "mdt-anim-radar-in"]}
+    style:width="{SIZE}px"
+    style:height="{SIZE}px"
+  >
     <svg width={SIZE - 16} height={SIZE - 16} viewBox="-{HALF} -{HALF} {SIZE} {SIZE}" class="overflow-visible">
       {#if showRings}
         <circle cx="0" cy="0" r={HALF - 8} fill="none" stroke="rgb(255 255 255 / 0.08)" stroke-width="1" />
@@ -108,6 +174,7 @@
           stroke={state.leftAlert === 2 ? "#ff4646" : "#f5a524"}
           stroke-width={state.leftAlert === 2 ? "6" : "4"}
           stroke-linecap="round"
+          class={[animate && state.leftAlert === 2 && "mdt-anim-radar-arc-danger"]}
         />
       {/if}
 
@@ -119,6 +186,7 @@
           stroke={state.rightAlert === 2 ? "#ff4646" : "#f5a524"}
           stroke-width={state.rightAlert === 2 ? "6" : "4"}
           stroke-linecap="round"
+          class={[animate && state.rightAlert === 2 && "mdt-anim-radar-arc-danger"]}
         />
       {/if}
 
@@ -135,17 +203,18 @@
       />
       <path d="M -4 -9 L 0 -12 L 4 -9" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" />
 
-      <!-- Nearby cars -->
-      {#each state.blips as b (b.id)}
+      <!-- Nearby cars (interpolated at display refresh rate) -->
+      {#each smoothBlips as b (b.id)}
         {@const cx = b.lat * pxPerMeter}
         {@const cy = -b.lon * pxPerMeter}
         {@const overlap = Math.abs(b.lon) <= 3.2 && Math.abs(b.lat) <= 6.5}
         <rect
-          x={cx - 6.5}
-          y={cy - 13}
+          x="-6.5"
+          y="-13"
           width="13"
           height="26"
           rx="3.5"
+          transform="translate({cx.toFixed(2)}, {cy.toFixed(2)})"
           fill={overlap ? "#ff4646" : b.color}
           stroke="#ffffff"
           stroke-width={overlap ? "1.8" : "1"}
