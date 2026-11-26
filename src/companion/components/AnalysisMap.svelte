@@ -27,6 +27,53 @@
   let view = $state({ k: 1, tx: 0, ty: 0 });
   let drag = $state<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
 
+  // #16 Interactive 2D Ghost Replay state (time-synced Car A vs Ghost Car B)
+  let playing = $state(false);
+  let playbackSpeed = $state(1);
+  let playTime = $state(0);
+
+  const maxLapTime = $derived.by(() => {
+    const tA = data.a.t[data.a.t.length - 1] || 0;
+    const tB = data.b ? data.b.t[data.b.t.length - 1] || 0 : 0;
+    return Math.max(tA, tB, 1);
+  });
+
+  function findIndexAtTime(tArr: Float64Array, t: number): number {
+    let lo = 0;
+    let hi = tArr.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (tArr[mid] < t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  $effect(() => {
+    void data;
+    playing = false;
+    playTime = 0;
+  });
+
+  $effect(() => {
+    if (!playing || typeof window === "undefined") return;
+    let rafId = 0;
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000) * playbackSpeed;
+      last = now;
+      playTime += dt;
+      if (playTime >= maxLapTime) {
+        playTime = 0;
+      }
+      const idxA = findIndexAtTime(data.a.t, playTime);
+      oncursor(idxA);
+      rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
+  });
+
   const points = $derived.by(() => {
     const pts: [number, number][] = [];
     for (let i = 0; i < data.d.length; i++) pts.push([data.a.x[i], data.a.z[i]]);
@@ -141,11 +188,21 @@
 
     if (cursorIdx != null && cursorIdx < n) {
       if (data.b) {
-        const [bx, by] = toScreen(data.b.x[cursorIdx], data.b.z[cursorIdx]);
+        // In Ghost Replay mode, draw Ghost B at the SAME elapsed time as Car A so you see them pull ahead/behind!
+        const bIdx = playing ? findIndexAtTime(data.b.t, playTime) : cursorIdx;
+        const [bx, by] = toScreen(data.b.x[bIdx], data.b.z[bIdx]);
         ctx.fillStyle = "#f59e0b";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(bx, by, 5.5, 0, Math.PI * 2);
+        ctx.arc(bx, by, 6, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
+        if (playing) {
+          ctx.fillStyle = "#f59e0b";
+          ctx.font = "700 10px Segoe UI";
+          ctx.fillText("B", bx, by - 11);
+        }
       }
       const [ax, ay] = toScreen(data.a.x[cursorIdx], data.a.z[cursorIdx]);
       ctx.fillStyle = "#fff";
@@ -155,11 +212,16 @@
       ctx.arc(ax, ay, 6.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      if (playing) {
+        ctx.fillStyle = "#62b0ff";
+        ctx.font = "700 10px Segoe UI";
+        ctx.fillText("A", ax, ay - 12);
+      }
     }
   }
 
   $effect(() => {
-    void [data, colorBy, zones, cursorIdx, width, height, view.k, view.tx, view.ty, base];
+    void [data, colorBy, zones, cursorIdx, width, height, view.k, view.tx, view.ty, base, playing, playTime];
     draw();
   });
 
@@ -225,5 +287,59 @@
       <button class="btn h-6 px-2 text-xs" onclick={() => (view = { k: 1, tx: 0, ty: 0 })}>Restablecer vista</button>
     </div>
   {/if}
-  <div class="pointer-events-none absolute bottom-2 left-3 text-[11px] text-faint">Rueda para zoom · arrastra para mover · doble clic para restablecer</div>
+  <div class="pointer-events-none absolute bottom-10 left-3 text-[11px] text-faint">Rueda para zoom · arrastra para mover · doble clic para restablecer</div>
+
+  <!-- #16 Ghost Replay Controls Bar -->
+  <div class="flex flex-wrap items-center gap-2 border-t border-line bg-surface-2/90 px-3 py-2 text-xs">
+    <button
+      type="button"
+      class={[
+        "rounded-md px-2.5 py-1 font-bold transition-colors cursor-pointer",
+        playing ? "bg-amber-500 text-black" : "bg-accent text-white hover:bg-accent-hi",
+      ]}
+      onclick={() => {
+        if (!playing && cursorIdx != null && cursorIdx < data.a.t.length) {
+          playTime = data.a.t[cursorIdx];
+        }
+        playing = !playing;
+      }}
+    >
+      {playing ? "⏸ Pausar" : "▶ Replay Fantasma 2D"}
+    </button>
+    <div class="flex items-center gap-1">
+      {#each [0.5, 1, 2, 4] as spd (spd)}
+        <button
+          type="button"
+          class={[
+            "rounded px-1.5 py-0.5 font-mono text-[10px] font-bold cursor-pointer",
+            playbackSpeed === spd ? "bg-white/20 text-white" : "bg-black/30 text-muted hover:text-white",
+          ]}
+          onclick={() => (playbackSpeed = spd)}
+        >
+          {spd}×
+        </button>
+      {/each}
+    </div>
+    <input
+      type="range"
+      min="0"
+      max={maxLapTime}
+      step="0.05"
+      value={playTime}
+      oninput={(e) => {
+        playTime = Number(e.currentTarget.value);
+        oncursor(findIndexAtTime(data.a.t, playTime));
+      }}
+      class="flex-1 accent-accent cursor-pointer"
+    />
+    <span class="w-16 text-right font-mono text-[11px] text-muted tnum">
+      {playTime.toFixed(1)}s
+    </span>
+    {#if data.delta && cursorIdx != null && cursorIdx < data.delta.length}
+      {@const dVal = data.delta[cursorIdx]}
+      <span class={["rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tnum", dVal <= 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"]}>
+        Δ {dVal > 0 ? "+" : ""}{dVal.toFixed(3)}s
+      </span>
+    {/if}
+  </div>
 </div>

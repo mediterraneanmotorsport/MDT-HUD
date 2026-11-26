@@ -1,22 +1,39 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "../lib/api";
-  import { config, loadConfig, recoverWidgetsToPrimaryScreen, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS } from "../lib/config.svelte";
+  import { listen } from "@tauri-apps/api/event";
+  import { api, isNativeTauri } from "../lib/api";
+  import { config, DEFAULT_ONBOARD_FX, loadConfig, recoverWidgetsToPrimaryScreen, resetLayout, saveConfig, switchProfile, syncActiveProfile, WIDGETS, type TrackEntryAnim } from "../lib/config.svelte";
+  import { playTrackEntrySound } from "../lib/ignitionSound";
   import { live, startLive } from "../lib/live.svelte";
   import { overlayLayout } from "../lib/overlayLayout.svelte";
   import { smartGuides } from "../lib/smartGuides.svelte";
+  import { soundFx } from "../lib/soundFx.svelte";
   import { spotter } from "../lib/spotter.svelte";
   import { testAlert } from "../lib/testAlert.svelte";
   import SoftwareRepaint from "./SoftwareRepaint.svelte";
   import Logo from "../lib/Logo.svelte";
+  import EditStudioDrawer from "./EditStudioDrawer.svelte";
+  import FxOverlayEditor from "./FxOverlayEditor.svelte";
+  import BroadcastAlertToast from "./BroadcastAlertToast.svelte";
+  import OnboardFxLayer from "./OnboardFxLayer.svelte";
   import WidgetFrame from "./WidgetFrame.svelte";
   import { COMPONENTS } from "./widgets";
 
   let saveMessage = $state("");
+
+  $effect(() => {
+    if (edit) {
+      soundFx.stopContinuous();
+      return;
+    }
+    soundFx.processSnapshot(live.snap);
+  });
   let demoStartedForEditing = $state(false);
   let widgetPickerOpen = $state(false);
   let widgetSearch = $state("");
   let selectedWidgetId = $state<string | null>(null);
+  let studioDrawerMode = $state<"widget" | "theme" | null>(null);
+  let fxEditorOpen = $state(false);
   let panicMode = $state(false);
   let toolbarOffsetX = $state(0);
   let toolbarOffsetY = $state(0);
@@ -41,6 +58,16 @@
   }
 
   const ESSENTIAL_WIDGETS = new Set(["customdash", "dashboard", "radar", "flags", "spotter", "rpm", "inputs"]);
+  const QUALY_HIDDEN_WIDGETS = new Set([
+    "fuel",
+    "stintplanner",
+    "stintpace",
+    "pitrejoin",
+    "pacecatch",
+    "multiclasstraffic",
+    "pitbox",
+    "standings",
+  ]);
 
   function handleOverlayKeydown(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName;
@@ -51,6 +78,29 @@
     if (panicKey && (e.key.toLowerCase() === panicKey || e.code.toLowerCase() === panicKey)) {
       e.preventDefault();
       panicMode = !panicMode;
+      return;
+    }
+
+    // #8 Quick Toggle FX Onboard ON/OFF on the fly (default F9)
+    const fxKey = (config.value.general.onboardFx?.toggleKey || "F9").trim().toLowerCase();
+    if (fxKey && (e.key.toLowerCase() === fxKey || e.code.toLowerCase() === fxKey)) {
+      e.preventDefault();
+      if (!config.value.general.onboardFx) {
+        config.value.general.onboardFx = { ...DEFAULT_ONBOARD_FX, enabled: true };
+      } else {
+        config.value.general.onboardFx.enabled = !config.value.general.onboardFx.enabled;
+      }
+      saveConfig();
+      return;
+    }
+
+    // Close In-Game FX Editor on Escape
+    if (fxEditorOpen && e.key === "Escape") {
+      e.preventDefault();
+      fxEditorOpen = false;
+      if (isNativeTauri()) {
+        void import("@tauri-apps/api/core").then(({ invoke }) => invoke("set_fx_editor_mode", { enabled: false })).catch(() => {});
+      }
       return;
     }
 
@@ -118,6 +168,24 @@
     loadConfig();
     overlayLayout.init();
     testAlert.init();
+    let unlistenEntry: (() => void) | null = null;
+    let unlistenFxEd: (() => void) | null = null;
+    if (isNativeTauri()) {
+      void listen("test-track-entry-anim", () => {
+        triggerTrackEntryAnim();
+      }).then((fn) => {
+        unlistenEntry = fn;
+      });
+      void listen<boolean>("fx-editor-mode", (ev) => {
+        fxEditorOpen = Boolean(ev.payload);
+      }).then((fn) => {
+        unlistenFxEd = fn;
+      });
+    }
+    return () => {
+      unlistenEntry?.();
+      unlistenFxEd?.();
+    };
   });
 
   const edit = $derived(live.status.editMode);
@@ -126,6 +194,7 @@
   $effect(() => {
     if (!edit) {
       widgetPickerOpen = false;
+      studioDrawerMode = null;
       if (demoStartedForEditing && live.status.demo) {
         demoStartedForEditing = false;
         api.setDemoMode(false);
@@ -208,6 +277,75 @@
   const batteryFull = $derived(
     !!live.snap?.player && live.snap.player.electricMotorState > 0 && live.snap.player.battery >= 0.975,
   );
+  const pitLimiterActive = $derived(Boolean(live.snap?.player?.speedLimiter) && !edit);
+  const qualyModeActive = $derived(
+    Boolean(config.value.general.autoQualyMode) && !edit && live.snap?.session?.kind === "qualifying",
+  );
+
+  // #13 Optional Ambient Edge Lighting (Yellow/Blue flags, Car Left/Right side-by-side, Shift Light redline)
+  const ambient = $derived.by(() => {
+    if (!config.value.general.ambientEdgeLighting || edit || !live.snap?.player) {
+      return { yellow: false, blue: false, left: false, right: false, shift: false };
+    }
+    const snap = live.snap;
+    const p = snap.player!;
+    const me = snap.vehicles.find((v) => v.isPlayer);
+    const curSec = me?.sector && me.sector >= 1 && me.sector <= 3 ? me.sector : p.sector >= 1 && p.sector <= 3 ? p.sector : 1;
+    const yellow =
+      snap.session.phase === 6 ||
+      snap.session.yellowFlagState > 0 ||
+      Boolean(!p.inPits && snap.session.sectorYellow?.[curSec - 1]);
+    const blue = me?.flag === 6;
+    const shift = p.maxRpm > 0 && p.rpm / p.maxRpm > 0.965 && !p.inPits;
+
+    let left = false;
+    let right = false;
+    if (!p.inPits && p.speed > 8) {
+      const cos = Math.cos(p.yaw);
+      const sin = Math.sin(p.yaw);
+      for (const v of snap.vehicles) {
+        if (v.isPlayer || v.inPits || v.inGarage) continue;
+        const wx = v.pos[0] - p.pos[0];
+        const wz = v.pos[2] - p.pos[2];
+        if (wx * wx + wz * wz > 56) continue;
+        const dx = wx * cos - wz * sin; // LMU left-handed: +dx = LEFT, -dx = RIGHT
+        const dz = -wx * sin - wz * cos;
+        if (Math.abs(dz) <= 5.2 && Math.abs(dx) <= 3.6) {
+          if (dx > 0.4) left = true;
+          else if (dx < -0.4) right = true;
+        }
+      }
+    }
+    return { yellow, blue, left, right, shift };
+  });
+
+  // Track-entry / Ignition boot-up animation when player goes out on track (or tests preview)
+  const trackEntryAnim = $derived<TrackEntryAnim>(config.value.general.trackEntryAnim ?? "ignition");
+  let trackEntryAnimKey = $state(0);
+  let scanlineActive = $state(false);
+  let scanlineTimer: ReturnType<typeof setTimeout> | null = null;
+  let wasOnTrackForEntry = false;
+
+  function triggerTrackEntryAnim() {
+    if (trackEntryAnim === "none") return;
+    trackEntryAnimKey += 1;
+    scanlineActive = true;
+    if (config.value.general.trackEntrySound ?? true) {
+      playTrackEntrySound(trackEntryAnim);
+    }
+    if (scanlineTimer) clearTimeout(scanlineTimer);
+    scanlineTimer = setTimeout(() => {
+      scanlineActive = false;
+    }, 950);
+  }
+
+  $effect(() => {
+    const activeTrack = onTrack && !edit;
+    if (activeTrack && !wasOnTrackForEntry) {
+      triggerTrackEntryAnim();
+    }
+    wasOnTrackForEntry = activeTrack;
+  });
 </script>
 
 <svelte:window onkeydown={handleOverlayKeydown} />
@@ -220,10 +358,36 @@
   </div>
 {/if}
 
-{#if show && batteryFull}
+{#if show && pitLimiterActive}
+  <div class="pointer-events-none fixed inset-0 z-10 mdt-pit-limiter-screen"></div>
+{:else if show && batteryFull}
   <div
     class="pointer-events-none fixed inset-0 z-10 border-[3px] border-[#00ff66] hud-battery-full"
   ></div>
+{:else if show && ambient.yellow}
+  <div class="pointer-events-none fixed inset-0 z-10 mdt-ambient-yellow animate-pulse"></div>
+{:else if show && ambient.blue}
+  <div class="pointer-events-none fixed inset-0 z-10 mdt-ambient-blue animate-pulse"></div>
+{/if}
+
+{#if show && ambient.left}
+  <div class="pointer-events-none fixed inset-y-0 left-0 z-10 w-20 mdt-ambient-left animate-pulse"></div>
+{/if}
+{#if show && ambient.right}
+  <div class="pointer-events-none fixed inset-y-0 right-0 z-10 w-20 mdt-ambient-right animate-pulse"></div>
+{/if}
+{#if show && ambient.shift}
+  <div class="pointer-events-none fixed inset-x-0 top-0 z-10 h-14 mdt-ambient-shift"></div>
+{/if}
+
+{#if qualyModeActive && show}
+  <div class="pointer-events-none fixed top-2 left-3 z-40 rounded-full border border-fuchsia-400/50 bg-black/75 px-2.5 py-0.5 font-mono text-[10px] font-bold text-fuchsia-300 shadow-lg backdrop-blur-sm">
+    ⚡ MODO QUALY / HOTLAP
+  </div>
+{/if}
+
+{#if show && scanlineActive && trackEntryAnim !== "none"}
+  <div class="mdt-ignition-scanline"></div>
 {/if}
 
 {#if edit}
@@ -270,6 +434,20 @@
         onclick={() => (widgetPickerOpen = !widgetPickerOpen)}
       >
         {widgetPickerOpen ? "✕ Cerrar widgets" : "＋ Añadir / Quitar widgets"}
+      </button>
+      <button
+        class={["btn px-3! py-1.5! text-xs! font-bold", studioDrawerMode === "widget" ? "bg-cyan-400! text-black border-cyan-300!" : "bg-cyan-500/20! border-cyan-400/50! text-cyan-200! hover:bg-cyan-400! hover:text-black!"]}
+        title="Abrir panel de parámetros del widget seleccionado"
+        onclick={() => (studioDrawerMode = studioDrawerMode === "widget" ? null : "widget")}
+      >
+        ⚙ Configurar widget
+      </button>
+      <button
+        class={["btn px-3! py-1.5! text-xs! font-bold", studioDrawerMode === "theme" ? "bg-accent! text-white border-accent!" : "bg-accent/20! border-accent/50! text-accent-hi! hover:bg-accent! hover:text-white!"]}
+        title="Cambiar tema predefinido, colores, escala y opacidad global"
+        onclick={() => (studioDrawerMode = studioDrawerMode === "theme" ? null : "theme")}
+      >
+        🎨 Tema y Estilo
       </button>
       <button
         class={["btn px-3! py-1.5! text-xs! font-bold", live.status.demo ? "bg-warn! text-black" : ""]}
@@ -362,36 +540,76 @@
       </div>
     {/if}
   </div>
+
+  {#if studioDrawerMode}
+    <EditStudioDrawer
+      mode={studioDrawerMode}
+      {selectedWidgetId}
+      {effectiveWidgets}
+      onSelectWidget={(wid) => (selectedWidgetId = wid)}
+      onChangeMode={(m) => (studioDrawerMode = m)}
+      onTestTrackEntry={triggerTrackEntryAnim}
+      onClose={() => (studioDrawerMode = null)}
+    />
+  {/if}
 {/if}
 
 {#if show}
-  {#each WIDGETS as meta, idx (meta.id)}
-    {@const cfg = effectiveWidgets[meta.id]}
-    {@const isTesting = testAlert.isTesting(meta.id)}
-    {@const panicHidden = panicMode && !edit && !isTesting && !ESSENTIAL_WIDGETS.has(meta.id)}
-    {#if cfg && (cfg.enabled || isTesting) && !panicHidden}
-      {@const Widget = COMPONENTS[meta.id]}
-      {@const isSpotter = meta.id === "spotter"}
-      {@const shouldRender = edit || isTesting || (trackOk && focusOk) || (isSpotter && isSpotterSpeaking)}
-      {#if shouldRender}
-        <WidgetFrame
-          id={meta.id}
-          name={meta.name}
-          {edit}
-          selected={selectedWidgetId === meta.id}
-          customWidgets={effectiveWidgets}
-          {profileAnimKey}
-          staggerIndex={idx}
-          {nightMultiplier}
-          onSelect={(wid) => (selectedWidgetId = wid)}
-          onRemove={(wid) => {
-            if (selectedWidgetId === wid) selectedWidgetId = null;
-            toggleWidgetInEdit(wid, false);
-          }}
-        >
-          <Widget opts={cfg.options} units={config.value.general.units} edit={edit || isTesting} />
-        </WidgetFrame>
+  <OnboardFxLayer snap={live.snap} {edit} {trackOk} {focusOk} />
+  {@const tod = live.snap?.session?.timeOfDay ?? 43200}
+  {@const dayPhase =
+    !(config.value.general.animations?.dayNightTransition ?? true)
+      ? undefined
+      : tod >= 73800 || tod < 19800
+        ? "night"
+        : (tod >= 66600 && tod < 73800) || (tod >= 19800 && tod < 25200)
+          ? "dusk"
+          : "day"}
+  <div
+    class="pointer-events-none fixed inset-0 z-10"
+    data-pit-limiter={pitLimiterActive ? "true" : undefined}
+    data-day-phase={dayPhase}
+  >
+    {#each WIDGETS as meta, idx (meta.id)}
+      {@const cfg = effectiveWidgets[meta.id]}
+      {@const isTesting = testAlert.isTesting(meta.id)}
+      {@const panicHidden = panicMode && !edit && !isTesting && !ESSENTIAL_WIDGETS.has(meta.id)}
+      {@const qualyHidden = qualyModeActive && !isTesting && QUALY_HIDDEN_WIDGETS.has(meta.id)}
+      {#if cfg && (cfg.enabled || isTesting) && !panicHidden && !qualyHidden}
+        {@const Widget = COMPONENTS[meta.id]}
+        {@const isSpotter = meta.id === "spotter"}
+        {@const shouldRender = edit || isTesting || (trackOk && focusOk) || (isSpotter && isSpotterSpeaking)}
+        {#if shouldRender}
+          <WidgetFrame
+            id={meta.id}
+            name={meta.name}
+            {edit}
+            selected={selectedWidgetId === meta.id}
+            customWidgets={effectiveWidgets}
+            {profileAnimKey}
+            {trackEntryAnimKey}
+            {trackEntryAnim}
+            staggerIndex={idx}
+            {nightMultiplier}
+            onSelect={(wid) => (selectedWidgetId = wid)}
+            onConfigure={(wid) => {
+              selectedWidgetId = wid;
+              studioDrawerMode = "widget";
+            }}
+            onRemove={(wid) => {
+              if (selectedWidgetId === wid) selectedWidgetId = null;
+              toggleWidgetInEdit(wid, false);
+            }}
+          >
+            <Widget opts={cfg.options} units={config.value.general.units} edit={edit || isTesting} />
+          </WidgetFrame>
+        {/if}
       {/if}
-    {/if}
-  {/each}
+    {/each}
+  </div>
+  <BroadcastAlertToast snap={live.snap} {edit} />
+{/if}
+
+{#if fxEditorOpen}
+  <FxOverlayEditor onClose={() => (fxEditorOpen = false)} />
 {/if}

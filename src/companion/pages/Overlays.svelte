@@ -2,6 +2,7 @@
   import { api } from "../../lib/api";
   import {
     applyCompleteOverlayTheme,
+    BATTLE_SOUNDS,
     config,
     HUD_THEMES,
     resetLayout,
@@ -165,7 +166,12 @@
 
   function playBattleTestSound() {
     const vol = cfg?.options?.soundVolume ?? 0.8;
-    const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${Date.now()}`);
+    let file: string = cfg?.options?.soundFile || "Battle.mp3";
+    if (file === "random") {
+      const pool = BATTLE_SOUNDS.filter((s) => s.value !== "random");
+      file = pool[Math.floor(Math.random() * pool.length)]?.value ?? "Battle.mp3";
+    }
+    const audio = new Audio(`/Sound/Batalla/${encodeURIComponent(file)}?t=${Date.now()}`);
     audio.volume = Math.max(0, Math.min(1, vol));
     audio.play().catch(() => {});
   }
@@ -757,7 +763,7 @@
           <div class="mt-4 grid max-w-xl gap-3">
             <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
               <div class="min-w-0">
-                <div class="text-xs font-semibold text-fg">Sonido de Batalla (Battle.mp3)</div>
+                <div class="text-xs font-semibold text-fg">Sonido de Batalla</div>
                 <div class="text-[11px] text-muted">Se reproduce al activarse la alerta de batalla en pantalla</div>
               </div>
               <div class="flex items-center gap-3 shrink-0">
@@ -773,11 +779,31 @@
                   type="button"
                   class="rounded bg-accent/20 border border-accent/40 px-2.5 py-1 text-[11px] font-bold text-accent hover:bg-accent hover:text-white transition-colors cursor-pointer"
                   onclick={playBattleTestSound}
-                  title="Probar sonido de batalla"
+                  title="Probar sonido de batalla seleccionado"
                 >
                   ⚔️ ▶ Probar audio
                 </button>
               </div>
+            </div>
+
+            <!-- Selector de archivo de audio de batalla -->
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-2/60 p-3">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-fg">Audio de Batalla</div>
+                <div class="text-[11px] text-muted">Elige qué pista de Sound/Batalla sonará al entrar en duelo</div>
+              </div>
+              <select
+                class="field py-1 text-xs"
+                value={cfg.options.soundFile ?? "Battle.mp3"}
+                onchange={(e) => {
+                  cfg.options.soundFile = e.currentTarget.value;
+                  saveConfig();
+                }}
+              >
+                {#each BATTLE_SOUNDS as snd (snd.value)}
+                  <option value={snd.value}>{snd.label}</option>
+                {/each}
+              </select>
             </div>
 
             <!-- Slider: Volumen de la Alerta de Batalla -->

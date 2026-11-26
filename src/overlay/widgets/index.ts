@@ -34,6 +34,7 @@ import HeadToHead from "./HeadToHead.svelte";
 import GridPodium from "./GridPodium.svelte";
 import CustomDashWidget from "./CustomDashWidget.svelte";
 import PitBoxMeter from "./PitBoxMeter.svelte";
+import LiveTraceGhost from "./LiveTraceGhost.svelte";
 
 export interface WidgetProps {
   opts: Record<string, any>;
@@ -77,4 +78,5 @@ export const COMPONENTS: Record<string, Component<WidgetProps>> = {
   gridpodium: GridPodium,
   customdash: CustomDashWidget,
   pitbox: PitBoxMeter,
+  liveghost: LiveTraceGhost,
 };

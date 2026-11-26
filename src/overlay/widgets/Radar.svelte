@@ -10,6 +10,7 @@
 
   const range = $derived(opts.range ?? 14);
   const autoHide = $derived(opts.autoHide ?? false);
+  const showBackground = $derived(opts.showBackground ?? true);
   const showRings = $derived(opts.showRings ?? true);
   const animate = $derived(opts.animateTransitions ?? true);
 
@@ -28,8 +29,10 @@
     const p = snap?.player;
     if (!snap || !p) return { blips: [] as Blip[], leftAlert: 0, rightAlert: 0 };
 
-    // Determine forward unit vector from yaw or movement delta.
-    let fx = Math.sin(p.yaw);
+    // LMU / rFactor 2 uses a left-handed coordinate system:
+    // +X = left of car, +Y = up, +Z = rear of car, yaw = atan2(ori_z.x, ori_z.z).
+    // Forward unit vector F = -ori_z = (-sin(yaw), -cos(yaw)).
+    let fx = -Math.sin(p.yaw);
     let fz = -Math.cos(p.yaw);
     if (Math.abs(p.yaw) < 1e-4 && prevPos) {
       const mx = p.pos[0] - prevPos[0];
@@ -44,9 +47,10 @@
       }
     }
     prevPos = [p.pos[0], p.pos[2]];
-    // Right unit vector
-    const rx = -fz;
-    const rz = fx;
+    // Right unit vector in LMU left-handed XZ plane: R = (fz, -fx)
+    // (e.g. facing -Z => F=(0,-1) => R=(-1,0), since +X is left).
+    const rx = fz;
+    const rz = -fx;
 
     const blips: Blip[] = [];
     for (const v of snap.vehicles) {
@@ -154,7 +158,11 @@
 {#if visible}
   <div
     transition:scale={animate ? { start: 0.84, duration: 180 } : { duration: 0 }}
-    class={["hud relative grid place-items-center p-2", animate && "mdt-anim-radar-in"]}
+    class={[
+      showBackground ? "hud" : "bg-transparent",
+      "relative grid place-items-center p-2",
+      animate && "mdt-anim-radar-in",
+    ]}
     style:width="{SIZE}px"
     style:height="{SIZE}px"
   >

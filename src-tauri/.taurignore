@@ -1,0 +1,9 @@
+# Ignore heavy non-Rust directories so `npm run tauri dev` starts instantly
+qwen_voices/
+../VocesMDTQwen/
+../Perfil/
+../Sound/
+../public/Perfil/
+../public/Sound/
+../lmu-bridge/
+*.log

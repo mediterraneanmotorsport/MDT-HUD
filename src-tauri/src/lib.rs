@@ -4,6 +4,8 @@ mod damage;
 pub mod db;
 pub mod demo;
 mod engine;
+pub mod audio3d_engine;
+pub mod fx_engine;
 #[cfg(target_os = "linux")]
 mod viewport;
 pub mod lmu;
@@ -22,18 +24,20 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AppShortcuts {
-    #[serde(default = "default_edit_mode_sc")]
+    #[serde(default = "default_edit_mode_sc", alias = "editMode")]
     pub edit_mode: String,
-    #[serde(default = "default_toggle_overlay_sc")]
+    #[serde(default = "default_toggle_overlay_sc", alias = "toggleOverlay")]
     pub toggle_overlay: String,
-    #[serde(default = "default_toggle_spotter_sc")]
+    #[serde(default = "default_toggle_spotter_sc", alias = "toggleSpotter")]
     pub toggle_spotter: String,
-    #[serde(default = "default_next_profile_sc")]
+    #[serde(default = "default_next_profile_sc", alias = "nextProfile")]
     pub next_profile: String,
-    #[serde(default = "default_toggle_broadcast_sc")]
+    #[serde(default = "default_toggle_broadcast_sc", alias = "toggleBroadcast")]
     pub toggle_broadcast: String,
-    #[serde(default = "default_reset_focus_sc")]
+    #[serde(default = "default_reset_focus_sc", alias = "resetFocus")]
     pub reset_focus: String,
+    #[serde(default = "default_fx_editor_sc", alias = "fxEditor")]
+    pub fx_editor: String,
 }
 
 fn default_edit_mode_sc() -> String { "Ctrl+Shift+F9".into() }
@@ -42,6 +46,7 @@ fn default_toggle_spotter_sc() -> String { "Ctrl+Shift+F8".into() }
 fn default_next_profile_sc() -> String { "Ctrl+Shift+F7".into() }
 fn default_toggle_broadcast_sc() -> String { "Ctrl+Shift+F6".into() }
 fn default_reset_focus_sc() -> String { "Ctrl+Shift+F5".into() }
+fn default_fx_editor_sc() -> String { "Ctrl+Shift+F4".into() }
 
 impl Default for AppShortcuts {
     fn default() -> Self {
@@ -52,6 +57,7 @@ impl Default for AppShortcuts {
             next_profile: default_next_profile_sc(),
             toggle_broadcast: default_toggle_broadcast_sc(),
             reset_focus: default_reset_focus_sc(),
+            fx_editor: default_fx_editor_sc(),
         }
     }
 }
@@ -66,6 +72,7 @@ pub fn update_global_shortcuts(app: &tauri::AppHandle, shortcuts: &AppShortcuts)
         &shortcuts.next_profile,
         &shortcuts.toggle_broadcast,
         &shortcuts.reset_focus,
+        &shortcuts.fx_editor,
     ];
     for s in sc_list {
         let trimmed = s.trim();
@@ -86,6 +93,7 @@ pub struct AppState {
     pub config_path: PathBuf,
     pub data_dir: PathBuf,
     pub edit_mode: AtomicBool,
+    pub fx_editor_mode: AtomicBool,
     pub overlay_visible: AtomicBool,
     /// Created on first use by the companion's widget previews.
     pub preview: Mutex<Option<engine::PreviewSim>>,
@@ -97,6 +105,10 @@ pub struct AppState {
     pub mobile: Arc<Mutex<mobile_server::MobileRelayState>>,
     /// Dynamic global keyboard shortcuts
     pub configured_shortcuts: Mutex<AppShortcuts>,
+    /// Native DirectX 11 GPU post-processing engine (MDT-FX Engine)
+    pub fx: fx_engine::FxEngineHandle,
+    /// Native WASAPI Process-Loopback Spatial Audio DSP engine (MDT-Audio3D)
+    pub audio3d: audio3d_engine::Audio3DEngineHandle,
 }
 
 /// Detect the non-composited GTK path before constructing the overlay. Keep
@@ -287,6 +299,13 @@ pub fn run() {
                             return;
                         }
                     }
+                    if let Ok(fx_sc) = sc_map.fx_editor.parse::<Shortcut>() {
+                        if shortcut == &fx_sc {
+                            let enabled = !state.fx_editor_mode.load(Ordering::Acquire);
+                            commands::apply_fx_editor_mode(app, enabled);
+                            return;
+                        }
+                    }
                 })
                 .build(),
         )
@@ -348,21 +367,41 @@ pub fn run() {
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
 
+            let fx_handle = fx_engine::FxEngineHandle::new(shared.clone());
+            let audio3d_handle = audio3d_engine::Audio3DEngineHandle::new(shared.clone());
+
             app.manage(AppState {
                 shared: shared.clone(),
                 db: db.clone(),
                 config_path,
                 data_dir,
                 edit_mode: AtomicBool::new(false),
+                fx_editor_mode: AtomicBool::new(false),
                 overlay_visible: AtomicBool::new(true),
                 preview: Mutex::new(None),
                 uploads: uploads.clone(),
                 overlay_monitor: Mutex::new(String::new()),
                 mobile: mobile.clone(),
                 configured_shortcuts: Mutex::new(initial_shortcuts.clone()),
+                fx: fx_handle,
+                audio3d: audio3d_handle,
             });
 
             create_overlay(app, &monitor)?;
+
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(ov) = app.get_webview_window("overlay") {
+                    if let Ok(hwnd) = ov.hwnd() {
+                        app.state::<AppState>().fx.set_overlay_hwnd(hwnd.0 as isize);
+                    }
+                }
+                if let Some(main_w) = app.get_webview_window("main") {
+                    if let Ok(hwnd) = main_w.hwnd() {
+                        app.state::<AppState>().fx.set_companion_hwnd(hwnd.0 as isize);
+                    }
+                }
+            }
 
             update_global_shortcuts(app.handle(), &initial_shortcuts);
 
@@ -458,6 +497,7 @@ pub fn run() {
             commands::get_mobile_network_info,
             commands::open_mobile_firewall,
             commands::set_edit_mode,
+            commands::set_fx_editor_mode,
             commands::set_overlay_visible,
             commands::set_demo_mode,
             commands::list_monitors,
@@ -490,6 +530,34 @@ pub fn run() {
             commands::get_overlay_layout,
             commands::get_auto_start,
             commands::set_auto_start,
+            commands::send_discord_webhook,
+            commands::list_onnx_voices,
+            commands::open_onnx_voices_folder,
+            commands::install_piper_tts,
+            commands::synthesize_onnx_tts,
+            commands::ai_engineer_chat,
+            commands::listen_voice_command,
+            commands::list_qwen3_voices,
+            commands::open_qwen3_voices_folder,
+            commands::start_qwen3_tts_server,
+            commands::stop_qwen3_tts_server,
+            commands::clear_qwen3_cache,
+            commands::install_mdt_qwen,
+            commands::read_qwen3_voice_bundle,
+            commands::write_qwen3_voice_bundle,
+            commands::synthesize_qwen3_tts,
+            commands::update_native_fx,
+            commands::get_native_fx_status,
+            commands::load_native_fx_lut,
+            commands::clear_native_fx_lut,
+            commands::list_fx_cube_luts,
+            commands::load_fx_cube_lut_file,
+            commands::open_fx_presets_folder,
+            commands::save_fx_cube_lut_file,
+            commands::list_fx_preset_files,
+            commands::read_fx_preset_file,
+            commands::update_audio3d,
+            commands::get_audio3d_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -369,8 +369,10 @@ export async function install() {
     location.hash.startsWith("#mobile") ||
     location.hash.startsWith("#dash") ||
     location.hash.startsWith("#pitwall") ||
+    location.hash.startsWith("#streamer") ||
     location.pathname === "/mobile" ||
     location.pathname === "/dash" ||
+    location.pathname === "/streamer" ||
     /android|iphone|ipod|ipad/i.test(navigator.userAgent);
   const noLive = params.has("nolive") || isRemoteMobileClient;
   if (params.has("nolaps")) Object.assign(fx, { sessions: [], laps: [], traces: {}, personalBests: [], filters: { tracks: [], cars: [] } });

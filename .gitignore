@@ -35,3 +35,7 @@ __pycache__/
 
 # Windows bridge staged for native Linux packages
 src-tauri/resources/*.exe
+
+# Local Qwen3-TTS Python ROCm/CUDA environment
+VocesMDTQwen/.venv/
+VocesMDTQwen/*.log

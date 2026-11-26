@@ -1,8 +1,18 @@
 import { listen } from "@tauri-apps/api/event";
 import { getContext, setContext } from "svelte";
 import { api, isNativeTauri } from "./api";
-import { applyRemoteConfig, config, cycleNextProfile, saveConfig, toggleBroadcastMode } from "./config.svelte";
+import {
+  applyCompleteOverlayTheme,
+  applyRemoteConfig,
+  config,
+  cycleNextProfile,
+  saveConfig,
+  switchProfile,
+  toggleBroadcastMode,
+  type PresetThemeId,
+} from "./config.svelte";
 import { sendSessionToDiscord } from "./discord";
+import { aiEngineer } from "./aiEngineer.svelte";
 import { remoteStream } from "./remoteStream.svelte";
 import { spotter } from "./spotter.svelte";
 import type { Snapshot, Status } from "./types";
@@ -62,8 +72,10 @@ export async function startLive() {
     (location.hash.startsWith("#mobile") ||
       location.hash.startsWith("#dash") ||
       location.hash.startsWith("#pitwall") ||
+      location.hash.startsWith("#streamer") ||
       location.pathname === "/mobile" ||
       location.pathname === "/dash" ||
+      location.pathname === "/streamer" ||
       /android|iphone|ipod|ipad/i.test(navigator.userAgent));
   const isOverlayWindow = typeof window !== "undefined" && location.hash.startsWith("#overlay");
   wheelControl.startHost();
@@ -76,12 +88,14 @@ export async function startLive() {
   let lastExportedSessionId: number | null = null;
   let exitGarageTimer: ReturnType<typeof setTimeout> | undefined;
   let lastDemoOrEditExit = 0;
+  let lastCompanionSnapAt = 0;
+  let lastCompanionSource = "";
 
   async function triggerAutoDiscordExport() {
     if (live.status.demo || live.status.editMode || Date.now() - lastDemoOrEditExit < 15000) {
       return;
     }
-    if (!config.value.discord?.enabled || !config.value.discord?.autoExport || !config.value.discord?.webhookUrl) {
+    if (!config.value.discord?.enabled || !config.value.discord?.autoExport) {
       return;
     }
     const sessions = await api.listSessions({ limit: 1 }).catch(() => []);
@@ -102,12 +116,48 @@ export async function startLive() {
   }
 
   await listen<Snapshot>("snapshot", (e) => {
+    const snap = e.payload;
+    // Drop stale in-flight demo frames right after the user clicks "Detener Demo"
+    if (snap.source === "demo" && !live.status.demo && Date.now() - lastDemoOrEditExit < 1200) {
+      return;
+    }
     if (!remoteStream.spectatingId) {
-      live.snap = e.payload;
+      if (!isOverlayWindow && !isRemoteView) {
+        // Companion UI only needs ~6 Hz reactive DOM updates (cuts Companion CPU/GPU by ~90%)
+        const now = performance.now();
+        if (snap.source !== lastCompanionSource || now - lastCompanionSnapAt >= 160) {
+          lastCompanionSnapAt = now;
+          lastCompanionSource = snap.source;
+          live.snap = snap;
+        }
+      } else {
+        live.snap = snap;
+      }
     }
     if (!isRemoteView && !isOverlayWindow) {
       remoteStream.onLocalTelemetry(e.payload);
+
+      // #1 Auto-switch HUD profile by car class (Hypercar / LMP2 / LMP3 / LMGT3)
+      if (config.value.general.autoProfileByClass && e.payload.player?.vehicleClass) {
+        const rawCls = e.payload.player.vehicleClass.toLowerCase();
+        const normCls =
+          rawCls.includes("hyper") || rawCls.includes("lmh") || rawCls.includes("lmdh")
+            ? "Hypercar"
+            : rawCls.includes("lmp2")
+              ? "LMP2"
+              : rawCls.includes("lmp3")
+                ? "LMP3"
+                : rawCls.includes("gt")
+                  ? "LMGT3"
+                  : "";
+        const targetProf = normCls ? config.value.general.classProfiles?.[normCls] : "";
+        if (targetProf && targetProf !== config.value.activeProfile && config.value.profiles[targetProf]) {
+          switchProfile(targetProf);
+        }
+      }
+
       spotter.update(e.payload);
+      aiEngineer.onTelemetry(e.payload);
       if (!isNativeTauri()) {
         wheelControl.pushSnapshotToMobile(e.payload);
       }
@@ -156,13 +206,17 @@ export async function startLive() {
     live.status = { ...live.status, gameFocused: e.payload };
   });
   await listen<boolean>("demo-mode", (e) => {
-    if (live.status.demo && !e.payload) {
+    if (!e.payload) {
       lastDemoOrEditExit = Date.now();
       clearTimeout(exitGarageTimer);
       lastSessionCode = -1;
       lastPhase = -1;
       lastInRealtime = false;
       lastLapNumber = 0;
+      if (live.snap?.source === "demo") {
+        live.snap = null;
+        lastCompanionSource = "none";
+      }
     }
     live.status = { ...live.status, demo: e.payload };
   });
@@ -181,6 +235,27 @@ export async function startLive() {
       for (const v of live.snap.vehicles) {
         v.isFocused = v.isPlayer;
       }
+    }
+  });
+  await listen<{ action?: string; value?: string }>("streamer-action", (e) => {
+    if (isRemoteView || isOverlayWindow) return;
+    const act = e.payload?.action;
+    const val = e.payload?.value ?? "";
+    if (act === "toggle_broadcast") {
+      toggleBroadcastMode();
+    } else if (act === "toggle_spotter") {
+      config.value.spotter.enabled = !config.value.spotter.enabled;
+      saveConfig();
+    } else if (act === "next_profile") {
+      cycleNextProfile();
+    } else if (act === "set_profile" && val && config.value.profiles[val]) {
+      switchProfile(val);
+    } else if (act === "set_theme" && val) {
+      applyCompleteOverlayTheme(val as PresetThemeId, true);
+      wheelControl.setMobileTheme(val as PresetThemeId);
+    } else if (act === "toggle_widget" && val && config.value.widgets[val]) {
+      config.value.widgets[val].enabled = !config.value.widgets[val].enabled;
+      saveConfig();
     }
   });
   if (!isRemoteView && !isOverlayWindow) {

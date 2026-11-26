@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { config, saveConfig, type WidgetConfig } from "../lib/config.svelte";
+  import { config, saveConfig, type TrackEntryAnim, type WidgetConfig } from "../lib/config.svelte";
   import { live } from "../lib/live.svelte";
   import { overlayLayout } from "../lib/overlayLayout.svelte";
   import { smartGuides } from "../lib/smartGuides.svelte";
@@ -12,9 +12,12 @@
     selected = false,
     customWidgets,
     profileAnimKey = 0,
+    trackEntryAnimKey = 0,
+    trackEntryAnim = "ignition",
     staggerIndex = 0,
     nightMultiplier = 1,
     onSelect,
+    onConfigure,
     onRemove,
     children,
   }: {
@@ -24,9 +27,12 @@
     selected?: boolean;
     customWidgets?: Record<string, WidgetConfig>;
     profileAnimKey?: number;
+    trackEntryAnimKey?: number;
+    trackEntryAnim?: TrackEntryAnim;
     staggerIndex?: number;
     nightMultiplier?: number;
     onSelect?: (id: string) => void;
+    onConfigure?: (id: string) => void;
     onRemove?: (id: string) => void;
     children: Snippet;
   } = $props();
@@ -36,6 +42,21 @@
 
   let dragging = $state(false);
   let start = { px: 0, py: 0, x: 0, y: 0 };
+  type ResizeDir = "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
+  let resizing = $state<ResizeDir | null>(null);
+  let resizeStart = {
+    px: 0,
+    py: 0,
+    x: 0,
+    y: 0,
+    size: 1,
+    scaleX: 1,
+    scaleY: 1,
+    baseW: 200,
+    baseH: 100,
+    visW: 200,
+    visH: 100,
+  };
   let frameEl: HTMLDivElement | undefined = $state();
   let vpW = $state(typeof window !== "undefined" ? window.innerWidth : 1920);
   let vpH = $state(typeof window !== "undefined" ? window.innerHeight : 1080);
@@ -51,7 +72,106 @@
     return () => window.removeEventListener("resize", onResize);
   });
 
-  const scaleVal = $derived(g.scale * cfg.size);
+  const scaleXMult = $derived(cfg.scaleX ?? 1);
+  const scaleYMult = $derived(cfg.scaleY ?? 1);
+  const effScaleX = $derived(g.scale * cfg.size * scaleXMult);
+  const effScaleY = $derived(g.scale * cfg.size * scaleYMult);
+
+  function startResize(dir: ResizeDir, e: PointerEvent) {
+    if (!edit || cfg.locked || e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    onSelect?.(id);
+    const rect = frameEl?.getBoundingClientRect();
+    const curVisW = rect?.width || 200;
+    const curVisH = rect?.height || 100;
+    const curSx = Math.max(0.2, effScaleX);
+    const curSy = Math.max(0.2, effScaleY);
+    resizing = dir;
+    resizeStart = {
+      px: e.clientX,
+      py: e.clientY,
+      x: cfg.x,
+      y: cfg.y,
+      size: cfg.size,
+      scaleX: cfg.scaleX ?? 1,
+      scaleY: cfg.scaleY ?? 1,
+      baseW: curVisW / curSx,
+      baseH: curVisH / curSy,
+      visW: curVisW,
+      visH: curVisH,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function moveResize(e: PointerEvent) {
+    if (!resizing) return;
+    e.stopPropagation();
+    const dx = e.clientX - resizeStart.px;
+    const dy = e.clientY - resizeStart.py;
+    const dir = resizing;
+    const clampScale = (v: number) => Math.max(0.35, Math.min(3.0, Math.round(v * 100) / 100));
+
+    if (dir === "e" || dir === "w") {
+      // Independent horizontal transform (scaleX)
+      const signedDx = dir === "e" ? dx : -dx;
+      const targetVisW = Math.max(40, resizeStart.visW + signedDx);
+      const ratio = targetVisW / Math.max(1, resizeStart.visW);
+      const nextSx = clampScale(resizeStart.scaleX * ratio);
+      cfg.scaleX = nextSx;
+      if (dir === "w") {
+        const actualVisW = resizeStart.baseW * g.scale * resizeStart.size * nextSx;
+        cfg.x = Math.round(resizeStart.x + (resizeStart.visW - actualVisW));
+      }
+    } else if (dir === "n" || dir === "s") {
+      // Independent vertical transform (scaleY)
+      const signedDy = dir === "s" ? dy : -dy;
+      const targetVisH = Math.max(30, resizeStart.visH + signedDy);
+      const ratio = targetVisH / Math.max(1, resizeStart.visH);
+      const nextSy = clampScale(resizeStart.scaleY * ratio);
+      cfg.scaleY = nextSy;
+      if (dir === "n") {
+        const actualVisH = resizeStart.baseH * g.scale * resizeStart.size * nextSy;
+        cfg.y = Math.round(resizeStart.y + (resizeStart.visH - actualVisH));
+      }
+    } else {
+      // Diagonal corner resize: proportional uniform scale (cfg.size)
+      const signedDx = dir.includes("e") ? dx : -dx;
+      const signedDy = dir.includes("s") ? dy : -dy;
+      const rx = (resizeStart.visW + signedDx) / Math.max(1, resizeStart.visW);
+      const ry = (resizeStart.visH + signedDy) / Math.max(1, resizeStart.visH);
+      const ratio = (rx + ry) / 2;
+      const nextSize = clampScale(resizeStart.size * ratio);
+      cfg.size = nextSize;
+      if (dir.includes("w")) {
+        const actualVisW = resizeStart.baseW * g.scale * nextSize * resizeStart.scaleX;
+        cfg.x = Math.round(resizeStart.x + (resizeStart.visW - actualVisW));
+      }
+      if (dir.includes("n")) {
+        const actualVisH = resizeStart.baseH * g.scale * nextSize * resizeStart.scaleY;
+        cfg.y = Math.round(resizeStart.y + (resizeStart.visH - actualVisH));
+      }
+    }
+  }
+
+  function endResize(e: PointerEvent) {
+    if (!resizing) return;
+    e.stopPropagation();
+    resizing = null;
+    saveConfig();
+  }
+
+  function resetAxis(dir: ResizeDir, e: MouseEvent) {
+    e.stopPropagation();
+    if (dir === "e" || dir === "w") cfg.scaleX = 1;
+    else if (dir === "n" || dir === "s") cfg.scaleY = 1;
+    else {
+      cfg.size = 1;
+      cfg.scaleX = 1;
+      cfg.scaleY = 1;
+    }
+    saveConfig();
+  }
 
   // #9 Auto-Fade in Fast Corners: dims secondary widgets when cornering hard (|gLat| > 1.05G) and restores on straights/pits
   const cornerFadeMultiplier = $derived.by(() => {
@@ -154,7 +274,7 @@
   class:hover:z-20={edit}
   class:z-20={selected && !dragging}
   class:z-40={dragging}
-  style:transform="translate({clampedX}px, {clampedY}px) scale({scaleVal})"
+  style:transform="translate({clampedX}px, {clampedY}px) scale({effScaleX}, {effScaleY})"
   style:opacity={g.opacity * cfg.alpha * nightMultiplier * cornerFadeMultiplier}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
@@ -176,7 +296,13 @@
       ]}
     >
       <span class="pointer-events-none">{name}</span>
-      <span class="pointer-events-none font-normal opacity-80">{Math.round(g.scale * cfg.size * 100)}%</span>
+      <span class="pointer-events-none font-normal opacity-85 font-mono">
+        {#if Math.abs(scaleXMult - 1) > 0.01 || Math.abs(scaleYMult - 1) > 0.01}
+          {Math.round(effScaleX * 100)}%×{Math.round(effScaleY * 100)}%
+        {:else}
+          {Math.round(effScaleX * 100)}%
+        {/if}
+      </span>
       <button
         type="button"
         class="ml-1 flex h-4 px-1 cursor-pointer items-center justify-center rounded bg-black/30 text-[10px] leading-none text-white/90 hover:bg-black/60 transition-colors"
@@ -215,6 +341,8 @@
           onclick={(e) => {
             e.stopPropagation();
             cfg.size = 1;
+            cfg.scaleX = 1;
+            cfg.scaleY = 1;
             saveConfig();
           }}
         >
@@ -233,6 +361,21 @@
           ⌖
         </button>
       {/if}
+      {#if onConfigure}
+        <button
+          type="button"
+          class="flex h-4 w-4 cursor-pointer items-center justify-center rounded bg-black/30 text-[10px] leading-none text-white/90 hover:bg-cyan-500 hover:text-black transition-colors"
+          title="Configurar parámetros de {name}"
+          onpointerdown={(e) => e.stopPropagation()}
+          onclick={(e) => {
+            e.stopPropagation();
+            onSelect?.(id);
+            onConfigure(id);
+          }}
+        >
+          ⚙
+        </button>
+      {/if}
       {#if onRemove}
         <button
           type="button"
@@ -248,11 +391,44 @@
         </button>
       {/if}
     </div>
+
+    <!-- 8 Transform & Resize Handles: 4 Diagonal Corners + 2 Horizontal + 2 Vertical -->
+    {#if !cfg.locked}
+      {#each [
+        { dir: "nw", cls: "-top-2 -left-2 cursor-nwse-resize h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-black", title: "Redimensionar diagonal (doble clic = 100%)" },
+        { dir: "ne", cls: "-top-2 -right-2 cursor-nesw-resize h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-black", title: "Redimensionar diagonal (doble clic = 100%)" },
+        { dir: "sw", cls: "-bottom-2 -left-2 cursor-nesw-resize h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-black", title: "Redimensionar diagonal (doble clic = 100%)" },
+        { dir: "se", cls: "-bottom-2 -right-2 cursor-nwse-resize h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-black", title: "Redimensionar diagonal (doble clic = 100%)" },
+        { dir: "n", cls: "-top-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize h-2.5 w-7 rounded-full bg-accent border border-white", title: "Estirar verticalmente (doble clic = 100%)" },
+        { dir: "s", cls: "-bottom-1.5 left-1/2 -translate-x-1/2 cursor-ns-resize h-2.5 w-7 rounded-full bg-accent border border-white", title: "Estirar verticalmente (doble clic = 100%)" },
+        { dir: "w", cls: "top-1/2 -left-1.5 -translate-y-1/2 cursor-ew-resize h-7 w-2.5 rounded-full bg-accent border border-white", title: "Estirar horizontalmente (doble clic = 100%)" },
+        { dir: "e", cls: "top-1/2 -right-1.5 -translate-y-1/2 cursor-ew-resize h-7 w-2.5 rounded-full bg-accent border border-white", title: "Estirar horizontalmente (doble clic = 100%)" },
+      ] as h (h.dir)}
+        <div
+          class={["absolute z-30 shadow-md transition-transform hover:scale-125", h.cls]}
+          title={h.title}
+          role="presentation"
+          onpointerdown={(e) => startResize(h.dir as ResizeDir, e)}
+          onpointermove={moveResize}
+          onpointerup={endResize}
+          onpointercancel={endResize}
+          ondblclick={(e) => resetAxis(h.dir as ResizeDir, e)}
+        ></div>
+      {/each}
+    {/if}
   {/if}
-  {#key profileAnimKey}
+  {#key `${profileAnimKey}-${trackEntryAnimKey}`}
     <div
-      class={[edit && "pointer-events-none", profileAnimKey > 0 && "mdt-anim-profile-stagger"]}
+      class={[
+        edit && "pointer-events-none",
+        trackEntryAnimKey > 0 && trackEntryAnim !== "none"
+          ? `mdt-entry-${trackEntryAnim}`
+          : profileAnimKey > 0
+            ? "mdt-anim-profile-stagger"
+            : "",
+      ]}
       style:--stagger-delay="{staggerIndex * 24}ms"
+      style:--entry-delay="{Math.min(staggerIndex * 45, 540)}ms"
     >
       {@render children()}
     </div>

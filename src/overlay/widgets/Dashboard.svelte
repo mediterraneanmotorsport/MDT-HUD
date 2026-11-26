@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import type { Units } from "../../lib/config.svelte";
+  import { config, type Units } from "../../lib/config.svelte";
   import { speed, speedUnit } from "../../lib/format";
   import { useLive } from "../../lib/live.svelte";
 
@@ -58,20 +58,43 @@
   const deltaVal = $derived(
     live.snap?.timing.deltaPb ?? (live.snap?.timing.sessionBest && p ? p.deltaBest : null),
   );
+  const gForceEnabled = $derived(config.value.general.animations?.dashboardGForcePulse ?? true);
+  const absTcPulseEnabled = $derived(config.value.general.animations?.absTcLockupPulse ?? true);
+  const liftCoastEnabled = $derived(config.value.general.animations?.liftAndCoastAnim ?? true);
+  const ersFlowEnabled = $derived(config.value.general.animations?.ersFlowAnim ?? true);
+  const rotaryPopupEnabled = $derived(config.value.general.animations?.electronicsPopupAnim ?? true);
+  const isLiftAndCoast = $derived(liftCoastEnabled && Boolean(p && p.liftAndCoast > 0.08 && p.speed > 25 && !p.inPits));
+  const ersAnimClass = $derived(
+    !ersFlowEnabled
+      ? ""
+      : p?.electricMotorState === 2
+        ? "mdt-ers-deploy"
+        : p?.electricMotorState === 3
+          ? "mdt-ers-regen"
+          : "",
+  );
+  const gForceClass = $derived.by(() => {
+    if (!gForceEnabled || !p) return "";
+    if (p.brake > 0.65 && p.speed > 18) return "mdt-gforce-brake";
+    if (p.throttle > 0.92 && p.speed > 28 && p.gear >= 2) return "mdt-gforce-accel";
+    return "";
+  });
   const hudAlertClass = $derived(
     isYellowFlag
       ? "border-2 border-[#ffd400] ring-4 ring-[#ffd400]/70 shadow-[0_0_24px_#ffd400] animate-pulse"
       : isBlueFlag
         ? "border-2 border-[#1d6cf2] ring-4 ring-[#1d6cf2]/70 shadow-[0_0_24px_#1d6cf2] animate-pulse"
-        : batteryFull
-          ? "hud-battery-full"
-          : (opts.deltaBorder ?? true) && deltaVal != null
-            ? deltaVal < -0.005
-              ? "hud-delta-good"
-              : deltaVal > 0.005
-                ? "hud-delta-bad"
-                : ""
-            : "",
+        : gForceClass
+          ? gForceClass
+          : batteryFull
+            ? "hud-battery-full"
+            : (opts.deltaBorder ?? true) && deltaVal != null
+              ? deltaVal < -0.005
+                ? "hud-delta-good"
+                : deltaVal > 0.005
+                  ? "hud-delta-bad"
+                  : ""
+              : "",
   );
   const motor = $derived(
     batteryFull
@@ -369,7 +392,7 @@
         <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
       </svg>
       <div class="h-2 flex-1 overflow-hidden rounded-full bg-hud-2">
-        <div class="h-full rounded-full transition-[width] duration-150" style:width="{battery * 100}%" style:background={batteryColor}></div>
+        <div class={["h-full rounded-full transition-[width] duration-150", ersAnimClass]} style:width="{battery * 100}%" style:background={batteryColor}></div>
       </div>
       <span class="w-8 text-right text-[12px] font-bold tabular-nums">{Math.round(battery * 100)}%</span>
       <span class="w-12 text-right text-[10px] font-bold tracking-wider uppercase" style:color={motor.color}>{motor.label}</span>
@@ -424,30 +447,28 @@
 
 {#snippet pitLimiterBanner()}
   {#if isYellowFlag}
-    <div class="mb-2 animate-pulse rounded bg-[#ffd400] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_15px_#ffd400]">
+    <div class="pointer-events-none absolute top-1.5 inset-x-2 z-40 animate-pulse rounded bg-[#ffd400] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_15px_#ffd400]">
       ⚠️ BANDERA AMARILLA
     </div>
   {:else if isBlueFlag}
-    <div class="mb-2 animate-pulse rounded bg-[#1d6cf2] py-0.5 text-center font-display text-xs font-black tracking-widest text-white uppercase shadow-[0_0_15px_#1d6cf2]">
+    <div class="pointer-events-none absolute top-1.5 inset-x-2 z-40 animate-pulse rounded bg-[#1d6cf2] py-0.5 text-center font-display text-xs font-black tracking-widest text-white uppercase shadow-[0_0_15px_#1d6cf2]">
       🟦 BANDERA AZUL · CEDE EL PASO
     </div>
-  {/if}
-  {#if isPitLimiter}
-    <div class="mb-2 animate-pulse rounded bg-warn py-0.5 text-center font-display text-xs font-extrabold tracking-widest text-black uppercase">
+  {:else if isPitLimiter}
+    <div class="pointer-events-none absolute top-1.5 inset-x-2 z-40 animate-pulse rounded bg-warn py-0.5 text-center font-display text-xs font-extrabold tracking-widest text-black uppercase shadow-[0_0_14px_#f5a524]">
       LIMITADOR DE PIT ACTIVO
     </div>
-  {/if}
-  {#if changedBanner}
-    <div class="mb-1.5 rounded bg-accent/90 py-0.5 text-center font-display text-[11px] font-black tracking-widest text-white uppercase shadow">
-      ⚙ {changedBanner}
+  {:else if isLiftAndCoast}
+    <div class="mdt-anim-lift-coast pointer-events-none absolute top-1.5 inset-x-2 z-30 rounded border border-cyan-300/80 bg-cyan-500/90 py-0.5 text-center font-display text-xs font-black tracking-[0.16em] text-black uppercase shadow-[0_0_16px_rgba(34,211,238,0.75)]">
+      ⚡ LIFT &amp; COAST · LEVANTA EL PIE &gt;&gt;&gt;
     </div>
   {/if}
 {/snippet}
 
 {#snippet batteryFullBanner()}
-  {#if batteryFull}
+  {#if batteryFull && !isYellowFlag && !isBlueFlag && !isPitLimiter && !isLiftAndCoast}
     <div
-      class="mb-2 flex animate-pulse items-center justify-center gap-1.5 rounded bg-[#00ff66] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_18px_#00ff66]"
+      class="pointer-events-none absolute top-1.5 inset-x-2 z-30 flex animate-pulse items-center justify-center gap-1.5 rounded bg-[#00ff66] py-0.5 text-center font-display text-xs font-black tracking-widest text-black uppercase shadow-[0_0_18px_#00ff66]"
     >
       <span>⚡ BATERÍA 100% LLENA · DESPLEGAR ERS</span>
     </div>
@@ -455,10 +476,10 @@
 {/snippet}
 
 {#snippet bigRotaryOverlay()}
-  {#if changedPopup}
+  {#if changedPopup && rotaryPopupEnabled}
     <div class="pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-2">
       <div
-        class="flex flex-col items-center justify-center rounded-2xl border-4 bg-[#070e1b]/95 px-6 py-3.5 shadow-2xl backdrop-blur-md transition-all duration-150"
+        class="mdt-anim-rotary-pop flex flex-col items-center justify-center rounded-2xl border-4 bg-[#070e1b]/95 px-6 py-3.5 shadow-2xl backdrop-blur-md"
         style:border-color={changedPopup.color}
         style:box-shadow="0 0 35px {changedPopup.color}"
       >
@@ -673,7 +694,7 @@
       <div class="mt-2 flex items-center gap-2 rounded border border-white/10 bg-black/50 px-2 py-1">
         <span class="text-[10px] font-bold text-accent">HÍBRIDO</span>
         <div class="h-2 flex-1 overflow-hidden rounded-sm bg-hud-2">
-          <div class="h-full transition-[width] duration-150" style:width="{battery * 100}%" style:background={batteryColor}></div>
+          <div class={["h-full transition-[width] duration-150", ersAnimClass]} style:width="{battery * 100}%" style:background={batteryColor}></div>
         </div>
         <span class="text-xs font-bold tabular-nums">{Math.round(battery * 100)}%</span>
         <span class="text-[10px] font-bold uppercase" style:color={motor.color}>{motor.label}</span>

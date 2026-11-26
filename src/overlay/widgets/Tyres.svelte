@@ -1,6 +1,6 @@
 <script lang="ts">
   import { compoundStyle } from "../../lib/brands";
-  import type { Units } from "../../lib/config.svelte";
+  import { config, type Units } from "../../lib/config.svelte";
   import { stintLapsLeft, wearAtStintEnd } from "../../lib/estimates";
   import { pressure, pressureUnit, temp } from "../../lib/format";
   import { useLive } from "../../lib/live.svelte";
@@ -71,6 +71,13 @@
     p ? Math.round(((p.wheels[2].wear + p.wheels[3].wear) / 2) * 100) : 100,
   );
   const wearDiff = $derived(frontWearPct - rearWearPct); // negative = front more worn (understeer), positive = rear more worn (oversteer)
+  const lockupPulseEnabled = $derived(config.value.general.animations?.absTcLockupPulse ?? true);
+  function wheelPulseClass(idx: number): string {
+    if (!lockupPulseEnabled || !p) return "";
+    if (idx < 2 && p.absActive) return "mdt-anim-lockup-pulse ring-2 ring-sky-400 shadow-[0_0_12px_#38bdf8]";
+    if (idx >= 2 && p.tcActive) return "mdt-anim-lockup-pulse ring-2 ring-amber-400 shadow-[0_0_12px_#f59e0b]";
+    return "";
+  }
 </script>
 
 {#snippet pressureLabel(w: Wheel)}
@@ -86,11 +93,11 @@
 {/snippet}
 
 <!-- Tyre seen from above: stripes coloured by the left / centre / right temperature, with their average on top. -->
-{#snippet tyre(w: Wheel)}
+{#snippet tyre(w: Wheel, idx: number)}
   {@const zones = layer === "core" ? w.innerTemp : w.surfaceTemp}
   {@const avg = (zones[0] + zones[1] + zones[2]) / 3}
   {@const core = (w.innerTemp[0] + w.innerTemp[1] + w.innerTemp[2]) / 3}
-  <div class="relative flex h-[58px] w-[42px] overflow-hidden rounded-[8px] bg-black" class:opacity-40={w.detached}>
+  <div class={["relative flex h-[58px] w-[42px] overflow-hidden rounded-[8px] bg-black transition-shadow", wheelPulseClass(idx)]} class:opacity-40={w.detached}>
     {#each zones as t}
       <div class="flex-1" style:background={tempColor(t, w.optimalTemp)}></div>
     {/each}
@@ -143,7 +150,7 @@
       <div class={["flex items-end gap-1.5", i === b && "flex-row-reverse"]}>
         <div class="flex flex-col items-center gap-1">
           {@render pressureLabel(w)}
-          {@render tyre(w)}
+          {@render tyre(w, i)}
         </div>
         {#if opts.showBrakes}{@render brake(w)}{/if}
       </div>

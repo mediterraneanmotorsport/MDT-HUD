@@ -26,6 +26,10 @@ export interface WidgetConfig {
   y: number;
   /** Size multiplier for this widget, on top of the global scale. */
   size: number;
+  /** Independent horizontal transform scale multiplier (default 1). */
+  scaleX?: number;
+  /** Independent vertical transform scale multiplier (default 1). */
+  scaleY?: number;
   /** Opacity for this widget, on top of the global opacity. */
   alpha: number;
   /** Lock position in edit mode to prevent accidental drags. */
@@ -42,6 +46,7 @@ export interface AppShortcutsConfig {
   nextProfile: string;
   toggleBroadcast: string;
   resetFocus: string;
+  fxEditor: string;
 }
 
 export const DEFAULT_SHORTCUTS: AppShortcutsConfig = {
@@ -51,7 +56,879 @@ export const DEFAULT_SHORTCUTS: AppShortcutsConfig = {
   nextProfile: "Ctrl+Shift+F7",
   toggleBroadcast: "Ctrl+Shift+F6",
   resetFocus: "Ctrl+Shift+F5",
+  fxEditor: "Ctrl+Shift+F4",
 };
+
+export interface HudAnimationsConfig {
+  /** #1 Animación de adelantamiento y delta en la tabla de Clasificación */
+  standingsOvertake: boolean;
+  /** #2 Pulso dinámico de frenada fuerte / aceleración a fondo en el Dashboard */
+  dashboardGForcePulse: boolean;
+  /** #3 Barrido de luz Morado / Verde al completar sectores en Delta y Tiempos */
+  sectorSweepFlash: boolean;
+  /** #4 Banner televisivo cinematográfico de Bandera a Cuadros / Victoria / Podio */
+  checkeredBanner: boolean;
+  /** #7 Ondas de voz reales del micrófono (RMS en vivo) en el Team Radio PTT */
+  liveMicWaveform: boolean;
+  /** #8 Panel animado en vivo durante el Pit Stop (4 ruedas + repostaje + crono) */
+  pitStopLiveAnim: boolean;
+  /** Semáforo de Salida TV (5 Luces Rojas → Apagado) */
+  startLightsAnim: boolean;
+  /** Pulso de Bloqueo de Frenos / ABS / TC Activo */
+  absTcLockupPulse: boolean;
+  /** Animación dinámica de Lift & Coast */
+  liftAndCoastAnim: boolean;
+  /** Transición Día → Noche en el HUD */
+  dayNightTransition: boolean;
+  /** Alerta animada de Sanción (Drive-Through / Stop & Go) */
+  penaltyAlertAnim: boolean;
+  /** Flujo de partículas/energía en la barra Híbrida / ERS */
+  ersFlowAnim: boolean;
+  /** Destello y sacudida (shake) al invalidar vuelta */
+  lapInvalidShake: boolean;
+  /** Pop-up animado estilo volante F1/GT3 al cambiar electrónica */
+  electronicsPopupAnim: boolean;
+}
+
+export const DEFAULT_ANIMATIONS: HudAnimationsConfig = {
+  standingsOvertake: true,
+  dashboardGForcePulse: true,
+  sectorSweepFlash: true,
+  checkeredBanner: true,
+  liveMicWaveform: true,
+  pitStopLiveAnim: true,
+  startLightsAnim: true,
+  absTcLockupPulse: true,
+  liftAndCoastAnim: true,
+  dayNightTransition: true,
+  penaltyAlertAnim: true,
+  ersFlowAnim: true,
+  lapInvalidShake: true,
+  electronicsPopupAnim: true,
+};
+
+export type OnboardFxPresetId = "onboard_master" | "imsa_onboard" | "onboard_real" | "clean" | "f1_tcam" | "wec_film" | "kodak_2383" | "helmet_gopro" | "night_hdr" | "vhs_90s" | "custom";
+
+export interface OnboardFxConfig {
+  enabled: boolean;
+  preset: OnboardFxPresetId;
+  onlyOnTrack: boolean;
+  contrast: number;
+  saturation: number;
+  vibrance: number;
+  brightness: number;
+  exposure: number;
+  warmth: number;
+  tint: number;
+  acesTonemap: number;
+  casSharpen: number;
+  chromaticAberration: number;
+  speedBlur: number;
+  vignette: number;
+  speedVignette: boolean;
+  visorFrame: boolean;
+  visorDirt: number;
+  filmGrain: number;
+  scanlines: number;
+  rainDrops: boolean;
+  recBadge: boolean;
+  gForceVignette: boolean;
+  cameraShake: boolean;
+  lutStrength: number;
+  /** 0=None, 1=WEC Film, 2=F1 T-Cam, 3=Kodak 2383, 4=GoPro, 5=Night HDR, 6=Custom .cube */
+  lutPreset: number;
+  // --- 9 Pro Realism Shaders (all optional) ---
+  bloom: number;
+  halation: number;
+  lensDistortion: number;
+  clarity: number;
+  dehaze: number;
+  anamorphicFlare: number;
+  lift: number;
+  gamma: number;
+  gain: number;
+  autoExposure: boolean;
+  gforceShift: boolean;
+  rpmVibration: boolean;
+  autoWeatherTimeFx: boolean;
+  // --- 7 Lighting & Photorealism Shaders (all optional) ---
+  agxTonemap: number;
+  giBounce: number;
+  proMist: number;
+  localHdr: number;
+  highlightRolloff: number;
+  splitShadowCool: number;
+  splitHighlightWarm: number;
+  shadowDepth: number;
+  splitScreen?: number;
+  cameraShakeIntensity?: number;
+  rpmVibrationIntensity?: number;
+  // --- 6 Next-Gen Multi-Pass & Temporal Shaders (#1, #2, #4, #7, #8, #10) ---
+  pyramidalBloom?: number;
+  grassRealism?: number;
+  skyRealism?: number;
+  sunGodRays?: number;
+  film35mm?: number;
+  heatHaze?: number;
+  temporalMotionBlur?: number;
+  lumenGi?: number;
+  lumenSkyBounce?: number;
+  linearColorSpace?: boolean;
+  /** 0 = sRGB Native, 1 = Rec.709 (2.4 Broadcast), 2 = Rec.709 HLG, 3 = DCI-P3, 4 = BT.2020, 5 = ACEScg */
+  colorSpace?: number;
+  colorSpaceStrength?: number;
+  taaAntialias?: number;
+  performanceMode?: boolean;
+  /** GPU FXAA 3.11 edge anti-aliasing (0..1) */
+  fxaaAntialias?: number;
+  /** Cinematic Replay Depth of Field (0..1) */
+  cinematicDof?: number;
+  /** Focus plane height for Replay DoF (0.15 = horizon, 0.50 = mid, 0.85 = foreground) */
+  dofFocus?: number;
+  /** Cinema iris adaptation speed for Auto-Exposure (0.05 = ultra-slow ~4s .. 1.0 = ~1s) */
+  autoExposureSpeed?: number;
+  /** RealLongExposure / Camera Shutter multi-frame accumulation (0..1) */
+  longExposure?: number;
+  /** 6-point optical aperture starburst on headlights & sun (0..1) */
+  starburst?: number;
+  /** Light-reactive polycarbonate windshield & dirty lens scatter (0..1) */
+  dirtyLens?: number;
+  /** Real WEC/IMSA broadcast CMOS sensor look: 4:2:2 chroma softness + matte toe + highlight knee (0..1) */
+  broadcastSensor?: number;
+  /** Wet asphalt specular reflections driven by live LMU rain telemetry (0..1) */
+  wetReflections?: number;
+  /** 10-bit Blue-Noise Debanding (0..1) */
+  deband?: number;
+  /** Edge-preserving Bilateral Surface Blur (SurfaceBlur.fx, 0..1) */
+  surfaceBlur?: number;
+  /** Photochemical DPX Film Curve (DPX.fx, 0..1) */
+  dpxFilm?: number;
+  /** Analog Broadcast RF / VHS Chroma Bleed & Interlace (VHS_RA.fx, 0..1) */
+  vhsRf?: number;
+  /** Persisted file path when lutPreset === 6 (Custom .cube LUT) */
+  customLutPath?: string;
+  /** User-saved custom FX presets (1-click apply, rename, delete) */
+  userPresets?: UserFxPreset[];
+  toggleKey?: string;
+}
+
+export interface UserFxPreset {
+  id: string;
+  name: string;
+  values: Partial<Omit<OnboardFxConfig, "enabled" | "onlyOnTrack" | "preset" | "toggleKey" | "userPresets">>;
+}
+
+/** Neutral zero-baseline for all optional FX sliders so switching presets NEVER inherits leftover glow/white-out! */
+export const CLEAN_FX_SLIDERS: Partial<Omit<OnboardFxConfig, "enabled" | "onlyOnTrack" | "preset" | "toggleKey">> = {
+  contrast: 1.0,
+  saturation: 1.0,
+  vibrance: 0,
+  brightness: 1.0,
+  exposure: 0,
+  warmth: 0,
+  tint: 0,
+  acesTonemap: 0,
+  agxTonemap: 0,
+  casSharpen: 0,
+  chromaticAberration: 0,
+  speedBlur: 0,
+  vignette: 0,
+  visorFrame: false,
+  visorDirt: 0,
+  filmGrain: 0,
+  scanlines: 0,
+  recBadge: false,
+  lutStrength: 0,
+  lutPreset: 0,
+  bloom: 0,
+  halation: 0,
+  lensDistortion: 0,
+  clarity: 0,
+  dehaze: 0,
+  anamorphicFlare: 0,
+  lift: 0,
+  gamma: 1.0,
+  gain: 1.0,
+  autoExposure: false,
+  giBounce: 0,
+  proMist: 0,
+  localHdr: 0,
+  highlightRolloff: 0,
+  splitShadowCool: 0,
+  splitHighlightWarm: 0,
+  shadowDepth: 0,
+  pyramidalBloom: 0,
+  grassRealism: 0,
+  skyRealism: 0,
+  sunGodRays: 0,
+  film35mm: 0,
+  heatHaze: 0,
+  temporalMotionBlur: 0,
+  lumenGi: 0,
+  lumenSkyBounce: 0,
+  linearColorSpace: false,
+  colorSpace: 0,
+  colorSpaceStrength: 1.0,
+  taaAntialias: 0,
+  fxaaAntialias: 0,
+  cinematicDof: 0,
+  dofFocus: 0.5,
+  autoExposureSpeed: 0.22,
+  longExposure: 0,
+  starburst: 0,
+  dirtyLens: 0,
+  broadcastSensor: 0,
+  wetReflections: 0,
+  deband: 0,
+  surfaceBlur: 0,
+  dpxFilm: 0,
+  vhsRf: 0,
+};
+
+export const DEFAULT_ONBOARD_FX: OnboardFxConfig = {
+  enabled: false,
+  preset: "wec_film",
+  onlyOnTrack: true,
+  contrast: 1.08,
+  saturation: 1.06,
+  vibrance: 0.22,
+  brightness: 1.0,
+  exposure: 0.04,
+  warmth: 6,
+  tint: 0,
+  acesTonemap: 0.2,
+  casSharpen: 0.45,
+  chromaticAberration: 0.14,
+  speedBlur: 0.28,
+  vignette: 0.32,
+  speedVignette: true,
+  visorFrame: false,
+  visorDirt: 0.12,
+  filmGrain: 0.08,
+  scanlines: 0,
+  rainDrops: true,
+  recBadge: false,
+  gForceVignette: true,
+  cameraShake: true,
+  lutStrength: 0.65,
+  lutPreset: 1,
+  bloom: 0.24,
+  halation: 0.18,
+  lensDistortion: 0.16,
+  clarity: 0.32,
+  dehaze: 0.18,
+  anamorphicFlare: 0.14,
+  lift: 0.0,
+  gamma: 1.0,
+  gain: 1.02,
+  autoExposure: false,
+  gforceShift: true,
+  rpmVibration: true,
+  autoWeatherTimeFx: true,
+  agxTonemap: 0.28,
+  giBounce: 0.14,
+  proMist: 0.12,
+  localHdr: 0.12,
+  highlightRolloff: 0.32,
+  splitShadowCool: 0.18,
+  splitHighlightWarm: 0.14,
+  shadowDepth: 0.18,
+  splitScreen: 0,
+  cameraShakeIntensity: 1.0,
+  rpmVibrationIntensity: 1.0,
+  pyramidalBloom: 0.18,
+  grassRealism: 0.45,
+  skyRealism: 0.25,
+  sunGodRays: 0.12,
+  film35mm: 0.16,
+  heatHaze: 0.14,
+  temporalMotionBlur: 0.2,
+  lumenGi: 0.24,
+  lumenSkyBounce: 0.16,
+  linearColorSpace: false,
+  colorSpace: 0,
+  colorSpaceStrength: 1.0,
+  taaAntialias: 0.3,
+  performanceMode: false,
+  toggleKey: "F9",
+};
+
+export const ONBOARD_FX_PRESETS: Record<
+  Exclude<OnboardFxPresetId, "custom">,
+  { name: string; desc: string; values: Partial<Omit<OnboardFxConfig, "enabled" | "onlyOnTrack" | "preset" | "toggleKey">> }
+> = {
+  onboard_master: {
+    name: "🎥 WEC / IMSA Onboard Real (Master)",
+    desc: "Máximo realismo de cámara onboard real: sensor CMOS 4:2:2, parabrisas reactivo a la luz, destellos 6 puntas en faros, reflejos de lluvia, FXAA 3.11, debanding 10-bit e iris de cine sin flashes.",
+    values: {
+      contrast: 1.02,
+      saturation: 0.93,
+      vibrance: 0.04,
+      brightness: 0.99,
+      exposure: 0.0,
+      warmth: -1,
+      tint: 0,
+      agxTonemap: 0.26,
+      highlightRolloff: 0.34,
+      shadowDepth: 0.16,
+      casSharpen: 0.26,
+      fxaaAntialias: 0.45,
+      grassRealism: 0.44,
+      skyRealism: 0.28,
+      broadcastSensor: 0.68,
+      dirtyLens: 0.28,
+      starburst: 0.36,
+      wetReflections: 0.65,
+      deband: 0.6,
+      lensDistortion: 0.14,
+      chromaticAberration: 0.08,
+      vignette: 0.22,
+      filmGrain: 0.06,
+      lutPreset: 7,
+      lutStrength: 0.82,
+      autoExposure: true,
+      autoExposureSpeed: 0.18,
+      cameraShake: true,
+      cameraShakeIntensity: 0.95,
+      rpmVibration: true,
+      rpmVibrationIntensity: 0.85,
+      gforceShift: true,
+      autoWeatherTimeFx: true,
+    },
+  },
+  imsa_onboard: {
+    name: "📹 IMSA Onboard Real (Road Atlanta)",
+    desc: "Calibrado con foto real de Cadillac IMSA: LUT integrado sin blancos quemados, cockpit carbón limpio y paleta broadcast natural.",
+    values: {
+      contrast: 1.02,
+      saturation: 0.94,
+      vibrance: 0.04,
+      brightness: 0.99,
+      exposure: 0.0,
+      warmth: -2,
+      tint: 1,
+      agxTonemap: 0.25,
+      highlightRolloff: 0.42,
+      proMist: 0.14,
+      pyramidalBloom: 0.16,
+      casSharpen: 0.24,
+      grassRealism: 0.55,
+      skyRealism: 0.32,
+      lumenGi: 0.18,
+      lumenSkyBounce: 0.14,
+      lensDistortion: 0.16,
+      chromaticAberration: 0.1,
+      vignette: 0.2,
+      filmGrain: 0.08,
+      lutPreset: 7,
+      lutStrength: 0.9,
+      cameraShake: true,
+      rpmVibration: true,
+      gforceShift: true,
+      autoWeatherTimeFx: true,
+    },
+  },
+  onboard_real: {
+    name: "🎥 Onboard Real CMOS (Equilibrado)",
+    desc: "Aspecto cámara real equilibrado: AgX lineal corregido, negros limpios, Highlight Roll-Off y realismo HSL sin quemar blancos.",
+    values: {
+      contrast: 1.05,
+      saturation: 0.94,
+      vibrance: 0.1,
+      brightness: 0.98,
+      exposure: 0.0,
+      warmth: 2,
+      tint: -1,
+      acesTonemap: 0.0,
+      agxTonemap: 0.42,
+      giBounce: 0.14,
+      proMist: 0.12,
+      localHdr: 0.12,
+      highlightRolloff: 0.45,
+      splitShadowCool: 0.22,
+      splitHighlightWarm: 0.16,
+      shadowDepth: 0.2,
+      lift: 0.01,
+      gamma: 0.98,
+      gain: 1.0,
+      casSharpen: 0.34,
+      clarity: 0.24,
+      dehaze: 0.14,
+      bloom: 0.12,
+      halation: 0.12,
+      anamorphicFlare: 0.08,
+      lensDistortion: 0.18,
+      chromaticAberration: 0.14,
+      speedBlur: 0.24,
+      vignette: 0.28,
+      filmGrain: 0.09,
+      scanlines: 0,
+      lutStrength: 0.35,
+      lutPreset: 2,
+      autoExposure: false,
+      gforceShift: true,
+      rpmVibration: true,
+      cameraShake: true,
+      autoWeatherTimeFx: true,
+      pyramidalBloom: 0.2,
+      grassRealism: 0.55,
+      skyRealism: 0.32,
+      sunGodRays: 0.14,
+      film35mm: 0.2,
+      heatHaze: 0.15,
+      temporalMotionBlur: 0.24,
+      lumenGi: 0.24,
+      lumenSkyBounce: 0.16,
+    },
+  },
+  wec_film: {
+    name: "WEC Le Mans Film",
+    desc: "LUT cinematográfico cálido, ACES Filmic, CAS Sharpening 45% y Speed Blur sutil.",
+    values: {
+      contrast: 1.08,
+      saturation: 1.06,
+      vibrance: 0.22,
+      brightness: 1.0,
+      exposure: 0.04,
+      warmth: 6,
+      tint: 0,
+      acesTonemap: 0.35,
+      casSharpen: 0.45,
+      chromaticAberration: 0.14,
+      speedBlur: 0.28,
+      vignette: 0.32,
+      speedVignette: true,
+      visorFrame: false,
+      visorDirt: 0.12,
+      filmGrain: 0.08,
+      scanlines: 0,
+      rainDrops: true,
+      recBadge: false,
+      gForceVignette: true,
+      cameraShake: true,
+      lutStrength: 0.65,
+      lutPreset: 1,
+    },
+  },
+  f1_tcam: {
+    name: "F1 T-Cam Broadcast",
+    desc: "Nitidez CAS alta (65%), LUT TV frío técnico, aberración gran angular y REC.",
+    values: {
+      contrast: 1.12,
+      saturation: 1.02,
+      vibrance: 0.18,
+      brightness: 1.01,
+      exposure: 0.02,
+      warmth: -8,
+      tint: 0,
+      acesTonemap: 0.2,
+      casSharpen: 0.65,
+      chromaticAberration: 0.22,
+      speedBlur: 0.35,
+      vignette: 0.24,
+      speedVignette: true,
+      visorFrame: false,
+      visorDirt: 0.06,
+      filmGrain: 0.04,
+      scanlines: 0,
+      rainDrops: true,
+      recBadge: true,
+      gForceVignette: false,
+      cameraShake: true,
+      lutStrength: 0.7,
+      lutPreset: 2,
+    },
+  },
+  kodak_2383: {
+    name: "Kodak 2383 Cinema",
+    desc: "Sombras azul petróleo + luces doradas de película 35mm, grano fino y ACES.",
+    values: {
+      contrast: 1.1,
+      saturation: 1.04,
+      vibrance: 0.15,
+      brightness: 0.99,
+      exposure: 0.05,
+      warmth: 5,
+      tint: -2,
+      acesTonemap: 0.5,
+      casSharpen: 0.35,
+      chromaticAberration: 0.12,
+      speedBlur: 0.2,
+      vignette: 0.38,
+      speedVignette: true,
+      visorFrame: false,
+      visorDirt: 0.1,
+      filmGrain: 0.14,
+      scanlines: 0,
+      rainDrops: true,
+      recBadge: false,
+      gForceVignette: true,
+      cameraShake: true,
+      lutStrength: 0.85,
+      lutPreset: 3,
+    },
+  },
+  helmet_gopro: {
+    name: "GoPro Visera Casco",
+    desc: "Marco de visera, CAS 55%, vibrance alto, aberración cromática y Speed Blur.",
+    values: {
+      contrast: 1.14,
+      saturation: 1.1,
+      vibrance: 0.32,
+      brightness: 0.98,
+      exposure: 0.0,
+      warmth: 3,
+      tint: 0,
+      acesTonemap: 0.25,
+      casSharpen: 0.55,
+      chromaticAberration: 0.32,
+      speedBlur: 0.45,
+      vignette: 0.5,
+      speedVignette: true,
+      visorFrame: true,
+      visorDirt: 0.25,
+      filmGrain: 0.09,
+      scanlines: 0,
+      rainDrops: true,
+      recBadge: true,
+      gForceVignette: true,
+      cameraShake: true,
+      lutStrength: 0.72,
+      lutPreset: 4,
+    },
+  },
+  night_hdr: {
+    name: "Noche HDR Resistencia",
+    desc: "Negros profundos, realce de faros/pilotos traseros y CAS Sharpening nocturno.",
+    values: {
+      contrast: 1.18,
+      saturation: 1.08,
+      vibrance: 0.2,
+      brightness: 0.96,
+      exposure: 0.06,
+      warmth: -10,
+      tint: 0,
+      acesTonemap: 0.4,
+      casSharpen: 0.5,
+      chromaticAberration: 0.16,
+      speedBlur: 0.25,
+      vignette: 0.4,
+      speedVignette: true,
+      visorFrame: false,
+      visorDirt: 0.14,
+      filmGrain: 0.1,
+      scanlines: 0,
+      rainDrops: true,
+      recBadge: false,
+      gForceVignette: true,
+      cameraShake: true,
+      lutStrength: 0.85,
+      lutPreset: 5,
+    },
+  },
+  vhs_90s: {
+    name: "Onboard Retro 90s",
+    desc: "Cámara analógica clásica con scanlines, grano visible, aberración y tono cálido.",
+    values: {
+      contrast: 1.1,
+      saturation: 0.86,
+      vibrance: -0.05,
+      brightness: 0.98,
+      exposure: 0.0,
+      warmth: 16,
+      tint: 3,
+      acesTonemap: 0.25,
+      casSharpen: 0.1,
+      chromaticAberration: 0.45,
+      speedBlur: 0.18,
+      vignette: 0.48,
+      speedVignette: false,
+      visorFrame: false,
+      visorDirt: 0.2,
+      filmGrain: 0.26,
+      scanlines: 0.24,
+      rainDrops: false,
+      recBadge: true,
+      gForceVignette: false,
+      cameraShake: true,
+      lutStrength: 0.5,
+      lutPreset: 3,
+    },
+  },
+  clean: {
+    name: "Base Limpia (Neutro)",
+    desc: "Todos los shaders a cero para ajustar tu propio perfil desde cero.",
+    values: {
+      contrast: 1.0,
+      saturation: 1.0,
+      vibrance: 0.0,
+      brightness: 1.0,
+      exposure: 0.0,
+      warmth: 0,
+      tint: 0,
+      acesTonemap: 0.0,
+      casSharpen: 0.0,
+      chromaticAberration: 0.0,
+      speedBlur: 0.0,
+      vignette: 0.0,
+      speedVignette: false,
+      visorFrame: false,
+      visorDirt: 0.0,
+      filmGrain: 0.0,
+      scanlines: 0.0,
+      rainDrops: false,
+      recBadge: false,
+      gForceVignette: false,
+      cameraShake: false,
+      lutStrength: 0.0,
+      lutPreset: 0,
+      bloom: 0.0,
+      halation: 0.0,
+      lensDistortion: 0.0,
+      clarity: 0.0,
+      dehaze: 0.0,
+      anamorphicFlare: 0.0,
+      lift: 0.0,
+      gamma: 1.0,
+      gain: 1.0,
+      autoExposure: false,
+      gforceShift: false,
+      rpmVibration: false,
+      autoWeatherTimeFx: false,
+      agxTonemap: 0.0,
+      giBounce: 0.0,
+      proMist: 0.0,
+      localHdr: 0.0,
+      highlightRolloff: 0.0,
+      splitShadowCool: 0.0,
+      splitHighlightWarm: 0.0,
+      shadowDepth: 0.0,
+      pyramidalBloom: 0.0,
+      grassRealism: 0.0,
+      skyRealism: 0.0,
+      sunGodRays: 0.0,
+      film35mm: 0.0,
+      heatHaze: 0.0,
+      temporalMotionBlur: 0.0,
+      lumenGi: 0.0,
+      lumenSkyBounce: 0.0,
+    },
+  },
+};
+
+export type ShiftBeepStyle = "gt3" | "f1" | "hypercar";
+
+export interface SoundFxConfig {
+  enabled: boolean;
+  volume: number; // 0..1
+  shiftBeep: boolean;
+  shiftBeepStyle: ShiftBeepStyle;
+  shiftRpmPct: number; // 92..98
+  rotaryClick: boolean;
+  liftCoastBeep: boolean;
+  absTcPulse: boolean;
+  pitLimiterPulse: boolean;
+  startLightsBeep: boolean;
+  sectorChime: boolean;
+  flagsAlert: boolean;
+  lapInvalidBuzz: boolean;
+  ersWhine: boolean;
+  batteryFullChime: boolean;
+}
+
+export const DEFAULT_SOUND_FX: SoundFxConfig = {
+  enabled: false,
+  volume: 0.55,
+  shiftBeep: true,
+  shiftBeepStyle: "gt3",
+  shiftRpmPct: 95,
+  rotaryClick: true,
+  liftCoastBeep: true,
+  absTcPulse: false,
+  pitLimiterPulse: true,
+  startLightsBeep: true,
+  sectorChime: true,
+  flagsAlert: true,
+  lapInvalidBuzz: true,
+  ersWhine: false,
+  batteryFullChime: true,
+};
+
+export const SOUND_FX_PRESETS: Record<
+  "gt3_wec" | "f1_broadcast" | "essentials",
+  { name: string; desc: string; values: Partial<SoundFxConfig> }
+> = {
+  gt3_wec: {
+    name: "GT3 / WEC Pro",
+    desc: "Shift Bosch GT3, clicks de volante, Lift & Coast, banderas FIA, sectores y ERS.",
+    values: {
+      shiftBeep: true,
+      shiftBeepStyle: "gt3",
+      shiftRpmPct: 95,
+      rotaryClick: true,
+      liftCoastBeep: true,
+      absTcPulse: true,
+      pitLimiterPulse: true,
+      startLightsBeep: true,
+      sectorChime: true,
+      flagsAlert: true,
+      lapInvalidBuzz: true,
+      ersWhine: true,
+      batteryFullChime: true,
+    },
+  },
+  f1_broadcast: {
+    name: "F1 Broadcast",
+    desc: "Pitido F1 agudo al 96%, semáforo 5 luces, timbres TV morado/verde y alertas FIA.",
+    values: {
+      shiftBeep: true,
+      shiftBeepStyle: "f1",
+      shiftRpmPct: 96,
+      rotaryClick: true,
+      liftCoastBeep: true,
+      absTcPulse: false,
+      pitLimiterPulse: false,
+      startLightsBeep: true,
+      sectorChime: true,
+      flagsAlert: true,
+      lapInvalidBuzz: true,
+      ersWhine: false,
+      batteryFullChime: true,
+    },
+  },
+  essentials: {
+    name: "Solo Esenciales",
+    desc: "Limpio y minimalista: solo Shift Beep, Semáforo, Banderas FIA y Vuelta Invalidada.",
+    values: {
+      shiftBeep: true,
+      shiftBeepStyle: "hypercar",
+      shiftRpmPct: 95,
+      rotaryClick: false,
+      liftCoastBeep: false,
+      absTcPulse: false,
+      pitLimiterPulse: false,
+      startLightsBeep: true,
+      sectorChime: false,
+      flagsAlert: true,
+      lapInvalidBuzz: true,
+      ersWhine: false,
+      batteryFullChime: false,
+    },
+  },
+};
+
+export interface Audio3DConfig {
+  enabled: boolean;
+  /** 0 = Binaural HRTF, 1 = 7.1 Virtual Surround, 2 = 8D Dinámico, 3 = 5.1 Cockpit */
+  mode: number;
+  wetMix: number;
+  spatialWidth: number;
+  cockpitReverb: number;
+  subBassPunch: number;
+  helmetResonance: number;
+  gforcePanning: boolean;
+  aeroWind: number;
+  // --- #3: 5-Band Parametric EQ (-12..+12 dB) + Auto-Class ---
+  eqSubDb: number;
+  eqBassDb: number;
+  eqMidDb: number;
+  eqPresenceDb: number;
+  eqAirDb: number;
+  autoByClass: boolean;
+  // --- #4: Spatial Rival Proximity Audio (Doppler Left/Right) ---
+  rivalProximity: number;
+}
+
+export const DEFAULT_AUDIO3D: Audio3DConfig = {
+  enabled: false,
+  mode: 0,
+  wetMix: 0.48,
+  spatialWidth: 0.72,
+  cockpitReverb: 0.36,
+  subBassPunch: 0.42,
+  helmetResonance: 0.2,
+  gforcePanning: true,
+  aeroWind: 0.18,
+  eqSubDb: 1.5,
+  eqBassDb: 1.0,
+  eqMidDb: 0.0,
+  eqPresenceDb: 1.2,
+  eqAirDb: 0.8,
+  autoByClass: true,
+  rivalProximity: 0.45,
+};
+
+export const AUDIO3D_PRESETS: Record<
+  "binaural_gt3" | "surround_71" | "dynamic_8d" | "raw_exhaust",
+  { name: string; desc: string; values: Partial<Omit<Audio3DConfig, "enabled">> }
+> = {
+  binaural_gt3: {
+    name: "🎧 Binaural Casco GT3",
+    desc: "HRTF realista para auriculares, reflexiones de carbono, calidez de casco y golpe de escape.",
+    values: {
+      mode: 0,
+      wetMix: 0.5,
+      spatialWidth: 0.75,
+      cockpitReverb: 0.38,
+      subBassPunch: 0.45,
+      helmetResonance: 0.28,
+      gforcePanning: true,
+      aeroWind: 0.18,
+    },
+  },
+  surround_71: {
+    name: "🔊 7.1 Virtual Surround WEC",
+    desc: "Escena envolvente 360° con canales traseros virtuales para sentir tráfico y motores alrededor.",
+    values: {
+      mode: 1,
+      wetMix: 0.56,
+      spatialWidth: 0.88,
+      cockpitReverb: 0.44,
+      subBassPunch: 0.4,
+      helmetResonance: 0.12,
+      gforcePanning: true,
+      aeroWind: 0.22,
+    },
+  },
+  dynamic_8d: {
+    name: "🌀 8D Inmersivo G-Force",
+    desc: "Rotación espacial 8D suave combinada con inercia lateral en curvas y viento aerodinámico.",
+    values: {
+      mode: 2,
+      wetMix: 0.52,
+      spatialWidth: 0.9,
+      cockpitReverb: 0.42,
+      subBassPunch: 0.38,
+      helmetResonance: 0.15,
+      gforcePanning: true,
+      aeroWind: 0.25,
+    },
+  },
+  raw_exhaust: {
+    name: "🔥 Escape Sub-Grave Bruto (5.1)",
+    desc: "Excitador armónico de graves 45–135 Hz al máximo para darle cuerpo brutal al motor.",
+    values: {
+      mode: 3,
+      wetMix: 0.58,
+      spatialWidth: 0.6,
+      cockpitReverb: 0.32,
+      subBassPunch: 0.85,
+      helmetResonance: 0.18,
+      gforcePanning: false,
+      aeroWind: 0.1,
+    },
+  },
+};
+
+export interface CustomPersonalityDef {
+  id: string;
+  name: string;
+  description: string;
+  llmPrompt: string;
+  /** Optional linked MDT-QWEN profile folder name (e.g. "Ingeniero_random") */
+  linkedVoiceProfile?: string;
+  phrases: Record<string, string[]>;
+}
 
 export interface AppConfig {
   version: 1;
@@ -98,6 +975,33 @@ export interface AppConfig {
     shortcuts?: AppShortcutsConfig;
     /** Transición animada escalonada al cambiar de perfil de HUD / Broadcast */
     animateProfileSwitch?: boolean;
+    /** Animación de encendido/arranque del overlay al salir a pista */
+    trackEntryAnim?: TrackEntryAnim;
+    /** Reproducir efecto sonoro de encendido sincronizado con la animación de arranque */
+    trackEntrySound?: boolean;
+    /** Cambiar automáticamente de perfil de HUD según la categoría del coche (Hypercar / LMP2 / LMGT3) */
+    autoProfileByClass?: boolean;
+    /** Mapeo de categoría -> ID de perfil */
+    classProfiles?: Record<string, string>;
+    /** Modo Qualy / Hotlap automático (oculta widgets de resistencia durante clasificación) */
+    autoQualyMode?: boolean;
+    /** Luces ambientales perimetrales en pantalla completa (banderas, paralelo, shift light) */
+    ambientEdgeLighting?: boolean;
+    /** Alertas televisivas animadas automáticas en pantalla (vuelta rápida, podio, pit stop, FCY) */
+    broadcastAlerts?: boolean;
+    /** Centro de Animaciones HUD opcionales (#1, #2, #3, #4, #7, #8) */
+    animations?: HudAnimationsConfig;
+    /** Capa FX de posprocesado Onboard Real entre el juego y el HUD */
+    onboardFx?: OnboardFxConfig;
+    /** Motor de síntesis de audio de telemetría en tiempo real (SonidosFX) */
+    soundFx?: SoundFxConfig;
+    /** Motor nativo WASAPI Process-Loopback Binaural / 7.1 / 8D para LMU (MDT-Audio3D) */
+    audio3d?: Audio3DConfig;
+    /** Personalización visual global en vivo (#11): radio, grosor, desenfoque y textura */
+    hudRadius?: number;
+    hudBorderWidth?: number;
+    hudBlur?: number;
+    hudTexture?: "default" | "glass" | "carbon" | "neon";
     /** Guías magnéticas de alineación al arrastrar widgets en modo edición */
     smartGuides?: boolean;
     /** Atenuar automáticamente la opacidad del HUD durante la noche en pista */
@@ -108,6 +1012,9 @@ export interface AppConfig {
     panicModeKey?: string;
     /** Minimizar a la bandeja del sistema de Windows en lugar de cerrar */
     minimizeToTray?: boolean;
+    /** Dispositivos de audio seleccionados dentro de la app (vacío = predeterminado de Windows) */
+    audioInputId?: string;
+    audioOutputId?: string;
   };
   /** Lap rankings and car setup sharing. Off until the user opts in. */
   online: {
@@ -135,6 +1042,14 @@ export interface AppConfig {
     strategy: boolean;
     carStatus: boolean;
     session: boolean;
+    /** Mensajes de ánimo contextuales en pista (metrónomo, tras error, defensa exitosa, remontada, tramo final, stint limpio) */
+    encouragement?: boolean;
+    /** Retrasa mensajes no urgentes del spotter en curvas rápidas o frenadas fuertes (#10) */
+    quietInFastCorners?: boolean;
+    /** Nombre o apodo del piloto para personalizar aleatoriamente las frases de radio (ej. "Miguel") */
+    driverName?: string;
+    /** Frecuencia con la que el spotter incluye el nombre del piloto (0..1, por defecto 0.35) */
+    driverNameFrequency?: number;
   };
   /** Discord Webhook integration for session telemetry exports */
   discord: {
@@ -149,6 +1064,37 @@ export interface AppConfig {
     driverName: string;
     brokerUrl: string;
     rateHz: number;
+  };
+  /** Ingeniero de Pista IA Local + Voces Clonadas (.onnx / Piper TTS) */
+  aiEngineer?: {
+    enabled: boolean;
+    brainMode: "local_rules" | "ollama" | "lmstudio";
+    endpoint: string;
+    model: string;
+    personality: string;
+    voiceEngine: "onnx" | "qwen3" | "system";
+    onnxModelPath: string;
+    onnxSpeed: number;
+    onnxNoiseScale?: number;
+    onnxNoiseW?: number;
+    /** MDT-QWEN (Qwen3-TTS 0.6B local zero-shot voice cloning · CUDA / ROCm · FP16/BF16) */
+    qwen3Profile?: string;
+    qwen3Device?: "auto" | "cuda" | "rocm" | "cpu";
+    qwen3Dtype?: "fp16" | "bf16" | "fp32";
+    qwen3PythonPath?: string;
+    qwen3Endpoint?: string;
+    /** Auto-start MDT-QWEN GPU server silently when opening MDT-HUD */
+    qwen3AutoStart?: boolean;
+    /** User-created custom personalities & phrase banks (exportable/importable) */
+    customPersonalities?: Record<string, CustomPersonalityDef>;
+    /** Usar la voz IA (.onnx o MDT-QWEN) también para todos los avisos en vivo del Spotter */
+    useForSpotterEvents?: boolean;
+    radioFilter: boolean;
+    /** Nivel/estilo de filtro de radio: studio (limpio), wec, f1_vintage o walkie (con ruido blanco) */
+    radioPreset?: "studio" | "wec" | "f1_vintage" | "walkie";
+    volume: number;
+    proactiveEnabled: boolean;
+    proactiveEveryLaps: number;
   };
   widgets: Record<string, WidgetConfig>;
   /** Id of the profile mirrored by `general.scale/opacity` and `widgets`. */
@@ -278,7 +1224,46 @@ export function applyThemeToElement(
 export function applyTheme(g: AppConfig["general"]) {
   if (typeof document === "undefined") return;
   applyThemeToElement(document.documentElement, g.theme, g.accentColor, g.hudBgColor, g.hudBorderOpacity);
+  const st = document.documentElement.style;
+  if (g.hudRadius != null) st.setProperty("--hud-radius", `${g.hudRadius}px`);
+  else st.removeProperty("--hud-radius");
+  if (g.hudBorderWidth != null) st.setProperty("--hud-border-w", `${g.hudBorderWidth}px`);
+  else st.removeProperty("--hud-border-w");
+  if (g.hudBlur != null && g.hudBlur > 0) st.setProperty("--hud-blur", `${g.hudBlur}px`);
+  else st.setProperty("--hud-blur", "0px");
+  if (g.hudTexture && g.hudTexture !== "default") {
+    document.documentElement.setAttribute("data-hud-texture", g.hudTexture);
+  } else {
+    document.documentElement.removeAttribute("data-hud-texture");
+  }
 }
+
+export type TrackEntryAnim =
+  | "ignition"
+  | "telemetry-boot"
+  | "grid-launch"
+  | "hypercar-pulse"
+  | "cinematic-fade"
+  | "none";
+
+export const TRACK_ENTRY_ANIMS: { value: TrackEntryAnim; label: string; desc: string }[] = [
+  { value: "ignition", label: "🔑 Encendido Cockpit (Ignition Sweep)", desc: "Barrido luminoso y despliegue progresivo tipo cuadro Hypercar" },
+  { value: "telemetry-boot", label: "⚡ Boot Telemetría (Holograma DDU)", desc: "Parpadeo digital de arranque y apertura vertical estilo volante F1/WEC" },
+  { value: "grid-launch", label: "🚀 Arranque en Parrilla (Slide Converge)", desc: "Entrada deslizada con desaceleración elástica y enfoque progresivo" },
+  { value: "hypercar-pulse", label: "🔥 Pulso Hypercar (Sobrecarga ERS)", desc: "Destello energético en bordes con zoom de alta tensión en cascada" },
+  { value: "cinematic-fade", label: "🎬 Broadcast TV (Cortinilla WEC)", desc: "Revelado limpio de izquierda a derecha estilo retransmisión oficial" },
+  { value: "none", label: "Sin animación (Instantánea)", desc: "Aparece al instante sin transición de carga" },
+];
+
+export const BATTLE_SOUNDS = [
+  { value: "Battle.mp3", label: "Clásico (Battle.mp3)" },
+  { value: "aura-mp3_MCdhuKZ.mp3", label: "Aura (aura-mp3_MCdhuKZ.mp3)" },
+  { value: "battlebus.mp3", label: "Battle Bus (battlebus.mp3)" },
+  { value: "cowboy-stand-off.mp3", label: "Cowboy Stand-Off (cowboy-stand-off.mp3)" },
+  { value: "doue-aura.mp3", label: "Doué Aura (doue-aura.mp3)" },
+  { value: "pokemon-battle.mp3", label: "Pokémon Battle (pokemon-battle.mp3)" },
+  { value: "random", label: "🎲 Aleatorio (cualquiera)" },
+] as const;
 
 export const WIDGETS: WidgetMeta[] = [
   {
@@ -505,10 +1490,11 @@ export const WIDGETS: WidgetMeta[] = [
     options: [
       { key: "range", label: "Alcance del radar (m)", type: "number", min: 8, max: 25, step: 1 },
       { key: "autoHide", label: "Ocultar automáticamente si no hay coches cerca", type: "boolean" },
+      { key: "showBackground", label: "Mostrar fondo y recuadro del radar", type: "boolean" },
       { key: "showRings", label: "Anillos de distancia", type: "boolean" },
       { key: "animateTransitions", label: "Transición suave de aparición y pulso en zona roja", type: "boolean" },
     ],
-    optionDefaults: { range: 14, autoHide: false, showRings: true, animateTransitions: true },
+    optionDefaults: { range: 14, autoHide: false, showBackground: true, showRings: true, animateTransitions: true },
   },
   {
     id: "fuel",
@@ -738,6 +1724,7 @@ export const WIDGETS: WidgetMeta[] = [
     optionDefaults: {
       deltaThreshold: 1.0,
       showTyres: true,
+      soundFile: "Battle.mp3",
       showInterval: true,
       showSpeed: true,
       showClassBadge: true,
@@ -960,6 +1947,24 @@ export const WIDGETS: WidgetMeta[] = [
       alwaysShow: false,
     },
   },
+  {
+    id: "liveghost",
+    name: "Comparador Vuelta Fantasma (Live Trace PB)",
+    description: "Superpone tu acelerador y freno en tiempo real contra tu mejor vuelta (PB) con vista anticipada de la próxima frenada.",
+    defaults: { enabled: false, x: 760, y: 840 },
+    options: [
+      { key: "width", label: "Ancho (px)", type: "number", min: 260, max: 540, step: 20 },
+      { key: "lookBehindMeters", label: "Historial atrás (m)", type: "number", min: 100, max: 500, step: 20 },
+      { key: "lookAheadMeters", label: "Vista anticipada PB (m)", type: "number", min: 40, max: 300, step: 20 },
+      { key: "showSpeedDelta", label: "Mostrar delta de velocidad vs PB", type: "boolean" },
+    ],
+    optionDefaults: {
+      width: 360,
+      lookBehindMeters: 260,
+      lookAheadMeters: 140,
+      showSpeedDelta: true,
+    },
+  },
 ];
 
 export const widgetMeta = (id: string) => WIDGETS.find((w) => w.id === id)!;
@@ -998,6 +2003,21 @@ function defaults(): AppConfig {
       broadcastMode: false,
       shortcuts: { ...DEFAULT_SHORTCUTS },
       animateProfileSwitch: true,
+      trackEntryAnim: "ignition",
+      trackEntrySound: true,
+      autoProfileByClass: false,
+      classProfiles: { Hypercar: "", LMP2: "", LMP3: "", LMGT3: "" },
+      autoQualyMode: false,
+      ambientEdgeLighting: false,
+      broadcastAlerts: true,
+      animations: { ...DEFAULT_ANIMATIONS },
+      onboardFx: { ...DEFAULT_ONBOARD_FX },
+      soundFx: { ...DEFAULT_SOUND_FX },
+      audio3d: { ...DEFAULT_AUDIO3D },
+      hudRadius: 10,
+      hudBorderWidth: 1,
+      hudBlur: 0,
+      hudTexture: "default",
       smartGuides: true,
       autoNightDim: false,
       nightOpacity: 0.68,
@@ -1017,10 +2037,11 @@ function defaults(): AppConfig {
       strategy: true,
       carStatus: true,
       session: true,
+      encouragement: true,
     },
     discord: {
       enabled: true,
-      webhookUrl: "https://discord.com/api/webhooks/1571662308269232189/Y9Sv1n8yOwKUjWJbzJxxJgg-ipdOJLhAWlw0EcasB23RT97Z1WVgV2v_q6Ci6w6mgVEX",
+      webhookUrl: "",
       botName: "Ingeniera MDT",
       autoExport: true,
     },
@@ -1029,6 +2050,31 @@ function defaults(): AppConfig {
       driverName: "",
       brokerUrl: "wss://broker.hivemq.com:8884/mqtt",
       rateHz: 15,
+    },
+    aiEngineer: {
+      enabled: false,
+      brainMode: "local_rules",
+      endpoint: "http://127.0.0.1:11434",
+      model: "gemma3:4b",
+      personality: "wec_pro",
+      voiceEngine: "onnx",
+      onnxModelPath: "",
+      onnxSpeed: 0.96,
+      onnxNoiseScale: 0.62,
+      onnxNoiseW: 0.78,
+      qwen3Profile: "Antonio",
+      qwen3Device: "auto",
+      qwen3Dtype: "fp16",
+      qwen3PythonPath: "",
+      qwen3Endpoint: "http://127.0.0.1:18421",
+      qwen3AutoStart: false,
+      customPersonalities: {},
+      useForSpotterEvents: true,
+      radioFilter: true,
+      radioPreset: "wec",
+      volume: 0.9,
+      proactiveEnabled: false,
+      proactiveEveryLaps: 3,
     },
     widgets,
     activeProfile: "default",
@@ -1051,15 +2097,23 @@ function mergeWidgets(stored: any): Record<string, WidgetConfig> {
 function merge(stored: any): AppConfig {
   const base = defaults();
   if (!stored || typeof stored !== "object") return base;
-  const general = { ...base.general, ...(stored.general ?? {}) };
+  const general = {
+    ...base.general,
+    ...(stored.general ?? {}),
+    animations: { ...DEFAULT_ANIMATIONS, ...(stored.general?.animations ?? {}) },
+    onboardFx: { ...DEFAULT_ONBOARD_FX, ...(stored.general?.onboardFx ?? {}) },
+    soundFx: { ...DEFAULT_SOUND_FX, ...(stored.general?.soundFx ?? {}) },
+    audio3d: { ...DEFAULT_AUDIO3D, ...(stored.general?.audio3d ?? {}) },
+  };
   if (general.theme !== "custom" && !(general.theme in HUD_THEMES)) {
     general.theme = "mdt-aura";
   }
   const online = { ...base.online, ...(stored.online ?? {}) };
   const spotter = { ...base.spotter, ...(stored.spotter ?? {}) };
   const discord = { ...base.discord, ...(stored.discord ?? {}) };
-  if (!discord.webhookUrl || !discord.webhookUrl.startsWith("http")) {
-    discord.webhookUrl = base.discord.webhookUrl;
+  // Clear legacy/revoked default webhook so clients transparently use the protected Rust backend channel
+  if (!discord.webhookUrl || discord.webhookUrl.includes("1571662308269232189") || !discord.webhookUrl.startsWith("https://")) {
+    discord.webhookUrl = "";
   }
   if (!discord.botName || discord.botName === "MDT-HUD Telemetría") {
     discord.botName = "Ingeniera MDT";
@@ -1068,6 +2122,13 @@ function merge(stored: any): AppConfig {
   if (discord.autoExport === undefined) discord.autoExport = true;
   const broadcast = { ...base.broadcast, ...(stored.broadcast ?? {}) };
   if (broadcast.enabled === undefined) broadcast.enabled = true;
+  const aiEngineer = { ...base.aiEngineer!, ...(stored.aiEngineer ?? {}) };
+  if (aiEngineer.voiceEngine !== "onnx" && aiEngineer.voiceEngine !== "qwen3" && aiEngineer.voiceEngine !== "system") {
+    aiEngineer.voiceEngine = "onnx";
+  }
+  if (aiEngineer.onnxModelPath && aiEngineer.onnxModelPath.includes("es_ES-davefx-medium")) {
+    aiEngineer.onnxModelPath = aiEngineer.onnxModelPath.replace("es_ES-davefx-medium", "Carlos_MDT");
+  }
   if (!broadcast.brokerUrl) broadcast.brokerUrl = base.broadcast.brokerUrl;
   if (!broadcast.rateHz) broadcast.rateHz = 15;
   const widgets = mergeWidgets(stored.widgets);
@@ -1097,7 +2158,7 @@ function merge(stored: any): AppConfig {
     Array.isArray(stored.customDashboards) && stored.customDashboards.length > 0
       ? stored.customDashboards
       : base.customDashboards ?? [createTemplateDashboard("gt3-pro")];
-  return { ...base, general, online, spotter, discord, broadcast, widgets, activeProfile, profiles, customDashboards };
+  return { ...base, general, online, spotter, discord, broadcast, aiEngineer, widgets, activeProfile, profiles, customDashboards };
 }
 
 class ConfigStore {
@@ -1119,12 +2180,15 @@ function applyMergedInPlace(next: AppConfig) {
   Object.assign(config.value.spotter, next.spotter);
   if (next.discord) Object.assign(config.value.discord, next.discord);
   if (next.broadcast) Object.assign(config.value.broadcast, next.broadcast);
+  if (next.aiEngineer) Object.assign(config.value.aiEngineer, next.aiEngineer);
   for (const [id, wNext] of Object.entries(next.widgets)) {
     if (config.value.widgets[id]) {
       config.value.widgets[id].enabled = wNext.enabled;
       config.value.widgets[id].x = wNext.x;
       config.value.widgets[id].y = wNext.y;
       config.value.widgets[id].size = wNext.size;
+      config.value.widgets[id].scaleX = wNext.scaleX;
+      config.value.widgets[id].scaleY = wNext.scaleY;
       config.value.widgets[id].alpha = wNext.alpha;
       config.value.widgets[id].locked = wNext.locked;
       config.value.widgets[id].autoFadeInCorners = wNext.autoFadeInCorners;

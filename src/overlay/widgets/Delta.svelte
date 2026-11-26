@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Units } from "../../lib/config.svelte";
+  import { config, type Units } from "../../lib/config.svelte";
   import { delta, lapTime } from "../../lib/format";
   import { useLive } from "../../lib/live.svelte";
 
@@ -20,7 +20,23 @@
     return base > 0 ? base + value : null;
   });
   const range = $derived(opts.range ?? 2);
-  const animateFlash = $derived(opts.animateSectorFlash ?? true);
+  const animateFlash = $derived((opts.animateSectorFlash ?? true) && (config.value.general.animations?.sectorSweepFlash ?? true));
+  const invalidShakeEnabled = $derived(config.value.general.animations?.lapInvalidShake ?? true);
+  let prevInvalid = false;
+  let invalidShake = $state(false);
+  let invalidShakeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const inv = Boolean(snap?.player?.lapInvalidated);
+    if (inv && !prevInvalid && invalidShakeEnabled) {
+      invalidShake = true;
+      clearTimeout(invalidShakeTimer);
+      invalidShakeTimer = setTimeout(() => {
+        invalidShake = false;
+      }, 900);
+    }
+    prevInvalid = inv;
+  });
   const frac = $derived(value == null ? 0 : Math.max(-1, Math.min(1, value / range)));
   const color = $derived(value == null ? "var(--color-muted)" : value <= 0 ? "var(--color-good)" : "var(--color-bad)");
   const borderClass = $derived(
@@ -76,6 +92,7 @@
 <div
   class={[
     "hud relative w-[280px] px-3.5 py-3 transition-all duration-150",
+    invalidShake && "mdt-anim-invalid-shake",
     !flashState && borderClass,
     flashState?.kind === "purple" && "mdt-anim-sector-purple mdt-shimmer-overlay",
     flashState?.kind === "green" && "mdt-anim-sector-green mdt-shimmer-overlay",

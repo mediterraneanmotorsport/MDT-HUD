@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../src");
 @import "@fontsource/barlow/400.css";
 @import "@fontsource/barlow/500.css";
 @import "@fontsource/barlow/600.css";
@@ -55,10 +55,21 @@
     user-select: none;
   }
   body.companion {
-    background: var(--color-bg);
+    --font-sans: "Barlow", "Segoe UI", system-ui, sans-serif;
+    --font-display: "Barlow Condensed", "Barlow", "Segoe UI", sans-serif;
+    --color-bg: #0a0b0e;
+    --color-surface: #111318;
+    --color-surface-2: #171a22;
+    --color-surface-3: #202530;
+    --color-line: rgb(255 255 255 / 0.09);
+    --color-fg: #f3f5f8;
+    --color-muted: #8e96a4;
+    --color-faint: #5b6270;
+    background: #0a0b0e;
     color: var(--color-fg);
     color-scheme: dark;
     font-family: var(--font-sans);
+    letter-spacing: 0;
   }
   body.overlay {
     background: transparent;
@@ -74,7 +85,28 @@
     color: #fff;
   }
   input[type="range"] {
-    accent-color: var(--color-accent);
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.14);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 14px;
+    border-radius: 2px;
+    background: #f3f5f8;
+    border: 1px solid var(--color-accent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+    transition: transform 0.1s ease, background-color 0.1s ease;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.08);
+    background: var(--color-accent-hi);
   }
   ::-webkit-scrollbar {
     width: 10px;
@@ -99,9 +131,10 @@
 @utility hud {
   position: relative;
   background: var(--color-hud);
-  border: 1px solid var(--color-hud-line);
+  border: var(--hud-border-w, 1px) solid var(--color-hud-line);
   border-radius: var(--hud-radius, 10px);
   box-shadow: var(--hud-shadow, 0 6px 20px rgb(0 0 0 / 0.35));
+  backdrop-filter: blur(var(--hud-blur, 0px));
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -485,26 +518,41 @@
     calc(var(--check, 12px) * 2);
 }
 
-/* ---------- Companion ---------- */
+/* ---------- Companion (Official FIA WEC / F1 TV Broadcast Studio) ---------- */
 
 @utility page-title {
   font-family: var(--font-display);
   font-size: 26px;
-  line-height: 1.15;
+  line-height: 1.08;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #f3f5f8;
+  padding-left: 12px;
+  border-left: 3px solid var(--color-accent);
 }
 
 @utility section-title {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #cfd6e3;
 }
 
 @utility card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: 12px;
+  background: #111318;
+  border: 1px solid rgb(255 255 255 / 0.085);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.35);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+@utility glass-dock {
+  background: #111318;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
 }
 
 @utility btn {
@@ -512,52 +560,357 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 6px 13px;
+  border-radius: 4px;
+  font-size: 12.5px;
   font-weight: 600;
-  background: var(--color-surface-3);
-  color: var(--color-fg);
+  letter-spacing: 0.02em;
+  background: #191d26;
+  border: 1px solid rgb(255 255 255 / 0.11);
+  color: #e6ebf2;
   transition:
-    background-color 0.15s,
-    color 0.15s;
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
   &:hover {
-    background: var(--color-line);
+    background: #232834;
+    border-color: rgb(255 255 255 / 0.22);
+    color: #ffffff;
+  }
+  &:active {
+    background: #14171f;
   }
   &:disabled {
-    opacity: 0.4;
+    opacity: 0.38;
     pointer-events: none;
   }
 }
 
 @utility btn-primary {
-  background: var(--color-accent);
-  color: #fff;
+  background: #1a85ff;
+  border-color: #3a97ff;
+  color: #ffffff;
+  font-weight: 700;
   &:hover {
-    background: var(--color-accent-hi);
+    background: #3395ff;
+    border-color: #60aeff;
   }
 }
 
 @utility field {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-line);
-  border-radius: 8px;
+  background: #0b0d12;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 4px;
   padding: 6px 10px;
-  font-size: 14px;
-  color: var(--color-fg);
+  font-size: 13px;
+  color: #f3f5f8;
+  transition: border-color 0.14s ease;
   &:focus {
     outline: none;
-    border-color: var(--color-accent);
+    border-color: #1a85ff;
   }
 }
 
 @utility kbd {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   padding: 1px 5px;
+  border-radius: 3px;
+  background: #1a1e28;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  color: #aeb6c4;
+}
+
+/* Official WEC / F1 TV Broadcast Companion — dynamically themed by active HUD preset! */
+body.companion {
+  background-color: #08090c !important;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.022) 1px, transparent 1px),
+    radial-gradient(65% 42% at 50% 0%, color-mix(in srgb, var(--color-accent) 14%, transparent) 0%, transparent 70%) !important;
+  background-size: 32px 32px, 32px 32px, 100% 100% !important;
+  font-family: "Barlow", "Segoe UI", system-ui, sans-serif !important;
+}
+body.companion .card {
+  border-radius: 6px !important;
+  border: 1px solid rgb(255 255 255 / 0.09) !important;
+  outline: none !important;
+  background: linear-gradient(180deg, #13161e 0%, #0e1016 100%) !important;
+  box-shadow: 0 3px 14px rgb(0 0 0 / 0.4) !important;
+  backdrop-filter: none !important;
+}
+body.companion .page-title {
+  font-family: "Barlow Condensed", "Barlow", "Segoe UI", sans-serif !important;
+  font-style: normal !important;
+  text-transform: uppercase !important;
+  text-shadow: none !important;
+  color: #f3f5f8 !important;
+  letter-spacing: 0.05em !important;
+  padding-left: 12px !important;
+  border-left: 3px solid var(--color-accent) !important;
+}
+body.companion .section-title {
+  font-family: "Barlow Condensed", "Barlow", "Segoe UI", sans-serif !important;
+  font-style: normal !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  color: color-mix(in srgb, var(--color-accent-hi) 45%, #d6dce6) !important;
+}
+body.companion .btn {
+  border-radius: 4px !important;
+  font-style: normal !important;
+  text-transform: none !important;
+  box-shadow: none !important;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.1s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+body.companion .btn:active {
+  transform: scale(0.97);
+}
+body.companion .btn-primary {
+  background: var(--color-accent) !important;
+  border-color: var(--color-accent-hi) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transition:
+    background-color 0.22s ease,
+    border-color 0.22s ease,
+    filter 0.15s ease,
+    transform 0.1s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+body.companion .btn-primary:hover {
+  filter: brightness(1.12);
+}
+body.companion .field {
+  border-radius: 4px !important;
+}
+
+/* Official FIA WEC / F1 TV Chamfered Hero Panel & Broadcast Animations (100% GPU transform/opacity) */
+.wec-stage {
+  position: relative;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 14%, transparent) 0%, transparent 45%),
+    linear-gradient(180deg, #141822 0%, #0c0e14 100%);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 26%, rgb(255 255 255 / 0.1));
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  transition: border-color 0.24s ease;
+}
+.wec-stage::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 18px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, var(--color-accent-hi) 48%, rgb(255 255 255 / 0.12) 100%);
+  pointer-events: none;
+}
+
+/* Sliding spring active bar & magnetic hover ghost in top navigation */
+.wec-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2.5px;
+  background: var(--color-accent);
+  pointer-events: none;
+  will-change: transform, width;
+  transition:
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.22s ease;
+}
+.wec-tab-hover {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
   border-radius: 4px;
-  background: var(--color-surface-3);
-  border: 1px solid var(--color-line);
+  background: rgb(255 255 255 / 0.055);
+  pointer-events: none;
+  will-change: transform, width, opacity;
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.14s ease;
+}
+
+/* Directional GPU page transitions + micro-stagger broadcast reveal */
+@keyframes wec-page-from-right {
+  0% {
+    opacity: 0;
+    transform: translate3d(16px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes wec-page-from-left {
+  0% {
+    opacity: 0;
+    transform: translate3d(-16px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes wec-stagger-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes wec-icon-pop {
+  0% { transform: scale(0.85); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.wec-page-enter-right {
+  animation: wec-page-from-right 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wec-page-enter-left {
+  animation: wec-page-from-left 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wec-page-enter-right > div > :nth-child(2),
+.wec-page-enter-left > div > :nth-child(2) {
+  animation: wec-stagger-rise 0.22s cubic-bezier(0.22, 1, 0.36, 1) 35ms both;
+}
+.wec-page-enter-right > div > :nth-child(3),
+.wec-page-enter-left > div > :nth-child(3) {
+  animation: wec-stagger-rise 0.22s cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
+}
+.wec-page-enter-right > div > :nth-child(4),
+.wec-page-enter-left > div > :nth-child(4) {
+  animation: wec-stagger-rise 0.22s cubic-bezier(0.22, 1, 0.36, 1) 105ms both;
+}
+.wec-tab-icon-active {
+  animation: wec-icon-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 1. Car Showroom Roll-In & Circuit Outline Reveal */
+@keyframes wec-car-rollin-kf {
+  0% {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.wec-car-rollin {
+  animation: wec-car-rollin-kf 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wec-track-reveal-kf {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.wec-track-reveal {
+  animation: wec-track-reveal-kf 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 2. Broadcast Light Sweep on Theme / Preset Switch */
+@keyframes wec-sweep-flash-kf {
+  0% {
+    opacity: 0;
+    transform: translate3d(-120%, 0, 0) skewX(-22deg);
+  }
+  25% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(260%, 0, 0) skewX(-22deg);
+  }
+}
+.wec-sweep-flash {
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--color-accent-hi) 38%, white) 50%, transparent 100%);
+  animation: wec-sweep-flash-kf 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* 3. Elastic Command Palette & Modal Entrance */
+@keyframes wec-backdrop-kf {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes wec-modal-kf {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.wec-backdrop-enter {
+  animation: wec-backdrop-kf 0.14s ease-out both;
+}
+.wec-modal-enter {
+  animation: wec-modal-kf 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 4. Smooth Grid Accordion (zero layout jump) */
+.wec-accordion {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease;
+}
+.wec-accordion[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.wec-accordion > div {
+  overflow: hidden;
+}
+
+/* 5. Internal Sub-Tab Content Reveal */
+.wec-subtab-enter {
+  animation: wec-stagger-rise 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.wec-tile {
+  position: relative;
+  background: #10131a;
+  border: 1px solid rgb(255 255 255 / 0.085);
+  border-radius: 4px;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+.wec-tile:hover {
+  border-color: rgb(255 255 255 / 0.22);
+  background: #151923;
+  transform: translateY(-1px);
+}
+@keyframes wec-scan-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+.wec-scan-bar {
+  animation: wec-scan-sweep 4.2s linear infinite;
 }
 
 /* =========================================================================
@@ -797,4 +1150,433 @@
 }
 .mdt-anim-pit-exit {
   animation: mdt-pit-exit-flash 1.6s ease-out both;
+}
+
+/* =========================================================================
+   8. LIMITADOR DE VELOCIDAD (PIT LIMITER): Animación en bordes de TODOS los widgets y pantalla
+   ========================================================================= */
+@keyframes mdt-pit-limiter-widget-border {
+  0%, 100% {
+    border-color: rgb(245 165 36 / 0.95);
+    box-shadow:
+      0 0 18px rgb(245 165 36 / 0.65),
+      inset 0 0 12px rgb(245 165 36 / 0.28);
+  }
+  50% {
+    border-color: rgb(255 230 90 / 1);
+    box-shadow:
+      0 0 28px rgb(245 165 36 / 0.95),
+      0 0 6px rgb(255 245 150 / 0.8),
+      inset 0 0 18px rgb(245 165 36 / 0.42);
+  }
+}
+
+@keyframes mdt-pit-limiter-sheen {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes mdt-pit-limiter-screen-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 28px rgb(245 165 36 / 0.45);
+    border-color: rgb(245 165 36 / 0.85);
+  }
+  50% {
+    box-shadow: inset 0 0 48px rgb(255 215 64 / 0.72);
+    border-color: rgb(255 235 110 / 1);
+  }
+}
+
+.mdt-pit-limiter-screen {
+  border: 3px solid rgb(245 165 36 / 0.9);
+  animation: mdt-pit-limiter-screen-pulse 0.72s ease-in-out infinite;
+}
+
+[data-pit-limiter="true"] .hud {
+  animation: mdt-pit-limiter-widget-border 0.72s ease-in-out infinite !important;
+}
+
+[data-pit-limiter="true"] .hud::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    110deg,
+    transparent 15%,
+    rgb(255 215 64 / 0.95) 35%,
+    rgb(245 158 11 / 0.2) 50%,
+    rgb(255 240 130 / 0.95) 68%,
+    transparent 85%
+  );
+  background-size: 200% 100%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: mdt-pit-limiter-sheen 1.15s linear infinite;
+  z-index: 30;
+}
+
+/* =========================================================================
+   9. TRANSICIONES DE ARRANQUE AL SALIR A PISTA (5 OPCIONES SELECCIONABLES)
+   ========================================================================= */
+
+/* Opción 1: Encendido Cockpit (Ignition Sweep) */
+@keyframes mdt-entry-ignition-kf {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+    filter: brightness(2.4) saturate(1.8) blur(4px);
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.02);
+    filter: brightness(1.45) saturate(1.3) blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1) saturate(1) blur(0px);
+  }
+}
+.mdt-entry-ignition {
+  animation: mdt-entry-ignition-kf 0.68s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+/* Opción 2: Boot Telemetría (Holograma DDU) */
+@keyframes mdt-entry-telemetry-boot-kf {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.06) scaleX(1.06);
+    filter: brightness(3) contrast(1.8);
+  }
+  28% {
+    opacity: 0.85;
+    transform: scaleY(1.04) scaleX(0.99);
+    filter: brightness(1.9) contrast(1.4);
+  }
+  42% {
+    opacity: 0.35;
+    transform: scaleY(0.97) scaleX(1.01);
+    filter: brightness(2.2);
+  }
+  58% {
+    opacity: 1;
+    transform: scaleY(1.01) scaleX(1);
+    filter: brightness(1.35);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1) scaleX(1);
+    filter: brightness(1) contrast(1);
+  }
+}
+.mdt-entry-telemetry-boot {
+  transform-origin: center;
+  animation: mdt-entry-telemetry-boot-kf 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+/* Opción 3: Arranque en Parrilla (Slide Converge) */
+@keyframes mdt-entry-grid-launch-kf {
+  0% {
+    opacity: 0;
+    transform: translateY(34px) scale(0.88);
+    filter: blur(6px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.015);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+.mdt-entry-grid-launch {
+  animation: mdt-entry-grid-launch-kf 0.62s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+/* Opción 4: Pulso Hypercar (Sobrecarga ERS) */
+@keyframes mdt-entry-hypercar-pulse-kf {
+  0% {
+    opacity: 0;
+    transform: scale(1.16);
+    filter: brightness(2.6) drop-shadow(0 0 22px var(--color-accent));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(0.985);
+    filter: brightness(1.35) drop-shadow(0 0 14px var(--color-accent));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1) drop-shadow(0 0 0 transparent);
+  }
+}
+.mdt-entry-hypercar-pulse {
+  transform-origin: center;
+  animation: mdt-entry-hypercar-pulse-kf 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+/* Opción 5: Broadcast TV (Cortinilla WEC) */
+@keyframes mdt-entry-cinematic-fade-kf {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-16px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+.mdt-entry-cinematic-fade {
+  animation: mdt-entry-cinematic-fade-kf 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--entry-delay, 0ms);
+}
+
+/* Barrido luminoso horizontal de encendido (Scanline de arranque en pista) */
+@keyframes mdt-ignition-scanline-kf {
+  0% {
+    opacity: 0;
+    transform: translateY(-10vh);
+  }
+  18% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(110vh);
+  }
+}
+.mdt-ignition-scanline {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 45;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, var(--color-accent) 25%, #ffffff 50%, var(--color-accent) 75%, transparent 100%);
+  box-shadow: 0 0 28px 6px var(--color-accent);
+  animation: mdt-ignition-scanline-kf 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* =========================================================================
+   10. TEXTURAS GLOBALES AJUSTABLES EN VIVO (#11: Glass / Carbon / Neon)
+   ========================================================================= */
+[data-hud-texture="glass"] .hud {
+  border-radius: var(--hud-radius, 14px) !important;
+  border-width: var(--hud-border-w, 1px) !important;
+  background: linear-gradient(155deg, rgb(255 255 255 / 0.13) 0%, rgb(10 18 32 / 0.62) 55%, rgb(5 10 20 / 0.72) 100%) !important;
+  backdrop-filter: blur(var(--hud-blur, 14px)) saturate(1.4) !important;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.25) !important;
+}
+
+[data-hud-texture="carbon"] .hud {
+  border-radius: var(--hud-radius, 6px) !important;
+  border-width: var(--hud-border-w, 1px) !important;
+  background-color: rgb(11 13 18 / 0.94) !important;
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 0.035) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 0.035) 75%),
+    linear-gradient(-45deg, rgb(255 255 255 / 0.035) 25%, transparent 25%, transparent 75%, rgb(255 255 255 / 0.035) 75%) !important;
+  background-size: 8px 8px !important;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.12) !important;
+}
+
+[data-hud-texture="neon"] .hud {
+  border-radius: var(--hud-radius, 12px) !important;
+  border-width: var(--hud-border-w, 2px) !important;
+  border-color: var(--color-accent) !important;
+  box-shadow:
+    0 0 18px var(--color-accent),
+    inset 0 0 14px rgb(34 135 236 / 0.22) !important;
+}
+
+/* =========================================================================
+   11. AMBIENT EDGE LIGHTING (#13: Luces ambientales perimetrales opcionales)
+   ========================================================================= */
+.mdt-ambient-yellow {
+  box-shadow: inset 0 0 55px 8px rgb(250 204 21 / 0.42);
+  border: 2px solid rgb(250 204 21 / 0.75);
+}
+.mdt-ambient-blue {
+  box-shadow: inset 0 0 55px 8px rgb(59 130 246 / 0.45);
+  border: 2px solid rgb(59 130 246 / 0.8);
+}
+.mdt-ambient-left {
+  background: linear-gradient(90deg, rgb(249 115 22 / 0.65) 0%, rgb(239 68 68 / 0.18) 45%, transparent 100%);
+}
+.mdt-ambient-right {
+  background: linear-gradient(270deg, rgb(249 115 22 / 0.65) 0%, rgb(239 68 68 / 0.18) 45%, transparent 100%);
+}
+.mdt-ambient-shift {
+  background: linear-gradient(180deg, rgb(56 189 248 / 0.62) 0%, transparent 100%);
+}
+
+/* =========================================================================
+   12. CENTRO DE ANIMACIONES HUD OPCIONALES (#1, #2, #3, #4, #7, #8)
+   ========================================================================= */
+
+/* #1 Standings overtake / position change slide-bump */
+@keyframes mdt-pos-up-kf {
+  0% { transform: translateY(8px); filter: brightness(1.45); }
+  45% { transform: translateY(-2px); filter: brightness(1.15); }
+  100% { transform: translateY(0); filter: brightness(1); }
+}
+@keyframes mdt-pos-down-kf {
+  0% { transform: translateY(-8px); filter: brightness(1.35); }
+  45% { transform: translateY(2px); filter: brightness(1.1); }
+  100% { transform: translateY(0); filter: brightness(1); }
+}
+.mdt-anim-pos-up {
+  animation: mdt-pos-up-kf 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mdt-anim-pos-down {
+  animation: mdt-pos-down-kf 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* #2 Dashboard G-Force braking & full-throttle dynamic border glow */
+@keyframes mdt-gforce-brake-kf {
+  0%, 100% {
+    box-shadow: 0 0 18px rgb(239 68 68 / 0.55), inset 0 0 16px rgb(239 68 68 / 0.25);
+    border-color: rgb(239 68 68 / 0.92);
+  }
+  50% {
+    box-shadow: 0 0 28px rgb(249 115 22 / 0.72), inset 0 0 22px rgb(239 68 68 / 0.38);
+    border-color: rgb(249 115 22 / 0.98);
+  }
+}
+.mdt-gforce-brake {
+  animation: mdt-gforce-brake-kf 0.55s ease-in-out infinite;
+}
+.mdt-gforce-accel {
+  box-shadow: 0 0 20px rgb(56 189 248 / 0.48), inset 0 0 14px rgb(34 211 238 / 0.2);
+  border-color: rgb(56 189 248 / 0.85);
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+
+/* #4 Animated checkered flag ribbon for Checkered / Victory / Podium TV banner */
+@keyframes mdt-checkered-scroll-kf {
+  from { background-position: 0 0, 8px 8px; }
+  to { background-position: 32px 0, 40px 8px; }
+}
+.mdt-checkered-strip {
+  background-color: #111827;
+  background-image:
+    linear-gradient(45deg, #ffffff 25%, transparent 25%, transparent 75%, #ffffff 75%, #ffffff),
+    linear-gradient(45deg, #ffffff 25%, transparent 25%, transparent 75%, #ffffff 75%, #ffffff);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  animation: mdt-checkered-scroll-kf 1.4s linear infinite;
+}
+
+/* #8 Pit Stop tyre refresh green pop */
+@keyframes mdt-pit-tyre-fresh-kf {
+  0% { transform: scale(1.18); box-shadow: 0 0 18px rgb(34 197 94 / 0.9); }
+  100% { transform: scale(1); box-shadow: 0 0 8px rgb(34 197 94 / 0.45); }
+}
+.mdt-pit-tyre-fresh {
+  animation: mdt-pit-tyre-fresh-kf 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ABS / TC / Brake Lockup sharp micro-pulse */
+@keyframes mdt-lockup-pulse-kf {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.06); filter: brightness(1.45); }
+}
+.mdt-anim-lockup-pulse {
+  animation: mdt-lockup-pulse-kf 0.24s ease-in-out infinite;
+}
+
+/* Lift & Coast dynamic chevron glow */
+@keyframes mdt-lift-coast-kf {
+  0%, 100% { opacity: 0.78; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(3px); }
+}
+.mdt-anim-lift-coast {
+  animation: mdt-lift-coast-kf 0.55s ease-in-out infinite;
+}
+
+/* ERS / Hybrid flowing energy particles (Deploy → right, Regen ← left) */
+@keyframes mdt-ers-deploy-kf {
+  from { background-position: 0 0; }
+  to { background-position: 28px 0; }
+}
+@keyframes mdt-ers-regen-kf {
+  from { background-position: 28px 0; }
+  to { background-position: 0 0; }
+}
+.mdt-ers-deploy {
+  background-image: repeating-linear-gradient(
+    -55deg,
+    rgba(255, 255, 255, 0.36) 0px,
+    rgba(255, 255, 255, 0.36) 6px,
+    transparent 6px,
+    transparent 14px
+  );
+  background-size: 28px 100%;
+  animation: mdt-ers-deploy-kf 0.45s linear infinite;
+}
+.mdt-ers-regen {
+  background-image: repeating-linear-gradient(
+    55deg,
+    rgba(255, 255, 255, 0.38) 0px,
+    rgba(255, 255, 255, 0.38) 6px,
+    transparent 6px,
+    transparent 14px
+  );
+  background-size: 28px 100%;
+  animation: mdt-ers-regen-kf 0.5s linear infinite;
+}
+
+/* Lap Invalidated horizontal shake + red flash */
+@keyframes mdt-invalid-shake-kf {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-6px); box-shadow: 0 0 24px rgb(239 68 68 / 0.85); border-color: #ef4444; }
+  35% { transform: translateX(6px); }
+  55% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.mdt-anim-invalid-shake {
+  animation: mdt-invalid-shake-kf 0.48s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Electronics Rotary spring pop-in */
+@keyframes mdt-rotary-pop-kf {
+  0% { opacity: 0; transform: scale(0.76) translateY(8px); }
+  65% { opacity: 1; transform: scale(1.05) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.mdt-anim-rotary-pop {
+  animation: mdt-rotary-pop-kf 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Day → Dusk → Night smooth HUD ambient transition */
+[data-day-phase="dusk"] .hud {
+  transition: box-shadow 1.8s ease, border-color 1.8s ease, filter 1.8s ease;
+  box-shadow: 0 6px 24px rgb(245 158 11 / 0.18), var(--hud-shadow, 0 6px 20px rgb(0 0 0 / 0.35));
+}
+[data-day-phase="night"] .hud {
+  transition: box-shadow 1.8s ease, border-color 1.8s ease, filter 1.8s ease;
+  box-shadow: 0 6px 26px rgb(56 189 248 / 0.16), var(--hud-shadow, 0 6px 20px rgb(0 0 0 / 0.45));
 }

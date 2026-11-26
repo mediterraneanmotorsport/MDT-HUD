@@ -1,9 +1,17 @@
 import { api, isNativeTauri } from "./api";
-import { applyCompleteOverlayTheme, config, cycleNextProfile, saveConfig, type PresetThemeId } from "./config.svelte";
+import { aiEngineer } from "./aiEngineer.svelte";
+import { applyCompleteOverlayTheme, config, cycleNextProfile, DEFAULT_ONBOARD_FX, saveConfig, type PresetThemeId } from "./config.svelte";
 import { toasts } from "./toasts.svelte";
 import type { Snapshot } from "./types";
 
-export type WheelGlobalAction = "toggleOverlay" | "toggleSpotter" | "nextProfile" | "markLapNote";
+export type WheelGlobalAction =
+  | "toggleOverlay"
+  | "toggleSpotter"
+  | "nextProfile"
+  | "markLapNote"
+  | "aiEngineerReport"
+  | "aiEngineerPtt"
+  | "toggleFx";
 
 export type MfdPageId =
   | "dashboard"
@@ -198,6 +206,9 @@ class WheelController {
     toggleSpotter: null,
     nextProfile: null,
     markLapNote: null,
+    aiEngineerReport: null,
+    aiEngineerPtt: null,
+    toggleFx: null,
   });
   telemetryMarks = $state<{ time: string; label: string }[]>([]);
   connectedGamepads = $state<string[]>([]);
@@ -506,6 +517,22 @@ class WheelController {
         this.telemetryMarks = [{ time: stamp, label: `Marca volante (${stamp})` }, ...this.telemetryMarks.slice(0, 29)];
         this.saveStored();
         toasts.push(`📌 Marca de telemetría guardada (${stamp})`, { kind: "success", durationMs: 2400 });
+      } else if (action === "aiEngineerReport") {
+        toasts.push("🧠 Pidiendo informe táctico al Ingeniero IA...", { kind: "info", durationMs: 2200 });
+        void api.getSnapshot().then((s) => aiEngineer.ask("", s)).catch(() => aiEngineer.ask("", null));
+      } else if (action === "aiEngineerPtt") {
+        toasts.push("🎙️ Radio PTT activa: habla mientras mantienes pulsado...", { kind: "info", durationMs: 2000 });
+        void api.getSnapshot().then((s) => aiEngineer.beginPushToTalk(s)).catch(() => aiEngineer.beginPushToTalk(null));
+      } else if (action === "toggleFx") {
+        if (!config.value.general.onboardFx) {
+          config.value.general.onboardFx = { ...DEFAULT_ONBOARD_FX };
+        }
+        config.value.general.onboardFx.enabled = !config.value.general.onboardFx.enabled;
+        saveConfig();
+        toasts.push(
+          config.value.general.onboardFx.enabled ? "🎥 FX Onboard ACTIVADO" : "🎥 FX Onboard DESACTIVADO",
+          { kind: "info", durationMs: 2000 },
+        );
       }
     };
 
@@ -559,10 +586,18 @@ class WheelController {
             for (const [act, b] of Object.entries(this.actionBinds) as [WheelGlobalAction, WheelButtonBind | null][]) {
               if (b?.kind === "key" && (e.code === b.key || e.key === b.key)) {
                 e.preventDefault();
+                if (e.repeat && act === "aiEngineerPtt") break;
                 triggerGlobalAction(act);
                 break;
               }
             }
+          }
+        });
+
+        window.addEventListener("keyup", (e) => {
+          const pttBind = this.actionBinds.aiEngineerPtt;
+          if (pttBind?.kind === "key" && (e.code === pttBind.key || e.key === pttBind.key)) {
+            void aiEngineer.endPushToTalk();
           }
         });
       }
@@ -625,6 +660,16 @@ class WheelController {
                   }
                 }
               } else if (!isDown) {
+                if (wasDown) {
+                  const pttBind = this.actionBinds.aiEngineerPtt;
+                  if (
+                    pttBind?.kind === "gamepad" &&
+                    pttBind.buttonIndex === bi &&
+                    (pttBind.gamepadIndex === gi || pttBind.gamepadId === pad.id)
+                  ) {
+                    void aiEngineer.endPushToTalk();
+                  }
+                }
                 this.baselinePressed.delete(k);
               }
             }

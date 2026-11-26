@@ -155,7 +155,7 @@
   const lapFlashTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   $effect(() => {
-    if (!(opts.animateSectorFlash ?? true) || !snap?.vehicles) return;
+    if (!((opts.animateSectorFlash ?? true) && (config.value.general.animations?.sectorSweepFlash ?? true)) || !snap?.vehicles) return;
     const classBestMap = new Map<string, number>();
     for (const v of snap.vehicles) {
       if (v.bestLap > 0) {
@@ -215,18 +215,20 @@
     return null;
   }
 
-  // WEC Position Change Animation Tracker (Green for gain, Red for loss)
+  // WEC Position Change Animation Tracker (Green for gain, Red for loss + delta badge)
   let prevPlaces = new Map<number, number>();
-  let positionAnims = $state<Record<number, "up" | "down">>({});
+  let positionAnims = $state<Record<number, { dir: "up" | "down"; delta: number }>>({});
   let animTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
 
   $effect(() => {
-    if (!opts.animatePositions || !snap?.vehicles) return;
+    const enabled = (opts.animatePositions ?? true) && (config.value.general.animations?.standingsOvertake ?? true);
+    if (!enabled || !snap?.vehicles) return;
     for (const v of snap.vehicles) {
       const prev = prevPlaces.get(v.id);
       if (prev !== undefined && prev !== v.place) {
-        const dir = v.place < prev ? "up" : "down";
-        positionAnims = { ...positionAnims, [v.id]: dir };
+        const delta = prev - v.place;
+        const dir = delta > 0 ? "up" : "down";
+        positionAnims = { ...positionAnims, [v.id]: { dir, delta: Math.abs(delta) } };
         if (animTimeouts.has(v.id)) clearTimeout(animTimeouts.get(v.id)!);
         const timer = setTimeout(() => {
           const next = { ...positionAnims };
@@ -358,8 +360,8 @@
       <div
         class={[
           "mx-1.5 grid h-[26px] items-center gap-x-2 rounded-md px-1.5 cursor-pointer transition-all duration-300 relative",
-          anim === "up" && "bg-emerald-950/70 ring-2 ring-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] border-l-4 border-emerald-400 font-bold",
-          anim === "down" && "bg-rose-950/70 ring-2 ring-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)] border-l-4 border-rose-500 font-bold",
+          anim?.dir === "up" && "mdt-anim-pos-up bg-emerald-950/75 ring-2 ring-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] border-l-4 border-emerald-400 font-bold",
+          anim?.dir === "down" && "mdt-anim-pos-down bg-rose-950/75 ring-2 ring-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.5)] border-l-4 border-rose-500 font-bold",
           !anim && lFlash === "purple" && "mdt-anim-sector-purple mdt-shimmer-overlay",
           !anim && lFlash === "green" && "mdt-anim-sector-green mdt-shimmer-overlay",
           !anim && !lFlash && pExit && "mdt-anim-pit-exit",
@@ -388,10 +390,10 @@
         }}
       >
         <span class="text-right font-semibold flex items-center justify-end gap-0.5">
-          {#if anim === "up"}
-            <span class="text-emerald-400 font-black text-[10px]">▲</span>
-          {:else if anim === "down"}
-            <span class="text-rose-400 font-black text-[10px]">▼</span>
+          {#if anim?.dir === "up"}
+            <span class="rounded bg-emerald-500/25 px-0.5 text-emerald-300 font-black text-[9px] leading-tight">▲+{anim.delta}</span>
+          {:else if anim?.dir === "down"}
+            <span class="rounded bg-rose-500/25 px-0.5 text-rose-300 font-black text-[9px] leading-tight">▼-{anim.delta}</span>
           {/if}
           <span>{r.v.classPlace}</span>
         </span>

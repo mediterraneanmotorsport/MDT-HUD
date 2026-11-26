@@ -1,7 +1,7 @@
 <script lang="ts">
   import { scale } from "svelte/transition";
   import { api } from "../../lib/api";
-  import type { Units } from "../../lib/config.svelte";
+  import { BATTLE_SOUNDS, type Units } from "../../lib/config.svelte";
   import { classColor, gap, shortName, speed, speedUnit } from "../../lib/format";
   import { live as globalLive, useLive } from "../../lib/live.svelte";
   import type { Vehicle } from "../../lib/types";
@@ -191,7 +191,12 @@
       if (opts.soundAlert !== false && now - lastBattleSoundTime > 20000) {
         lastBattleSoundTime = now;
         try {
-          const audio = new Audio(`/Sound/Batalla/Battle.mp3?t=${now}`);
+          let file: string = opts.soundFile || "Battle.mp3";
+          if (file === "random") {
+            const pool = BATTLE_SOUNDS.filter((s) => s.value !== "random");
+            file = pool[Math.floor(Math.random() * pool.length)]?.value ?? "Battle.mp3";
+          }
+          const audio = new Audio(`/Sound/Batalla/${encodeURIComponent(file)}?t=${now}`);
           audio.volume = Math.max(0.05, Math.min(1.0, opts.soundVolume ?? 0.8));
           audio.play().catch(() => {});
         } catch {

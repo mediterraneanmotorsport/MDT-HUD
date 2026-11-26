@@ -359,7 +359,9 @@ fn parse_player(t: &TelemInfo, scoring: Option<&Vehicle>, info: &ScoringInfo) ->
         front_arb: t.front_anti_sway,
         rear_arb: t.rear_anti_sway,
         brake_bias_front: 1.0 - t.rear_brake_bias,
-        speed_limiter: t.speed_limiter_active != 0,
+        // In LMU shared memory, `mSpeedLimiter` (0=off, 1=on) is the true pit speed limiter switch.
+        // `mSpeedLimiterActive` can report non-zero even when the limiter is not engaged.
+        speed_limiter: t.speed_limiter == 1,
         headlights: t.headlights != 0,
         wipers: t.wiper_state,
         ignition: t.ignition_starter,

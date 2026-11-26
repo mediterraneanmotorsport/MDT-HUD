@@ -35,9 +35,9 @@
     run: () => void;
   }
 
-  function openExternalHash(hash: "#mobile" | "#pitwall") {
+  function openExternalHash(hash: "#mobile" | "#pitwall" | "#streamer") {
     const url = `http://localhost:1420/${hash}`;
-    if (isNativeTauri() && location.port !== "1420") {
+    if (isNativeTauri()) {
       openUrl(url).catch(() => window.open(url, "_blank"));
     } else {
       window.open(`/${hash}`, "_blank");
@@ -114,6 +114,13 @@
         label: "Abrir DDU Móvil en navegador (#mobile)",
         icon: "📱",
         run: () => openExternalHash("#mobile"),
+      },
+      {
+        id: "act-streamer",
+        group: "Acciones rápidas",
+        label: "Abrir Modo Streamer / Stream Deck (#streamer)",
+        icon: "🎛️",
+        run: () => openExternalHash("#streamer"),
       },
       {
         id: "act-copy-mobile",
@@ -211,15 +218,15 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="fixed inset-0 z-[80] flex items-start justify-center bg-black/70 px-4 pt-[12vh] backdrop-blur-sm"
+    class="wec-backdrop-enter fixed inset-0 z-[80] flex items-start justify-center bg-black/75 px-4 pt-[12vh]"
     onclick={() => (open = false)}
   >
     <div
-      class="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-accent/40 bg-[#0b1320] shadow-2xl"
+      class="wec-modal-enter flex w-full max-w-xl flex-col overflow-hidden rounded-[6px] border border-accent/45 bg-[#0c0e14] shadow-2xl"
       onclick={(e) => e.stopPropagation()}
     >
       <div class="flex items-center gap-2.5 border-b border-white/10 px-4 py-3">
-        <span class="text-base text-accent">⌘</span>
+        <svg class="text-accent-hi shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
         <input
           bind:this={inputEl}
           bind:value={query}

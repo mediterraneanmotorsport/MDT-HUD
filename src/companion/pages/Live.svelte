@@ -2,24 +2,23 @@
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { onDestroy, onMount } from "svelte";
-  import { api } from "../../lib/api";
+  import { api, isNativeTauri } from "../../lib/api";
   import {
     applyCompleteOverlayTheme,
     config,
-    createMdtTemplateProfile,
     HUD_THEMES,
     saveConfig,
-    switchProfile,
     type PresetThemeId,
   } from "../../lib/config.svelte";
-  import { delta, fuel, fuelUnit, lapTime, sessionLabel, speed, speedUnit } from "../../lib/format";
+  import { lapTime, sessionLabel } from "../../lib/format";
   import { live } from "../../lib/live.svelte";
   import { generateQrMatrix } from "../../lib/qr";
   import { spotter } from "../../lib/spotter.svelte";
   import { wheelControl } from "../../lib/wheelControl.svelte";
   import type { LapRecord, LapRecordedEvent, SessionSummary } from "../../lib/types";
+  import CarRender from "../../lib/CarRender.svelte";
+  import TrackOutline from "../../lib/TrackOutline.svelte";
   import CarLogo from "../../overlay/CarLogo.svelte";
-  import TrackHero from "../../lib/TrackHero.svelte";
   import LapTable from "../components/LapTable.svelte";
   import RaceDebriefCard from "../components/RaceDebriefCard.svelte";
   import Toggle from "../components/Toggle.svelte";
@@ -29,11 +28,20 @@
   const snap = $derived(live.snap);
   const p = $derived(snap?.player);
   const units = $derived(config.value.general.units);
+  const isLive = $derived(Boolean(snap && snap.source !== "none" && p));
+  const meVehicle = $derived(snap?.vehicles?.find((v) => v.isPlayer));
+
+  // Mobile DDU / PitWall / Streamer QR & Wheel Bindings state
   let copiedMobileUrl = $state(false);
   let showMobileOrderEditor = $state(false);
-  let qrMode = $state<"mobile" | "pitwall">("mobile");
+  let qrMode = $state<"mobile" | "pitwall" | "streamer">("mobile");
+  let themeSweepKey = $state(0);
   const activeQrUrl = $derived(
-    qrMode === "pitwall" ? wheelControl.mobileUrl.replace("#mobile", "#pitwall") : wheelControl.mobileUrl,
+    qrMode === "pitwall"
+      ? wheelControl.mobileUrl.replace("#mobile", "#pitwall")
+      : qrMode === "streamer"
+        ? wheelControl.mobileUrl.replace("#mobile", "#streamer")
+        : wheelControl.mobileUrl,
   );
   const qrMatrix = $derived(generateQrMatrix(activeQrUrl));
 
@@ -43,9 +51,9 @@
     setTimeout(() => (copiedMobileUrl = false), 2500);
   }
 
-  function openMobilePreview(hashTarget: "#mobile" | "#pitwall") {
+  function openMobilePreview(hashTarget: "#mobile" | "#pitwall" | "#streamer") {
     const url = `http://localhost:1420/${hashTarget}`;
-    if ("__TAURI_INTERNALS__" in window && location.port !== "1420") {
+    if ("__TAURI_INTERNALS__" in window) {
       openUrl(url).catch(() => window.open(url, "_blank"));
     } else {
       window.open(`/${hashTarget}`, "_blank");
@@ -57,6 +65,45 @@
     saveConfig();
   }
 
+  async function toggleDemo() {
+    const next = !live.status.demo;
+    live.status = { ...live.status, demo: next };
+    if (!next) {
+      if (live.snap?.source === "demo") {
+        live.snap = null;
+      }
+      if (!isNativeTauri()) {
+        (window as any).__MDT_STOP_DEMO__?.();
+      }
+    }
+    try {
+      await api.setDemoMode(next);
+    } catch {
+      // ignore in browser preview
+    }
+  }
+
+  function classAccent(cls: string): string {
+    const c = (cls || "").toLowerCase();
+    if (c.includes("hyper")) return "#e10600";
+    if (c.includes("lmp2")) return "#1a85ff";
+    if (c.includes("lmp3")) return "#a855f7";
+    if (c.includes("gt")) return "#22c55e";
+    return "var(--color-accent)";
+  }
+
+  // Live Timing Tower rows (up to 7 cars centered around player or top 7)
+  const timingTower = $derived.by(() => {
+    const list = snap?.vehicles ?? [];
+    if (list.length === 0) return [];
+    const sorted = [...list].sort((a, b) => a.place - b.place);
+    if (!meVehicle || sorted.length <= 7) return sorted.slice(0, 7);
+    const idx = sorted.findIndex((v) => v.isPlayer);
+    const start = Math.max(0, Math.min(sorted.length - 7, idx - 3));
+    return sorted.slice(start, start + 7);
+  });
+
+  // Session & Laps history
   let session = $state<SessionSummary | null>(null);
   let laps = $state<LapRecord[]>([]);
   let toast = $state<string | null>(null);
@@ -73,218 +120,394 @@
   const unlisten = listen<LapRecordedEvent>("lap-recorded", (e) => {
     refresh(e.payload.sessionId);
     if (e.payload.personalBest) {
-      toast = `Nuevo récord personal: ${lapTime(e.payload.lapTime)}`;
-      toasts.push(`🏆 Nuevo Récord Personal: ${lapTime(e.payload.lapTime)}`, { desc: e.payload.track, kind: "success", durationMs: 5000 });
+      toast = `NUEVO RÉCORD PERSONAL · ${lapTime(e.payload.lapTime)}`;
+      toasts.push(`Nuevo Récord Personal: ${lapTime(e.payload.lapTime)}`, {
+        desc: e.payload.track,
+        kind: "success",
+        durationMs: 5000,
+      });
       setTimeout(() => (toast = null), 6000);
     }
   });
   onDestroy(() => unlisten.then((f) => f()));
 </script>
 
-<div class="mx-auto max-w-6xl p-6">
-  <!-- 6. Mediterranean Motorsport Command Center Header -->
-  <section class="relative mb-5 overflow-hidden rounded-xl border border-[#2287EC]/35 bg-gradient-to-r from-[#091526] via-[#0d1f38] to-[#0a1220] p-4 shadow-lg">
-    <div class="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-[#2287EC]/15 blur-3xl"></div>
-    <div class="flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center gap-3.5">
-        <img src="/mdt-logo.png" alt="Mediterranean Motorsport" class="h-12 w-12 rounded-xl border border-[#2287EC]/40 bg-black/40 p-1 object-contain shadow-md" />
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] font-bold tracking-[0.2em] text-[#2287EC] uppercase">Mediterranean Motorsport</span>
-            <span class="rounded bg-[#2287EC]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#62b0ff]">COMMAND CENTER</span>
-          </div>
-          <h1 class="text-xl font-extrabold tracking-tight text-white">MDT-HUD · Telemetría & Spotter WEC</h1>
-        </div>
-      </div>
+<div class="mx-auto max-w-[1480px] px-5 py-4 space-y-4">
+  <!-- HERO SHOWROOM STAGE: REAL CAR RENDER + MANUFACTURER LOGO + CIRCUIT OUTLINE -->
+  <header class="wec-stage relative overflow-hidden">
+    {#if themeSweepKey > 0}
+      {#key themeSweepKey}
+        <div class="wec-sweep-flash z-20" aria-hidden="true"></div>
+      {/key}
+    {/if}
+    <!-- Class-tinted diagonal studio spotlight -->
+    <div
+      class="pointer-events-none absolute inset-y-0 right-0 w-[66%] [clip-path:polygon(14%_0,100%_0,100%_100%,0_100%)]"
+      style:background="linear-gradient(105deg, color-mix(in srgb, var(--color-accent) 22%, transparent) 0%, color-mix(in srgb, var(--color-accent) 6%, transparent) 55%, transparent 100%)"
+    ></div>
 
-      <!-- Controles rápidos: Tema Overlay PC + Perfil HUD + Spotter -->
-      <div class="flex flex-wrap items-center gap-2.5 text-xs">
-        <div class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5">
-          <span class="text-muted">Tema PC:</span>
-          {#each Object.entries(HUD_THEMES) as [id, t] (id)}
-            <button
-              class={[
-                "flex items-center gap-1 rounded px-2 py-1 font-display text-xs font-extrabold transition",
-                config.value.general.theme === id
-                  ? "bg-accent text-white shadow"
-                  : "text-muted hover:bg-white/10 hover:text-white",
-              ]}
-              onclick={() => applyCompleteOverlayTheme(id as PresetThemeId, true)}
-              title={t.subtitle}
-            >
-              <span class="h-2 w-2 rounded-full" style:background={t.accent}></span>
-              {t.label}
-            </button>
-          {/each}
-        </div>
-
-        <div class="flex items-center gap-2 rounded-lg border border-white/10 bg-black/35 px-3 py-1.5">
-          <span class="text-muted">Spotter:</span>
-          <button
-            class={["rounded px-2 py-1 font-bold transition", config.value.spotter.profile === "Sara" ? "bg-[#2287EC] text-white" : "text-muted hover:text-white"]}
-            onclick={() => setSpotterVoice("Sara")}
-          >Sara</button>
-          <button
-            class={["rounded px-2 py-1 font-bold transition", config.value.spotter.profile === "Antonio" ? "bg-[#2287EC] text-white" : "text-muted hover:text-white"]}
-            onclick={() => setSpotterVoice("Antonio")}
-          >Antonio</button>
-          <button
-            class="btn px-2 py-1 text-[11px]"
-            onclick={() => spotter.trigger("Bandera Verde", true)}
-            title="Probar voz del Spotter"
-          >🔊 Probar</button>
-        </div>
+    <!-- Subtle giant manufacturer watermark behind the car -->
+    {#if p?.vehicleModel || p?.vehicleName || session?.car}
+      <div class="pointer-events-none absolute top-1/2 left-[47%] -translate-x-1/2 -translate-y-1/2 text-white opacity-[0.045]">
+        <CarLogo model={p?.vehicleModel || session?.car || ""} entry={p?.vehicleName || ""} size={195} />
       </div>
-    </div>
-    {#if toast}
-      <div class="mt-3 inline-block rounded-full bg-best/15 px-3 py-1 text-sm font-semibold text-best">{toast}</div>
     {/if}
 
-    <!-- #1 Command Center Quick-Action Bar (1-click access + live LMU connection pulse) -->
-    <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-      <div class="flex items-center gap-2 text-xs">
-        <span class={["h-2.5 w-2.5 rounded-full", snap?.source === "lmu" ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : snap?.source === "demo" ? "bg-amber-400" : "bg-white/30"]}></span>
-        <span class="font-bold text-white">
-          {snap?.source === "lmu" ? `LMU Conectado · ${snap.session.track}` : snap?.source === "demo" ? "Modo Demo Activo" : "Esperando a Le Mans Ultimate"}
-        </span>
-      </div>
-      <div class="flex flex-wrap items-center gap-1.5 text-xs">
-        <button type="button" class="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 font-bold text-emerald-300 hover:bg-emerald-500/25 cursor-pointer" onclick={() => openMobilePreview("#pitwall")}>
-          📡 Abrir Pit Wall
-        </button>
-        <button type="button" class="rounded-lg border border-sky-400/40 bg-sky-500/15 px-2.5 py-1 font-bold text-sky-300 hover:bg-sky-500/25 cursor-pointer" onclick={() => openMobilePreview("#mobile")}>
-          📱 DDU Móvil
-        </button>
-        <button type="button" class="rounded-lg border border-fuchsia-400/40 bg-fuchsia-500/15 px-2.5 py-1 font-bold text-fuchsia-300 hover:bg-fuchsia-500/25 cursor-pointer" onclick={() => (nav.page = "dashstudio")}>
-          🎨 Dash Studio
-        </button>
-        <button type="button" class="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1 font-bold text-amber-300 hover:bg-amber-500/25 cursor-pointer" onclick={() => api.setEditMode(!live.status.editMode)}>
-          ✏️ {live.status.editMode ? "Salir Edición" : "Editar Overlay"}
-        </button>
-        <button type="button" class="rounded-lg border border-white/15 bg-white/10 px-2.5 py-1 font-bold text-white/85 hover:bg-white/20 cursor-pointer" onclick={() => api.setDemoMode(!live.status.demo)}>
-          🎮 {live.status.demo ? "Parar Demo" : "Probar Demo"}
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- #13 Race Debrief Card de la última sesión registrada -->
-  {#if session && laps.length > 0}
-    <RaceDebriefCard {session} {laps} {units} />
-  {/if}
-
-  <div class="grid gap-4 lg:grid-cols-3">
-    <section class="card overflow-hidden lg:col-span-2">
-      {#if !snap || snap.source === "none"}
-        <div class="p-5">
-          <div class="text-xl font-semibold">Esperando a Le Mans Ultimate</div>
-          <p class="mt-2 max-w-xl text-sm text-muted">
-            Inicia el juego y sal a pista. Ejecútalo en modo <b class="text-fg">sin bordes (borderless)</b> o ventana para que el
-            overlay se dibuje encima. No necesita plugins adicionales: MDT-HUD lee la memoria compartida nativa de LMU.
-          </p>
-        </div>
-      {:else}
-        <TrackHero track={snap.session.track} file={p?.vehFile} alt={p?.vehicleModel}>
-          <div class="flex items-center gap-2">
-            <span class="rounded-full bg-accent/15 px-2.5 py-0.5 text-xs font-semibold text-accent-hi">{sessionLabel(snap.session.kind)}</span>
-            {#if snap.source === "demo"}
-              <span class="rounded-full bg-warn/15 px-2.5 py-0.5 text-xs font-semibold text-warn">Datos demo</span>
+    <div class="relative z-10 grid min-h-[215px] items-center gap-4 px-6 py-5 lg:grid-cols-12">
+      <!-- Left (5 cols): Brand Emblem + Car Identity + Track + Broadcast Actions -->
+      <div class="flex flex-col justify-between gap-4 lg:col-span-5">
+        <div class="flex items-start gap-4">
+          <!-- Manufacturer Emblem Frame -->
+          <div
+            class="flex h-16 w-16 shrink-0 items-center justify-center rounded-[4px] border border-white/15 bg-[#090b10] p-2.5 text-white"
+            style:border-left={`3px solid ${classAccent(p?.vehicleClass || "")}`}
+          >
+            {#if p?.vehicleModel || p?.vehicleName || session?.car}
+              <CarLogo model={p?.vehicleModel || session?.car || ""} entry={p?.vehicleName || ""} size={42} />
+            {:else}
+              <img src="/mdt-logo.png" alt="MDT" class="h-full w-full object-contain" />
             {/if}
           </div>
-          <div class="mt-2 truncate text-2xl font-bold">{snap.session.track || "—"}</div>
-          <div class="mt-1 flex items-center gap-2 text-sm text-muted">
-            {#if p}
-              <CarLogo model={p.vehicleModel} entry={p.vehicleName} size={15} />
-              {p.vehicleModel || p.vehicleName} · {p.vehicleClass}
-            {:else}Fuera del coche{/if}
+
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                class="rounded-[2px] px-2 py-0.5 font-display text-[10px] font-bold tracking-[0.16em] text-white uppercase"
+                style:background={snap?.source === "lmu" ? "#16a34a" : snap?.source === "demo" ? "#d97706" : "var(--color-accent)"}
+              >
+                {snap?.source === "lmu" ? "ON TRACK" : snap?.source === "demo" ? "DEMO LIVE" : "STANDBY"}
+              </span>
+              {#if p?.vehicleClass}
+                <span
+                  class="rounded-[2px] border px-1.5 py-0.5 font-display text-[10px] font-bold tracking-[0.14em] uppercase"
+                  style:border-color={classAccent(p.vehicleClass)}
+                  style:color={classAccent(p.vehicleClass)}
+                >
+                  {p.vehicleClass}
+                </span>
+              {/if}
+              {#if snap?.session?.kind && isLive}
+                <span class="font-mono text-[10px] uppercase tracking-wider text-muted">{sessionLabel(snap.session.kind)}</span>
+              {/if}
+            </div>
+
+            <div class="mt-1.5 flex items-baseline gap-2.5">
+              {#if meVehicle?.number}
+                <span class="font-display text-3xl leading-none font-bold italic text-accent-hi">#{meVehicle.number}</span>
+              {/if}
+              <h1 class="truncate font-display text-3xl leading-none font-bold tracking-[0.03em] text-white uppercase">
+                {p ? (p.vehicleModel || p.vehicleName) : (session?.car || "MEDITERRANEAN MOTORSPORT")}
+              </h1>
+            </div>
+
+            <div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+              <span class="font-semibold text-fg uppercase tracking-wide">
+                {isLive ? (snap?.session?.track || "CIRCUITO ACTIVO") : (session?.track || "Esperando a Le Mans Ultimate")}
+              </span>
+              {#if meVehicle?.team}
+                <span class="text-white/20">·</span>
+                <span class="truncate">{meVehicle.team}</span>
+              {/if}
+            </div>
           </div>
-        </TrackHero>
-        {#if p}
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(92px,1fr))] gap-2 border-t border-line p-4 tnum">
-            {#each [
-              [`VUELTA ${p.lapNumber + 1}`, lapTime(snap.timing.currentLapTime, 1), ""],
-              ["VELOCIDAD", `${Math.round(speed(p.speed, units))}`, speedUnit(units)],
-              ["MARCHA", p.gear < 0 ? "R" : p.gear === 0 ? "N" : String(p.gear), ""],
-              ["RPM", `${Math.round(p.rpm)}`, ""],
-              ["TC", p.tc > 0 ? String(p.tc) : "OFF", p.tcSlip > 0 || p.tcCut > 0 ? `${p.tcSlip}/${p.tcCut}` : ""],
-              ["ABS", p.abs > 0 ? String(p.abs) : "OFF", ""],
-              ["MAP", p.motorMap > 0 ? String(p.motorMap) : "1", ""],
-              ["BB", p.brakeBiasFront > 0 ? `${(p.brakeBiasFront * 100).toFixed(1)}%` : "–", ""],
-              ["Δ PB", delta(snap.timing.deltaPb), ""],
-              ["COMB.", fuel(p.fuel, units).toFixed(1), fuelUnit(units)],
-            ] as [label, value, unit]}
-              <div class="rounded-lg bg-surface-2 px-3 py-2">
-                <div class="text-[10px] font-bold tracking-wider text-muted uppercase">{label}</div>
-                <div class="mt-0.5 font-display text-xl font-semibold whitespace-nowrap">{value} <span class="text-xs font-medium text-muted">{unit}</span></div>
+        </div>
+
+        <!-- Primary Broadcast Action Deck -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class={[
+              "btn px-3.5 py-1.5 font-display text-xs font-bold tracking-wider uppercase cursor-pointer",
+              live.status.editMode ? "border-warn bg-warn text-black" : "btn-primary",
+            ]}
+            onclick={() => api.setEditMode(!live.status.editMode)}
+          >
+            {live.status.editMode ? "Salir Edición HUD" : "Editar Overlay"}
+          </button>
+          <button
+            type="button"
+            class={[
+              "btn px-3 py-1.5 font-display text-xs font-bold tracking-wider uppercase cursor-pointer",
+              live.status.demo ? "border-amber-400/70 bg-amber-500/20 text-amber-200" : "",
+            ]}
+            onclick={toggleDemo}
+          >
+            {live.status.demo ? "Detener Demo" : "Simular Demo"}
+          </button>
+          <button
+            type="button"
+            class="btn px-3 py-1.5 font-display text-xs font-bold tracking-wider uppercase cursor-pointer"
+            onclick={() => openMobilePreview("#mobile")}
+          >
+            DDU Móvil
+          </button>
+          <button
+            type="button"
+            class="btn px-3 py-1.5 font-display text-xs font-bold tracking-wider uppercase cursor-pointer"
+            onclick={() => openMobilePreview("#pitwall")}
+          >
+            Pit Wall
+          </button>
+          <button
+            type="button"
+            class="btn px-3 py-1.5 font-display text-xs font-bold tracking-wider uppercase cursor-pointer"
+            onclick={() => openMobilePreview("#streamer")}
+          >
+            Streamer
+          </button>
+        </div>
+      </div>
+
+      <!-- Center (5 cols): REAL STUDIO CAR RENDER (FRONT 3/4) -->
+      <div class="relative flex min-h-[168px] items-center justify-center lg:col-span-5">
+        {#if p?.vehFile}
+          <div class="pointer-events-none absolute bottom-2 h-5 w-[72%] rounded-full bg-black/70 blur-lg"></div>
+          {#key p.vehFile}
+            <CarRender
+              file={p.vehFile}
+              view="front"
+              alt={p.vehicleModel || p.vehicleName}
+              class="wec-car-rollin relative z-10 max-h-[205px] w-full max-w-[470px] object-contain drop-shadow-[0_16px_20px_rgba(0,0,0,0.8)]"
+            />
+          {/key}
+        {:else}
+          <div class="flex flex-col items-center justify-center text-center">
+            <div class="font-mono text-[10px] font-bold tracking-[0.22em] text-accent-hi uppercase">PIT WALL // STANDBY</div>
+            <p class="mt-1.5 max-w-xs text-xs text-muted">
+              Inicia <b class="text-fg">Le Mans Ultimate</b> en modo Sin bordes o pulsa <b class="text-fg">Simular Demo</b> para ver el coche y la parrilla en directo.
+            </p>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Right (2 cols): REAL CIRCUIT OUTLINE + TRACK CONDITIONS -->
+      <div class="hidden lg:flex flex-col items-center justify-between gap-2 border-l border-white/[0.08] pl-4 lg:col-span-2">
+        <div class="flex h-[132px] w-full items-center justify-center">
+          {#key snap?.session?.track || session?.track || ""}
+            <TrackOutline
+              track={snap?.session?.track || session?.track || ""}
+              hideMissing
+              class="wec-track-reveal h-full w-full text-white/80"
+            />
+          {/key}
+        </div>
+        <div class="w-full space-y-0.5 text-center font-mono text-[10px] uppercase tracking-wider">
+          <div class="font-bold text-fg">
+            {snap?.session?.weather ? `PISTA ${Math.round(snap.session.weather.trackTemp)}°C` : "PISTA --°C"}
+          </div>
+          <div class={snap?.session?.weather?.raining && snap.session.weather.raining > 0.05 ? "text-sky-400 font-bold" : "text-muted"}>
+            {snap?.session?.weather?.raining && snap.session.weather.raining > 0.05
+              ? `LLUVIA ${Math.round(snap.session.weather.raining * 100)}%`
+              : "SECO · DRY"}
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  {#if toast}
+    <div class="rounded-[4px] border border-purple-400/50 bg-purple-500/15 px-4 py-2 font-display text-xs font-bold tracking-[0.12em] text-purple-200 uppercase">
+      {toast}
+    </div>
+  {/if}
+
+  <!-- CLEAN 2-COLUMN OPERATIONS ROW (TIMING / MODULES + MASTER CONTROL RACK) -->
+  <div class="grid gap-4 lg:grid-cols-12">
+    <!-- Left (7 cols): Live Timing Tower when driving, or Studio Modules Hub in Standby -->
+    <section class="card flex flex-col justify-between p-4 lg:col-span-7">
+      {#if timingTower.length > 0}
+        <div>
+          <div class="mb-2.5 flex items-center justify-between border-b border-white/[0.07] pb-2">
+            <span class="section-title">PARRILLA EN DIRECTO · LIVE TIMING</span>
+            <span class="font-mono text-[10px] text-muted uppercase">{snap?.vehicles?.length} COCHES EN SESIÓN</span>
+          </div>
+          <div class="space-y-1 tnum">
+            {#each timingTower as v (v.id)}
+              <div
+                class={[
+                  "flex items-center gap-2.5 rounded-[3px] border px-2.5 py-1.5 text-xs",
+                  v.isPlayer
+                    ? "border-accent/60 bg-accent/15 text-white"
+                    : "border-white/[0.05] bg-[#0a0c11] text-fg",
+                ]}
+              >
+                <span class="h-4 w-[3px] shrink-0 rounded-[1px]" style:background={classAccent(v.class)}></span>
+                <span class="w-6 font-display text-sm font-bold text-muted">P{v.place}</span>
+                <span class="min-w-0 flex-1 truncate font-semibold">{v.driver}</span>
+                <span class="hidden sm:inline truncate max-w-[160px] text-[11px] text-muted">{v.model || v.vehicle}</span>
+                {#if v.inPits}
+                  <span class="rounded-[2px] bg-amber-500/20 px-1.5 py-0.5 font-mono text-[9.5px] font-bold text-amber-300">PIT</span>
+                {:else}
+                  <span class="w-16 text-right font-mono text-[11px] text-muted">
+                    {v.place === 1 ? "LÍDER" : `+${v.timeBehindLeader.toFixed(1)}s`}
+                  </span>
+                {/if}
               </div>
             {/each}
           </div>
-        {/if}
+        </div>
+      {:else}
+        <div>
+          <div class="mb-3 flex items-center justify-between border-b border-white/[0.07] pb-2">
+            <span class="section-title">SUBSISTEMAS MDT STUDIO</span>
+            <span class="font-mono text-[10px] text-muted uppercase">ACCESO RÁPIDO</span>
+          </div>
+          <div class="grid gap-2.5 sm:grid-cols-2">
+            <button type="button" class="wec-tile flex items-center justify-between p-3.5 text-left cursor-pointer" onclick={() => (nav.page = "overlays")}>
+              <div>
+                <div class="font-display text-sm font-bold tracking-wider text-white uppercase">Overlays HUD</div>
+                <div class="mt-0.5 text-xs text-muted">Widgets en pista y perfiles</div>
+              </div>
+              <span class={["font-mono text-[10px] font-bold uppercase", live.status.overlayVisible ? "text-good" : "text-faint"]}>
+                {live.status.overlayVisible ? "ON" : "OFF"}
+              </span>
+            </button>
+            <button type="button" class="wec-tile flex items-center justify-between p-3.5 text-left cursor-pointer" onclick={() => (nav.page = "fx")}>
+              <div>
+                <div class="font-display text-sm font-bold tracking-wider text-white uppercase">Motor FX DirectX 11</div>
+                <div class="mt-0.5 text-xs text-muted">Onboard real, LUTs y presets MDT</div>
+              </div>
+              <span class={["font-mono text-[10px] font-bold uppercase", config.value.general.onboardFx?.enabled ? "text-accent-hi" : "text-faint"]}>
+                {config.value.general.onboardFx?.enabled ? "ON" : "OFF"}
+              </span>
+            </button>
+            <button type="button" class="wec-tile flex items-center justify-between p-3.5 text-left cursor-pointer" onclick={() => (nav.page = "fx")}>
+              <div>
+                <div class="font-display text-sm font-bold tracking-wider text-white uppercase">MDT-Audio 3D</div>
+                <div class="mt-0.5 text-xs text-muted">Audio espacial binaural en cabina</div>
+              </div>
+              <span class={["font-mono text-[10px] font-bold uppercase", config.value.general.audio3d?.enabled ? "text-sky-400" : "text-faint"]}>
+                {config.value.general.audio3d?.enabled ? "ON" : "OFF"}
+              </span>
+            </button>
+            <button type="button" class="wec-tile flex items-center justify-between p-3.5 text-left cursor-pointer" onclick={() => (nav.page = "settings")}>
+              <div>
+                <div class="font-display text-sm font-bold tracking-wider text-white uppercase">Spotter &amp; Ingeniero IA</div>
+                <div class="mt-0.5 text-xs text-muted">Radio de pista y telemetría por voz</div>
+              </div>
+              <span class={["font-mono text-[10px] font-bold uppercase", config.value.spotter.enabled ? "text-emerald-400" : "text-faint"]}>
+                {config.value.spotter.enabled ? config.value.spotter.profile : "OFF"}
+              </span>
+            </button>
+          </div>
+        </div>
       {/if}
     </section>
 
-    <section class="flex flex-col gap-3 card p-4 text-sm">
-      <div class="section-title text-sm text-muted">Overlay</div>
-      <div class="flex items-center justify-between">
-        <span>Mostrar overlay</span>
-        <Toggle checked={live.status.overlayVisible} onchange={(v) => api.setOverlayVisible(v)} label="Mostrar overlay" />
+    <!-- Right (5 cols): Master Control Rack (Overlay, Theme Sync, Radio, Hotkeys) -->
+    <section class="card flex flex-col justify-between gap-3.5 p-4 lg:col-span-5">
+      <div class="flex items-center justify-between border-b border-white/[0.07] pb-2.5">
+        <div>
+          <span class="section-title">CONTROL DE SESIÓN</span>
+          <div class="text-[11px] text-muted">Overlay, tema visual y radio de pista</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-[10px] text-muted uppercase">HUD</span>
+          <Toggle checked={live.status.overlayVisible} onchange={(v) => api.setOverlayVisible(v)} label="Mostrar overlay" />
+        </div>
       </div>
-      <div class="flex items-center justify-between">
-        <span>Datos de demostración</span>
-        <Toggle checked={live.status.demo} onchange={(v) => api.setDemoMode(v)} label="Datos de demostración" />
+
+      <!-- Theme Switcher (syncs BOTH Overlay AND Companion App!) -->
+      <div>
+        <div class="mb-1.5 font-display text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">
+          TEMA VISUAL (APP + OVERLAY)
+        </div>
+        <div class="grid grid-cols-5 gap-1.5">
+          {#each Object.entries(HUD_THEMES) as [id, t] (id)}
+            <button
+              type="button"
+              class={[
+                "flex flex-col items-center gap-1 rounded-[3px] border py-1.5 font-display text-[10px] font-bold uppercase transition cursor-pointer",
+                config.value.general.theme === id
+                  ? "border-accent bg-accent/20 text-white"
+                  : "border-white/[0.08] bg-[#0a0c11] text-muted hover:border-white/20 hover:text-fg",
+              ]}
+              onclick={() => {
+                applyCompleteOverlayTheme(id as PresetThemeId, true);
+                wheelControl.setMobileTheme(id as PresetThemeId);
+                themeSweepKey += 1;
+              }}
+              title={t.subtitle}
+            >
+              <span class="h-1.5 w-5 rounded-[1px]" style:background={t.accent}></span>
+              {t.label.replace("MDT-", "")}
+            </button>
+          {/each}
+        </div>
       </div>
-      <button
-        class={["btn mt-1", live.status.editMode ? "bg-warn! text-black" : "btn-primary"]}
-        onclick={() => api.setEditMode(!live.status.editMode)}
-      >
-        {live.status.editMode ? "Terminar edición de diseño" : "Editar diseño del overlay"}
-      </button>
-      <div class="text-xs leading-relaxed text-muted">
-        <kbd class="kbd">Ctrl+Shift+F9</kbd> editar diseño<br />
-        <kbd class="kbd">Ctrl+Shift+F10</kbd> mostrar / ocultar
+
+      <!-- Radio Selector -->
+      <div class="border-t border-white/[0.07] pt-3">
+        <div class="mb-1.5 flex items-center justify-between">
+          <span class="font-display text-[10.5px] font-bold tracking-[0.14em] text-muted uppercase">RADIO SPOTTER</span>
+          <button
+            type="button"
+            class="font-mono text-[10px] font-bold text-accent-hi hover:underline uppercase cursor-pointer"
+            onclick={() => spotter.trigger("Bandera Verde", true)}
+          >
+            PROBAR RADIO
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            class={[
+              "rounded-[3px] border py-1.5 font-display text-xs font-bold tracking-wider uppercase transition cursor-pointer",
+              config.value.spotter.profile === "Sara"
+                ? "border-accent bg-accent text-white"
+                : "border-white/[0.08] bg-[#0a0c11] text-muted hover:text-fg",
+            ]}
+            onclick={() => setSpotterVoice("Sara")}
+          >
+            SARA
+          </button>
+          <button
+            type="button"
+            class={[
+              "rounded-[3px] border py-1.5 font-display text-xs font-bold tracking-wider uppercase transition cursor-pointer",
+              config.value.spotter.profile === "Antonio"
+                ? "border-accent bg-accent text-white"
+                : "border-white/[0.08] bg-[#0a0c11] text-muted hover:text-fg",
+            ]}
+            onclick={() => setSpotterVoice("Antonio")}
+          >
+            ANTONIO
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between border-t border-white/[0.07] pt-2.5 font-mono text-[10px] text-muted">
+        <span><kbd class="kbd mr-1">Ctrl+Shift+F9</kbd>Editar HUD</span>
+        <span><kbd class="kbd mr-1">Ctrl+Shift+F10</kbd>Mostrar/Ocultar</span>
       </div>
     </section>
   </div>
 
-  <!-- Pantalla Móvil DDU + Control por Botones del Volante -->
-  <section class="mt-4 card border-[#2287EC]/30 p-5">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+  <!-- CONEXIÓN MÓVIL DDU, PIT WALL & STREAMER (QR EN DIRECTO + VOLANTE) -->
+  <section class="card p-4 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-3">
       <div>
         <div class="flex items-center gap-2">
-          <span class="rounded bg-[#2287EC]/20 px-2 py-0.5 text-[11px] font-bold text-[#62b0ff] uppercase">NUEVO · DDU MÓVIL & MFD</span>
-          <h2 class="text-base font-bold text-white">Dashboard en el Móvil + Botones del Volante</h2>
+          <span class="rounded-[2px] bg-accent/20 px-2 py-0.5 font-display text-[10px] font-bold tracking-[0.14em] text-accent-hi uppercase">WI-FI · QR DIRECTO</span>
+          <h2 class="section-title text-sm text-white">DDU MÓVIL, PIT WALL &amp; STREAMER DECK</h2>
         </div>
-        <p class="mt-1 text-xs text-muted">
-          Abre el enlace en el navegador de tu móvil (conectado al mismo Wi-Fi) y usa cualquier botón de tu volante para cambiar en tiempo real entre
-          <b>Relativo</b>, <b>Clasificación</b>, <b>Daños y Neumáticos</b>, <b>Combustible</b> y <b>Cazador</b>.
+        <p class="mt-0.5 text-xs text-muted">
+          Escanea el QR desde tu móvil o tablet (mismo Wi-Fi) para abrir el DDU, Muro de Ingenieros o Streamer Deck y controlar pantallas desde el volante.
         </p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onclick={() => openMobilePreview("#mobile")}
-          class="btn border border-[#2287EC]/40 bg-[#2287EC]/15 text-xs font-semibold text-[#62b0ff] hover:bg-[#2287EC]/25"
-        >📱 Vista previa DDU Móvil</button>
-        <button
-          type="button"
-          onclick={() => openMobilePreview("#pitwall")}
-          class="btn border border-emerald-500/40 bg-emerald-500/15 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25"
-        >📡 Muro de Ingenieros (#pitwall)</button>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button type="button" onclick={() => openMobilePreview("#mobile")} class="btn py-1 text-xs cursor-pointer">Abrir DDU Móvil</button>
+        <button type="button" onclick={() => openMobilePreview("#pitwall")} class="btn py-1 text-xs cursor-pointer">Abrir Pit Wall</button>
+        <button type="button" onclick={() => openMobilePreview("#streamer")} class="btn py-1 text-xs cursor-pointer">Abrir Streamer</button>
       </div>
     </div>
 
-    <div class="mt-4 grid gap-4 lg:grid-cols-2">
-      <!-- Columna 1: Código QR + URL Wi-Fi para el móvil o tablet -->
-      <div class="flex gap-3.5 rounded-xl border border-line bg-surface-2 p-3.5">
-        <!-- Código QR Escaneable -->
-        <div class="flex shrink-0 flex-col items-center gap-1.5">
-          <div class="rounded-lg bg-white p-2 shadow-md" title="Escanea con la cámara de tu móvil o tablet">
-            <svg
-              width="98"
-              height="98"
-              viewBox="0 0 {qrMatrix.length} {qrMatrix.length}"
-              shape-rendering="crispEdges"
-            >
+    <div class="grid gap-4 lg:grid-cols-12">
+      <!-- Columna 1 (7 cols): Código QR + Selector Móvil/PitWall/Streamer + URL + IP + Firewall -->
+      <div class="flex flex-col sm:flex-row gap-4 rounded-[4px] border border-white/[0.08] bg-[#0a0c11] p-3.5 lg:col-span-7">
+        <div class="flex shrink-0 flex-col items-center justify-between gap-2">
+          <div class="rounded-[4px] bg-white p-2" title="Escanea con la cámara de tu móvil o tablet">
+            <svg width="108" height="108" viewBox="0 0 {qrMatrix.length} {qrMatrix.length}" shape-rendering="crispEdges">
               {#each qrMatrix as row, y}
                 {#each row as dark, x}
                   {#if dark}
@@ -294,298 +517,208 @@
               {/each}
             </svg>
           </div>
-          <div class="flex gap-1 text-[10px]">
+          <div class="grid w-full grid-cols-3 gap-1 text-[10px]">
             <button
-              class={["rounded px-1.5 py-0.5 font-bold", qrMode === "mobile" ? "bg-accent text-white" : "bg-surface-3 text-muted"]}
+              type="button"
+              class={["rounded-[2px] py-0.5 font-display font-bold uppercase cursor-pointer", qrMode === "mobile" ? "bg-accent text-white" : "bg-surface-3 text-muted hover:text-fg"]}
               onclick={() => (qrMode = "mobile")}
-            >📱 Móvil</button>
+            >Móvil</button>
             <button
-              class={["rounded px-1.5 py-0.5 font-bold", qrMode === "pitwall" ? "bg-accent text-white" : "bg-surface-3 text-muted"]}
+              type="button"
+              class={["rounded-[2px] py-0.5 font-display font-bold uppercase cursor-pointer", qrMode === "pitwall" ? "bg-accent text-white" : "bg-surface-3 text-muted hover:text-fg"]}
               onclick={() => (qrMode = "pitwall")}
-            >📡 PitWall</button>
+            >PitWall</button>
+            <button
+              type="button"
+              class={["rounded-[2px] py-0.5 font-display font-bold uppercase cursor-pointer", qrMode === "streamer" ? "bg-[#e10600] text-white" : "bg-surface-3 text-muted hover:text-fg"]}
+              onclick={() => (qrMode = "streamer")}
+            >Stream</button>
           </div>
         </div>
 
-        <div class="flex min-w-0 flex-1 flex-col justify-between">
+        <div class="flex min-w-0 flex-1 flex-col justify-between gap-2.5">
           <div>
-            <div class="text-xs font-semibold tracking-wider text-muted uppercase">
-              1. Escanea el QR o abre por Wi-Fi ({qrMode === "mobile" ? "DDU Móvil" : "Muro de Ingenieros"})
+            <div class="font-display text-[11px] font-bold tracking-[0.12em] text-muted uppercase">
+              ENLACE WI-FI ({qrMode === "mobile" ? "DDU MÓVIL" : qrMode === "pitwall" ? "MURO PIT WALL" : "STREAMER DECK"})
             </div>
-            <div class="mt-2 flex items-center gap-2">
-              <input
-                type="text"
-                readonly
-                class="field flex-1 font-mono text-xs select-all"
-                value={activeQrUrl}
-              />
-              <button class="btn btn-primary text-xs" onclick={copyMobileUrl}>
-                {copiedMobileUrl ? "✓ Copiado" : "Copiar"}
+            <div class="mt-1.5 flex items-center gap-2">
+              <input type="text" readonly class="field flex-1 font-mono text-xs select-all" value={activeQrUrl} />
+              <button type="button" class="btn btn-primary text-xs cursor-pointer" onclick={copyMobileUrl}>
+                {copiedMobileUrl ? "Copiado" : "Copiar"}
               </button>
             </div>
-            <div class="mt-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11px] leading-snug text-warn">
-              ⚠️ <b>En tu móvil NO escribas <code class="font-mono">localhost</code></b>: escribe exactamente
-              <b class="font-mono text-white underline">{wheelControl.selectedIp ? `http://${wheelControl.selectedIp}:1420` : activeQrUrl}</b>
-              en Chrome/Safari de tu teléfono (conectado al mismo Wi-Fi).
-            </div>
-
-            {#if wheelControl.lanIps.length > 0}
-              <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-                <span>IP de tu PC:</span>
-                {#each wheelControl.lanIps as ip}
-                  <button
-                    class={[
-                      "rounded px-2 py-0.5 font-mono text-[11px] font-bold transition",
-                      wheelControl.selectedIp === ip
-                        ? "bg-accent text-white shadow"
-                        : "bg-black/40 text-fg hover:text-[#62b0ff]",
-                    ]}
-                    onclick={() => wheelControl.selectIp(ip)}
-                    title="Usar esta dirección IP para el código QR y enlace móvil"
-                  >{ip}</button>
-                {/each}
-                <button
-                  class="rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-muted hover:bg-white/10 hover:text-white"
-                  onclick={() => wheelControl.fetchMobileInfo()}
-                  title="Detectar de nuevo la IP Wi-Fi/LAN de este PC"
-                >↻ Actualizar IP</button>
-              </div>
-            {/if}
-
-            <!-- Estado del Firewall de Windows + Botón de Apertura en 1 Clic -->
-            <div class="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/35 px-2.5 py-1.5 text-[11px]">
-              {#if wheelControl.firewallOpen}
-                <span class="flex items-center gap-1.5 text-good font-semibold">
-                  <span>🟢 Firewall Windows: Puerto 1420 abierto</span>
-                </span>
-                <button
-                  class="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-muted hover:bg-white/10 hover:text-white disabled:opacity-40"
-                  disabled={wheelControl.firewallBusy}
-                  onclick={() => wheelControl.openFirewall()}
-                  title="Volver a aplicar la regla del Firewall de Windows si tu móvil no conecta"
-                >
-                  {wheelControl.firewallBusy ? "Abriendo puerto..." : "🛡️ Reparar Firewall Wi-Fi"}
-                </button>
-              {:else}
-                <span class="flex items-center gap-1.5 text-warn font-semibold">
-                  <span>🟠 Firewall de Windows bloquea la conexión del móvil</span>
-                </span>
-                <button
-                  class="rounded bg-accent px-2.5 py-1 text-[11px] font-bold text-white shadow hover:brightness-110 disabled:opacity-40"
-                  disabled={wheelControl.firewallBusy}
-                  onclick={() => wheelControl.openFirewall()}
-                >
-                  {wheelControl.firewallBusy ? "Autorizando..." : "🛡️ Permitir Wi-Fi en Firewall (1 Clic)"}
-                </button>
-              {/if}
-            </div>
           </div>
-          <div class="mt-2 text-[11px] text-muted">
-            💡 Desliza el dedo (<b>Swipe</b>) a izquierda/derecha en el móvil o usa los botones del volante para cambiar de pantalla.
-          </div>
-        </div>
-      </div>
 
-      <!-- Columna 2: Asignación de botones del volante -->
-      <div class="rounded-xl border border-line bg-surface-2 p-3.5">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-semibold tracking-wider text-muted uppercase">2. Botones del Volante / Teclado</span>
-          <span class="text-[11px] text-muted">
-            {#if wheelControl.connectedGamepads.length > 0}
-              🟢 {wheelControl.connectedGamepads.length} mando(s)/volante(s) USB
+          {#if wheelControl.lanIps.length > 0}
+            <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+              <span class="font-mono text-[10px] uppercase">IP PC:</span>
+              {#each wheelControl.lanIps as ip}
+                <button
+                  type="button"
+                  class={["rounded-[3px] px-2 py-0.5 font-mono text-[11px] font-bold cursor-pointer", wheelControl.selectedIp === ip ? "bg-accent text-white" : "bg-[#14171f] text-fg hover:text-accent-hi"]}
+                  onclick={() => wheelControl.selectIp(ip)}
+                >{ip}</button>
+              {/each}
+              <button
+                type="button"
+                class="rounded-[3px] border border-white/10 px-1.5 py-0.5 text-[10px] text-muted hover:text-white cursor-pointer"
+                onclick={() => wheelControl.fetchMobileInfo()}
+              >Actualizar</button>
+            </div>
+          {/if}
+
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-white/[0.08] bg-[#11141c] px-2.5 py-1.5 text-[11px]">
+            {#if wheelControl.firewallOpen}
+              <span class="flex items-center gap-1.5 font-semibold text-good">
+                <span class="h-1.5 w-1.5 rounded-[1px] bg-good"></span>
+                Firewall Windows: Puerto 1420 abierto
+              </span>
+              <button type="button" class="btn py-0.5 text-[10px] cursor-pointer" disabled={wheelControl.firewallBusy} onclick={() => wheelControl.openFirewall()}>
+                {wheelControl.firewallBusy ? "Abriendo..." : "Reparar Firewall"}
+              </button>
             {:else}
-              ⚪ Pulsa un botón del volante para activarlo
+              <span class="flex items-center gap-1.5 font-semibold text-warn">
+                <span class="h-1.5 w-1.5 rounded-[1px] bg-warn"></span>
+                Firewall bloquea la conexión móvil
+              </span>
+              <button type="button" class="btn btn-primary py-0.5 text-[10px] cursor-pointer" disabled={wheelControl.firewallBusy} onclick={() => wheelControl.openFirewall()}>
+                {wheelControl.firewallBusy ? "Autorizando..." : "Abrir Puerto 1420"}
+              </button>
             {/if}
-          </span>
-        </div>
-
-        <div class="mt-2.5 grid grid-cols-2 gap-2.5">
-          <!-- Botón Siguiente Pantalla -->
-          <div class="rounded-lg border border-white/10 bg-black/30 p-2.5">
-            <div class="text-[11px] text-muted">Siguiente pantalla MFD ▶</div>
-            <div class="mt-1 truncate font-mono text-xs font-bold text-[#62b0ff]">
-              {wheelControl.formatBinding(wheelControl.nextBind)}
-            </div>
-            <div class="mt-2 flex items-center gap-1.5">
-              {#if wheelControl.learning === "next"}
-                <button class="btn w-full bg-warn! py-1 text-xs font-bold text-black" onclick={() => wheelControl.cancelLearning()}>
-                  Pulsa botón del volante... (Cancelar)
-                </button>
-              {:else}
-                <button class="btn flex-1 py-1 text-xs" onclick={() => wheelControl.startLearning("next")}>
-                  🎮 Asignar botón
-                </button>
-              {/if}
-            </div>
-          </div>
-
-          <!-- Botón Pantalla Anterior -->
-          <div class="rounded-lg border border-white/10 bg-black/30 p-2.5">
-            <div class="text-[11px] text-muted">◀ Pantalla MFD anterior</div>
-            <div class="mt-1 truncate font-mono text-xs font-bold text-[#62b0ff]">
-              {wheelControl.formatBinding(wheelControl.prevBind)}
-            </div>
-            <div class="mt-2 flex items-center gap-1.5">
-              {#if wheelControl.learning === "prev"}
-                <button class="btn w-full bg-warn! py-1 text-xs font-bold text-black" onclick={() => wheelControl.cancelLearning()}>
-                  Pulsa botón del volante... (Cancelar)
-                </button>
-              {:else}
-                <button class="btn flex-1 py-1 text-xs" onclick={() => wheelControl.startLearning("prev")}>
-                  🎮 Asignar botón
-                </button>
-              {/if}
-            </div>
           </div>
         </div>
-
-        {#if wheelControl.lastPressedInfo}
-          <div class="mt-2 text-[11px] text-muted">
-            Última entrada detectada: <span class="font-mono text-fg">{wheelControl.lastPressedInfo}</span>
-          </div>
-        {/if}
-      </div>
-    </div>
-
-    <!-- Tema del Móvil + Barra de páginas MFD en vivo -->
-    <div class="mt-3.5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs font-semibold text-muted">Tema del Móvil:</span>
-        {#each Object.entries(HUD_THEMES) as [id, t] (id)}
-          <button
-            class={[
-              "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-display text-xs font-extrabold transition",
-              wheelControl.mobileTheme === id
-                ? "border-accent bg-accent text-white shadow"
-                : "border-line bg-surface-2 text-muted hover:text-fg",
-            ]}
-            onclick={() => wheelControl.setMobileTheme(id as PresetThemeId)}
-          >
-            <span class="h-2 w-2 rounded-full" style:background={t.accent}></span>
-            {t.label}
-          </button>
-        {/each}
       </div>
 
-      <div class="flex flex-wrap items-center gap-3">
-        <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs">
-          <input
-            type="checkbox"
-            class="accent-accent"
-            checked={wheelControl.autoPopups}
-            onchange={(e) => wheelControl.setAutoPopups(e.currentTarget.checked)}
-          />
-          <span class="font-semibold text-fg" title="Cambia temporalmente a Daños si recibes un golpe, a Combustible al entrar a boxes, y muestra un aviso gigante al tocar TC/ABS/Mapa">
-            Pop-ups automáticos inteligentes en móvil (Opcional)
-          </span>
-        </label>
-
-        <button
-          class="btn border border-accent/40 bg-accent/15 text-xs font-semibold text-accent-hi"
-          onclick={() => (showMobileOrderEditor = !showMobileOrderEditor)}
-        >
-          {showMobileOrderEditor ? "▲ Ocultar editor de pantallas" : "⚙️ Ordenar / Añadir / Eliminar pantallas del móvil"}
-        </button>
-      </div>
-    </div>
-
-    <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-3">
-      <span class="text-xs font-semibold text-muted">
-        Pantallas activas en el Móvil ({wheelControl.activePages.length}):
-      </span>
-      <div class="flex flex-wrap items-center gap-1.5">
-        <button class="btn px-2.5 py-1 text-xs" onclick={() => wheelControl.prevPage()}>◀ Ant.</button>
-        {#each wheelControl.activePages as pg, i (pg.id)}
-          <button
-            class={[
-              "rounded-lg px-2.5 py-1 text-xs font-bold transition",
-              wheelControl.page === pg.id
-                ? "bg-accent text-white shadow"
-                : "bg-surface-2 text-muted hover:text-fg",
-            ]}
-            onclick={() => wheelControl.setPage(i)}
-          >
-            {i + 1}. {pg.short}
-          </button>
-        {/each}
-        <button class="btn px-2.5 py-1 text-xs" onclick={() => wheelControl.nextPage()}>Sig. ▶</button>
-      </div>
-    </div>
-
-    {#if showMobileOrderEditor}
-      <div class="mt-3.5 grid gap-4 rounded-xl border border-line bg-surface-2/70 p-4 md:grid-cols-2">
+      <!-- Columna 2 (5 cols): Botones del Volante + Pantallas activas del móvil -->
+      <div class="flex flex-col justify-between gap-3 rounded-[4px] border border-white/[0.08] bg-[#0a0c11] p-3.5 lg:col-span-5">
         <div>
-          <div class="mb-2 flex items-center justify-between">
-            <span class="text-xs font-bold tracking-wider text-muted uppercase">
-              Orden actual en el Móvil (usa ↑ ↓ o ✕)
+          <div class="flex items-center justify-between">
+            <span class="font-display text-[11px] font-bold tracking-[0.12em] text-muted uppercase">BOTONES DEL VOLANTE / MFD</span>
+            <span class="font-mono text-[10px] text-muted">
+              {wheelControl.connectedGamepads.length > 0 ? `${wheelControl.connectedGamepads.length} USB` : "PULSA UN BOTÓN"}
             </span>
-            <button class="text-xs text-accent hover:underline" onclick={() => wheelControl.resetPages()}>
-              Restablecer por defecto
+          </div>
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <div class="rounded-[3px] border border-white/[0.08] bg-[#11141c] p-2">
+              <div class="text-[10.5px] text-muted">Siguiente MFD</div>
+              <div class="mt-0.5 truncate font-mono text-xs font-bold text-accent-hi">{wheelControl.formatBinding(wheelControl.nextBind)}</div>
+              <div class="mt-1.5">
+                {#if wheelControl.learning === "next"}
+                  <button type="button" class="btn w-full bg-warn! py-0.5 text-[11px] font-bold text-black cursor-pointer" onclick={() => wheelControl.cancelLearning()}>Pulsa... (Cancelar)</button>
+                {:else}
+                  <button type="button" class="btn w-full py-0.5 text-[11px] cursor-pointer" onclick={() => wheelControl.startLearning("next")}>Asignar</button>
+                {/if}
+              </div>
+            </div>
+            <div class="rounded-[3px] border border-white/[0.08] bg-[#11141c] p-2">
+              <div class="text-[10.5px] text-muted">Anterior MFD</div>
+              <div class="mt-0.5 truncate font-mono text-xs font-bold text-accent-hi">{wheelControl.formatBinding(wheelControl.prevBind)}</div>
+              <div class="mt-1.5">
+                {#if wheelControl.learning === "prev"}
+                  <button type="button" class="btn w-full bg-warn! py-0.5 text-[11px] font-bold text-black cursor-pointer" onclick={() => wheelControl.cancelLearning()}>Pulsa... (Cancelar)</button>
+                {:else}
+                  <button type="button" class="btn w-full py-0.5 text-[11px] cursor-pointer" onclick={() => wheelControl.startLearning("prev")}>Asignar</button>
+                {/if}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2 border-t border-white/[0.07] pt-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted">
+              <input
+                type="checkbox"
+                class="accent-accent"
+                checked={wheelControl.autoPopups}
+                onchange={(e) => wheelControl.setAutoPopups(e.currentTarget.checked)}
+              />
+              <span class="font-semibold text-fg">Pop-ups automáticos móvil</span>
+            </label>
+            <button type="button" class="font-mono text-[10px] font-bold text-accent-hi uppercase hover:underline cursor-pointer" onclick={() => (showMobileOrderEditor = !showMobileOrderEditor)}>
+              {showMobileOrderEditor ? "Ocultar pantallas" : `Pantallas (${wheelControl.activePages.length})`}
             </button>
           </div>
+          <div class="flex flex-wrap items-center gap-1">
+            <button type="button" class="btn px-2 py-0.5 text-[11px] cursor-pointer" onclick={() => wheelControl.prevPage()}>‹</button>
+            {#each wheelControl.activePages as pg, i (pg.id)}
+              <button
+                type="button"
+                class={["rounded-[3px] px-2 py-0.5 text-[11px] font-bold cursor-pointer", wheelControl.page === pg.id ? "bg-accent text-white" : "bg-[#14171f] text-muted hover:text-fg"]}
+                onclick={() => wheelControl.setPage(i)}
+              >
+                {i + 1}. {pg.short}
+              </button>
+            {/each}
+            <button type="button" class="btn px-2 py-0.5 text-[11px] cursor-pointer" onclick={() => wheelControl.nextPage()}>›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wec-accordion" data-open={showMobileOrderEditor}>
+      <div>
+        <div class="grid gap-3 rounded-[4px] border border-white/[0.08] bg-[#0a0c11] p-3.5 md:grid-cols-2">
           <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] font-bold uppercase text-muted">
+              <span>Orden en el móvil</span>
+              <button type="button" class="text-accent-hi hover:underline cursor-pointer" onclick={() => wheelControl.resetPages()}>Restablecer</button>
+            </div>
             {#each wheelControl.activePages as pg, idx (pg.id)}
-              <div class="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-1.5 text-xs">
-                <span class="font-semibold text-fg">
-                  <span class="mr-1.5 font-mono text-accent">{idx + 1}.</span>{pg.title}
-                </span>
+              <div class="flex items-center justify-between rounded-[3px] border border-white/[0.07] bg-[#11141c] px-2.5 py-1 text-xs">
+                <span class="font-semibold text-fg"><span class="mr-1 font-mono text-accent-hi">{idx + 1}.</span>{pg.title}</span>
                 <div class="flex items-center gap-1">
-                  <button
-                    class="rounded bg-surface-3 px-2 py-0.5 font-bold hover:bg-line disabled:opacity-30"
-                    disabled={idx === 0}
-                    title="Subir posición"
-                    onclick={() => wheelControl.movePage(idx, -1)}
-                  >↑</button>
-                  <button
-                    class="rounded bg-surface-3 px-2 py-0.5 font-bold hover:bg-line disabled:opacity-30"
-                    disabled={idx === wheelControl.activePages.length - 1}
-                    title="Bajar posición"
-                    onclick={() => wheelControl.movePage(idx, 1)}
-                  >↓</button>
-                  <button
-                    class="ml-1 rounded bg-bad/20 px-2 py-0.5 font-bold text-bad hover:bg-bad hover:text-white disabled:opacity-30"
-                    disabled={wheelControl.activePages.length <= 1}
-                    title="Eliminar del móvil"
-                    onclick={() => wheelControl.removePage(pg.id)}
-                  >✕</button>
+                  <button type="button" class="rounded bg-surface-3 px-1.5 py-0.5 font-bold disabled:opacity-30 cursor-pointer" disabled={idx === 0} onclick={() => wheelControl.movePage(idx, -1)}>↑</button>
+                  <button type="button" class="rounded bg-surface-3 px-1.5 py-0.5 font-bold disabled:opacity-30 cursor-pointer" disabled={idx === wheelControl.activePages.length - 1} onclick={() => wheelControl.movePage(idx, 1)}>↓</button>
+                  <button type="button" class="rounded bg-bad/20 px-1.5 py-0.5 font-bold text-bad hover:bg-bad hover:text-white disabled:opacity-30 cursor-pointer" disabled={wheelControl.activePages.length <= 1} onclick={() => wheelControl.removePage(pg.id)}>✕</button>
                 </div>
               </div>
             {/each}
           </div>
-        </div>
-
-        <div>
-          <div class="mb-2 text-xs font-bold tracking-wider text-muted uppercase">
-            Añadir nuevos Dashboards al Móvil
+          <div>
+            <div class="mb-1.5 text-[11px] font-bold uppercase text-muted">Añadir pantallas al móvil</div>
+            {#if wheelControl.availableToAdd.length === 0}
+              <div class="text-xs text-muted">Todas las pantallas están activas.</div>
+            {:else}
+              <div class="flex flex-wrap gap-1.5">
+                {#each wheelControl.availableToAdd as avail (avail.id)}
+                  <button type="button" class="rounded-[3px] border border-white/10 bg-[#11141c] px-2.5 py-1 text-xs font-semibold text-fg hover:border-accent cursor-pointer" onclick={() => wheelControl.addPage(avail.id)}>+ {avail.short}</button>
+                {/each}
+              </div>
+            {/if}
           </div>
-          {#if wheelControl.availableToAdd.length === 0}
-            <div class="rounded-lg border border-line bg-surface p-3 text-xs text-muted">
-              Todos los dashboards disponibles están activos en la rotación del móvil.
-            </div>
-          {:else}
-            <div class="flex flex-wrap gap-1.5">
-              {#each wheelControl.availableToAdd as avail (avail.id)}
-                <button
-                  class="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-fg hover:border-accent hover:text-accent"
-                  onclick={() => wheelControl.addPage(avail.id)}
-                >
-                  + {avail.short}
-                </button>
-              {/each}
-            </div>
-          {/if}
         </div>
       </div>
-    {/if}
+    </div>
   </section>
 
-  <div class="mt-6 mb-2 flex items-baseline justify-between">
-    <h2 class="section-title">
-      Última sesión
-      {#if session}<span class="ml-2 text-sm font-normal text-muted">{session.track} · {session.car} · {session.sessionType}</span>{/if}
-    </h2>
-    {#if session}
-      <button class="text-sm text-accent hover:underline" onclick={() => { nav.sessionId = session!.id; nav.page = "sessions"; }}>Abrir sesión</button>
-    {/if}
+  <!-- LAST SESSION DEBRIEF & LAP TABLE -->
+  {#if session && laps.length > 0}
+    <RaceDebriefCard {session} {laps} {units} />
+  {/if}
+
+  <div>
+    <div class="mb-2 flex items-baseline justify-between">
+      <h2 class="section-title">
+        ÚLTIMA SESIÓN REGISTRADA
+        {#if session}
+          <span class="ml-2 font-sans text-xs font-normal normal-case tracking-normal text-muted">
+            {session.track} · {session.car} · {session.sessionType}
+          </span>
+        {/if}
+      </h2>
+      {#if session}
+        <button
+          class="font-display text-xs font-bold tracking-wider text-accent-hi uppercase hover:underline cursor-pointer"
+          onclick={() => {
+            nav.sessionId = session!.id;
+            nav.page = "sessions";
+          }}
+        >
+          Abrir sesión completa →
+        </button>
+      {/if}
+    </div>
+    <LapTable {laps} onopen={(l) => nav.openAnalysis(l.track, l.id)} />
   </div>
-  <LapTable {laps} onopen={(l) => nav.openAnalysis(l.track, l.id)} />
 </div>

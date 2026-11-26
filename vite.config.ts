@@ -161,6 +161,10 @@ export default defineConfig({
   //
   // 1. prevent vite from obscuring rust errors
   clearScreen: false,
+  // Only crawl the actual app entrypoints (never VocesMDTQwen/.venv or audio folders)
+  optimizeDeps: {
+    entries: ["index.html", "src/main.ts"],
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,
@@ -198,6 +202,10 @@ export default defineConfig({
         target: "http://127.0.0.1:1422",
         changeOrigin: true,
       },
+      "/__streamer_cmd": {
+        target: "http://127.0.0.1:1422",
+        changeOrigin: true,
+      },
     },
     hmr: host
       ? {
@@ -207,8 +215,18 @@ export default defineConfig({
         }
       : undefined,
     watch: {
-      // 3. tell vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell vite to ignore watching heavy non-frontend directories (Rust, Python ROCm venv, audio packs)
+      ignored: [
+        "**/src-tauri/**",
+        "**/VocesMDTQwen/**",
+        "**/.venv/**",
+        "**/Perfil/**",
+        "**/Sound/**",
+        "**/public/Perfil/**",
+        "**/public/Sound/**",
+        "**/lmu-bridge/**",
+        "**/dist/**",
+      ],
     },
   },
 });

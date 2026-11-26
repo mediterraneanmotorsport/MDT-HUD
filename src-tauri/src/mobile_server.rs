@@ -495,13 +495,129 @@ fn handle_client(
 
     if clean_path == "/__mobile_focus" {
         let state = app.state::<AppState>();
+        let mut focus_ok = true;
         if let Ok(parsed) = serde_json::from_slice::<Value>(&body_bytes) {
             if let Some(slot) = parsed.get("slotId").or_else(|| parsed.get("focusSlotId")).and_then(Value::as_i64) {
                 state.shared.focused_slot.store(slot as i32, Ordering::Release);
-                let _ = tokio::task::spawn_blocking(move || crate::commands::lmu_rest_focus(slot));
+                focus_ok = crate::commands::lmu_rest_focus(slot);
             }
         }
-        return send_response(&mut stream, "200 OK", "application/json", b"{\"ok\":true}");
+        let body = if focus_ok { b"{\"ok\":true}".as_slice() } else { b"{\"ok\":false}".as_slice() };
+        return send_response(&mut stream, "200 OK", "application/json", body);
+    }
+
+    if clean_path == "/__streamer_cmd" {
+        let state = app.state::<AppState>();
+        let mut action = String::new();
+        let mut value = String::new();
+
+        for kv in query_str.split('&') {
+            if let Some((k, v)) = kv.split_once('=') {
+                if k == "action" {
+                    action = url_decode(v);
+                } else if k == "value" {
+                    value = url_decode(v);
+                }
+            }
+        }
+        if action.is_empty() && !body_bytes.is_empty() {
+            if let Ok(parsed) = serde_json::from_slice::<Value>(&body_bytes) {
+                if let Some(a) = parsed.get("action").and_then(Value::as_str) {
+                    action = a.to_string();
+                }
+                if let Some(v) = parsed.get("value") {
+                    value = v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
+                }
+            }
+        }
+
+        let mut ok = true;
+        match action.as_str() {
+            "toggle_overlay" => {
+                let next = !state.overlay_visible.load(Ordering::Acquire);
+                let _ = crate::commands::set_overlay_visible(app.clone(), next);
+            }
+            "show_overlay" => {
+                let _ = crate::commands::set_overlay_visible(app.clone(), true);
+            }
+            "hide_overlay" => {
+                let _ = crate::commands::set_overlay_visible(app.clone(), false);
+            }
+            "toggle_edit" => {
+                let next = !state.edit_mode.load(Ordering::Acquire);
+                let _ = crate::commands::set_edit_mode(app.clone(), next);
+            }
+            "toggle_demo" => {
+                let next = !state.shared.demo.load(Ordering::Acquire);
+                state.shared.demo.store(next, Ordering::Release);
+                let _ = app.emit("demo-mode", next);
+            }
+            "mobile_page_next" | "mobile_page_prev" => {
+                let mut st = relay.lock().unwrap_or_else(|e| e.into_inner());
+                let delta = if action == "mobile_page_next" { 1 } else { -1 };
+                st.page += delta;
+                st.page_seq += 1;
+            }
+            "focus_driver" => {
+                if let Ok(slot) = value.parse::<i64>() {
+                    state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                    ok = crate::commands::lmu_rest_focus(slot);
+                } else {
+                    ok = false;
+                }
+            }
+            "focus_player" => {
+                let snap = state.shared.latest.read().ok().map(|s| s.clone());
+                if let Some(me) = snap.and_then(|s| s.vehicles.into_iter().find(|v| v.is_player)) {
+                    let slot = me.slot_id as i64;
+                    state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                    ok = crate::commands::lmu_rest_focus(slot);
+                } else {
+                    ok = false;
+                }
+            }
+            "focus_leader" => {
+                let snap = state.shared.latest.read().ok().map(|s| s.clone());
+                if let Some(leader) = snap.and_then(|s| s.vehicles.into_iter().min_by_key(|v| v.place)) {
+                    let slot = leader.slot_id as i64;
+                    state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                    ok = crate::commands::lmu_rest_focus(slot);
+                } else {
+                    ok = false;
+                }
+            }
+            "focus_battle" => {
+                let snap = state.shared.latest.read().ok().map(|s| s.clone());
+                if let Some(mut cars) = snap.map(|s| s.vehicles) {
+                    cars.retain(|v| !v.in_pits && !v.in_garage);
+                    cars.sort_by_key(|v| v.place);
+                    let mut best: Option<(f64, i64)> = None;
+                    for pair in cars.windows(2) {
+                        let gap = (pair[1].time_behind_leader - pair[0].time_behind_leader).abs();
+                        if gap > 0.01 && best.is_none_or(|(g, _)| gap < g) {
+                            best = Some((gap, pair[1].slot_id as i64));
+                        }
+                    }
+                    if let Some((_, slot)) = best {
+                        state.shared.focused_slot.store(slot as i32, Ordering::Release);
+                        ok = crate::commands::lmu_rest_focus(slot);
+                    } else {
+                        ok = false;
+                    }
+                } else {
+                    ok = false;
+                }
+            }
+            "toggle_broadcast" | "toggle_spotter" | "next_profile" | "set_profile" | "set_theme" | "toggle_widget" => {
+                let _ = app.emit("streamer-action", json!({ "action": action, "value": value }));
+            }
+            _ => {
+                ok = false;
+            }
+        }
+
+        let body = serde_json::to_vec(&json!({ "ok": ok, "action": action, "value": value })).unwrap_or_else(|_| b"{}".to_vec());
+        return send_response(&mut stream, "200 OK", "application/json", &body);
     }
 
     if clean_path == "/__mobile_snap" {
@@ -588,6 +704,10 @@ fn handle_client(
             "mobileTheme": mobile_theme,
             "autoPopups": auto_popups,
             "configSeq": config_seq,
+            "overlayVisible": state.overlay_visible.load(Ordering::Acquire),
+            "editMode": state.edit_mode.load(Ordering::Acquire),
+            "demo": demo_on,
+            "broadcastMode": state.shared.broadcast_mode.load(Ordering::Acquire),
             "snap": final_snap,
         });
         if let Some(cfg) = app_config {
@@ -896,7 +1016,7 @@ fn handle_client(
 
     // Serve static frontend assets (in debug/dev builds, prefer fresh dist/ on disk so mobile picks up rebuilds immediately)
     let asset_path = match clean_path {
-        "/" | "/mobile" | "/dash" | "/ddu" | "/pitwall" | "/broadcast" | "/overlay" => "index.html".to_string(),
+        "/" | "/mobile" | "/dash" | "/ddu" | "/pitwall" | "/streamer" | "/broadcast" | "/overlay" => "index.html".to_string(),
         p => p.trim_start_matches('/').to_string(),
     };
 

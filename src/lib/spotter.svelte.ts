@@ -1,6 +1,9 @@
 import { emit, listen } from "@tauri-apps/api/event";
+import { aiEngineer } from "./aiEngineer.svelte";
+import { applyOutputSink } from "./audioDevices.svelte";
 import { config } from "./config.svelte";
 import { api, isNativeTauri } from "./api";
+import { pickSpotterPhrase, type SpotterEventContext } from "./spotterPhrases";
 import type { Snapshot } from "./types";
 
 export type SpotterPriority = 1 | 2 | 3 | 4 | 5;
@@ -10,7 +13,7 @@ export interface SpotterEventDef {
   label: string;
   priority: SpotterPriority;
   cooldownMs: number;
-  category: "traffic" | "flags" | "strategy" | "car" | "session";
+  category: "traffic" | "flags" | "strategy" | "car" | "session" | "encouragement";
   ttsDefault: string;
 }
 
@@ -70,6 +73,31 @@ export const SPOTTER_EVENTS: SpotterEventDef[] = [
   { folder: "Top 10", label: "Final: En los puntos (P4 - P10)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros. Terminamos en P{place}. Carrera sólida con buenos puntos para el equipo. Buen esfuerzo." },
   { folder: "Final Dificil", label: "Final: Carrera difícil (> P10 o daños)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros. Día complicado hoy en pista. Trae el coche a boxes, analizaremos los datos para la próxima." },
   { folder: "Final Carrera", label: "Final: Bandera a cuadros estándar", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros, final de carrera" },
+  { folder: "Final Remontada", label: "Final: Enhorabuena / Remontada", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Enhorabuena, gran remontada de {gained} posiciones hasta P{place}." },
+  { folder: "Final Pesimista", label: "Final: Pesimista (Posiciones perdidas)", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Bandera a cuadros en P{place}, hemos perdido {lost} posiciones hoy." },
+
+  // EVENTOS PRO DE INGENIERO IA (Telemetría avanzada en vivo)
+  { folder: "Frenos Calientes", label: "Frenos sobrecalentados (>780°C)", priority: 3, cooldownMs: 45000, category: "car", ttsDefault: "Atención, discos de freno a {temp} grados, refrigera en recta." },
+  { folder: "Desgaste Neumaticos", label: "Desgaste crítico de neumático (<35%)", priority: 3, cooldownMs: 60000, category: "car", ttsDefault: "Aviso de desgaste: la {wheel} baja al {wear} por ciento." },
+  { folder: "Aviso Limites Pista", label: "Alerta de límites de pista (cerca de sanción)", priority: 2, cooldownMs: 35000, category: "flags", ttsDefault: "Cuidado con los límites de pista, un aviso más y nos cae penalización." },
+  { folder: "Energia Virtual Baja", label: "Energía Virtual (VE) baja (<18%)", priority: 3, cooldownMs: 50000, category: "strategy", ttsDefault: "Energía virtual baja, quedan {laps} vueltas de margen." },
+  { folder: "Rival Boxes", label: "Rival de delante entra a boxes (Overcut)", priority: 3, cooldownMs: 35000, category: "strategy", ttsDefault: "{driver} acaba de entrar a boxes. Pista limpia, empuja para el overcut." },
+  { folder: "Tiempo Restante", label: "Hito de tiempo restante (15 / 10 / 5 / 2 min)", priority: 4, cooldownMs: 50000, category: "session", ttsDefault: "Quedan {mins} minutos de carrera, mantén el ritmo." },
+  { folder: "Motor Caliente", label: "Motor sobrecalentado", priority: 3, cooldownMs: 45000, category: "car", ttsDefault: "Temperatura de motor elevada, sal del rebufo para refrigerar." },
+  { folder: "Resumen Vuelta", label: "Resumen periódico de ritmo y gap", priority: 5, cooldownMs: 60000, category: "session", ttsDefault: "Buen ritmo. Vas P{place}, {driver} delante a {gap} segundos." },
+  { folder: "Bloqueo Repetido", label: "Coaching: bloqueo repetido + ajuste de Brake Bias", priority: 3, cooldownMs: 55000, category: "car", ttsDefault: "Segundo bloqueo seguido. {advice} para estabilizar la frenada." },
+  { folder: "Lift And Coast", label: "Coaching: Lift & Coast automático para ahorrar parada", priority: 3, cooldownMs: 90000, category: "strategy", ttsDefault: "Haz lift and coast en las rectas largas, ahorrando {laps} vueltas evitas una parada extra." },
+  { folder: "Gomas en Ventana", label: "Neumáticos en ventana óptima de temperatura", priority: 4, cooldownMs: 90000, category: "car", ttsDefault: "Gomas en ventana óptima, ya tienes grip para empujar." },
+  { folder: "Caza Rival", label: "Predicción de caza (recortando al coche de delante)", priority: 4, cooldownMs: 55000, category: "strategy", ttsDefault: "Le estás recortando {delta} por vuelta a {driver}. En {laps} estás encima." },
+  { folder: "Defensa Rival", label: "Predicción de defensa (rival detrás recortando)", priority: 4, cooldownMs: 55000, category: "strategy", ttsDefault: "Atención, {driver} viene {delta} más rápido por vuelta. En {laps} estará encima, prepara defensa." },
+
+  // MENSAJES DE ÁNIMO CONTEXTUALES (Psicología y motivación en carrera)
+  { folder: "Animo Metronomo", label: "Ánimo: Racha de metrónomo (consistencia)", priority: 5, cooldownMs: 180000, category: "encouragement", ttsDefault: "Ritmo de metrónomo, {laps} vueltas seguidas clavadas al mismo tiempo. Gran trabajo." },
+  { folder: "Animo Tras Error", label: "Ánimo: Recuperación tras error o salida", priority: 5, cooldownMs: 120000, category: "encouragement", ttsDefault: "Cabeza fría, eso ya pasó. Queda mucha carrera, resetea y vuelve a tu ritmo." },
+  { folder: "Animo Defensa Exitosa", label: "Ánimo: Defensa aguantada con éxito", priority: 5, cooldownMs: 120000, category: "encouragement", ttsDefault: "Gran defensa frente a {driver}, ya has abierto hueco. Respira y marca tu ritmo." },
+  { folder: "Animo Remontada", label: "Ánimo: Remontada en marcha", priority: 5, cooldownMs: 180000, category: "encouragement", ttsDefault: "Ya llevas {gained} posiciones ganadas hasta P{place}. Gran remontada, sigue empujando." },
+  { folder: "Animo Tramo Final", label: "Ánimo: Empujón en tramo final de carrera", priority: 5, cooldownMs: 240000, category: "encouragement", ttsDefault: "Recta final de carrera, máxima concentración ahora. Tienes ritmo de sobra, dalo todo." },
+  { folder: "Animo Stint Limpio", label: "Ánimo: Stint largo limpio sin errores", priority: 5, cooldownMs: 240000, category: "encouragement", ttsDefault: "{laps} vueltas seguidas sin un solo fallo. Stint de libro, mantén el foco." },
 ];
 
 const EVENT_MAP = new Map<string, SpotterEventDef>(SPOTTER_EVENTS.map((e) => [e.folder, e]));
@@ -77,7 +105,7 @@ const EVENT_MAP = new Map<string, SpotterEventDef>(SPOTTER_EVENTS.map((e) => [e.
 interface QueuedClip {
   event: SpotterEventDef;
   enqueuedAt: number;
-  context?: { place?: number; classPlace?: number; sector?: number };
+  context?: SpotterEventContext;
 }
 
 export interface ActiveSpotterTransmission {
@@ -88,6 +116,7 @@ export interface ActiveSpotterTransmission {
   profile: string;
   category: "traffic" | "flags" | "strategy" | "car" | "session";
   startedAt: number;
+  speaker?: "driver" | "engineer";
 }
 
 class SpotterEngine {
@@ -107,6 +136,8 @@ class SpotterEngine {
   private currentPriority: SpotterPriority | null = null;
   private currentStartedAt = 0;
   private queue: QueuedClip[] = [];
+  private deferredCornerQueue: QueuedClip[] = [];
+  private inFastCorner = false;
   private audioCtx: AudioContext | null = null;
 
   private getAudioContext(): AudioContext | null {
@@ -118,6 +149,7 @@ class SpotterEngine {
     if (this.audioCtx && this.audioCtx.state === "suspended") {
       void this.audioCtx.resume();
     }
+    applyOutputSink(this.audioCtx);
     return this.audioCtx;
   }
 
@@ -222,7 +254,44 @@ class SpotterEngine {
   private wasDriving = false;
   private lastSector: number | null = null;
   private lastLapInvalidated = false;
+  private sectorSessionKey = "";
+  private mySessionBestSectors: [number, number, number] = [0, 0, 0];
   private broadcastChannel: BroadcastChannel | null = null;
+  private radioChannelOpen = false;
+  private closeRadioTimer: ReturnType<typeof setTimeout> | null = null;
+  private warnedVeLow = false;
+  private warnedTrackLimits = false;
+  private lastOverheating = false;
+  private lastAheadId: number | null = null;
+  private lastAheadDriver = "";
+  private lastAheadInPits = false;
+  private calledTimeMilestones = new Set<number>();
+  private lastSummaryLap = 0;
+  private prevWheelSurfTemp: [number, number, number, number] = [0, 0, 0, 0];
+  private frontLockupCount = 0;
+  private rearLockupCount = 0;
+  private lastLockupAt = 0;
+  private advisedLiftCoast = false;
+  private raceStartPlace: number | null = null;
+  private inQualyHotlap = false;
+  private tyresWereCold = false;
+  private prevLapAheadId: number | null = null;
+  private prevLapAheadGap: number | null = null;
+  private prevLapBehindId: number | null = null;
+  private prevLapBehindGap: number | null = null;
+  private lastChaseCallLap = 0;
+  private lastDefendCallLap = 0;
+  // Encouragement / morale state
+  private recentCleanLapTimes: number[] = [];
+  private cleanLapStreak = 0;
+  private currentLapHadIncident = false;
+  private highSpeedSeenAt = 0;
+  private incidentDetectedAt = 0;
+  private defendingRivalId: number | null = null;
+  private defendingRivalName = "";
+  private defendingSince = 0;
+  private calledRemontadaAtGained = 0;
+  private calledFinalPush = false;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -326,10 +395,21 @@ class SpotterEngine {
     return chosen;
   }
 
+  private isAiSpotterActive(): boolean {
+    const aiCfg = config.value.aiEngineer;
+    return Boolean(
+      aiCfg?.enabled &&
+      (aiCfg.useForSpotterEvents ?? true) &&
+      (aiCfg.voiceEngine === "onnx" || aiCfg.voiceEngine === "qwen3") &&
+      isNativeTauri(),
+    );
+  }
+
   /** Trigger a spotter event respecting priority, cooldowns, and anti-loop rules. */
-  trigger(folder: string, force = false, context?: { place?: number; classPlace?: number; sector?: number }) {
+  trigger(folder: string, force = false, context?: SpotterEventContext) {
     const cfg = config.value.spotter;
-    if (!force && !cfg?.enabled) return;
+    const active = Boolean(cfg?.enabled || this.isAiSpotterActive());
+    if (!force && !active) return;
 
     const def = EVENT_MAP.get(folder);
     if (!def) return;
@@ -340,6 +420,7 @@ class SpotterEngine {
       if (def.category === "strategy" && !cfg.strategy) return;
       if (def.category === "car" && !cfg.carStatus) return;
       if (def.category === "session" && !cfg.session) return;
+      if (def.category === "encouragement" && cfg.encouragement === false) return;
 
       const now = performance.now();
       const last = this.lastTriggeredAt.get(folder) ?? -Infinity;
@@ -348,6 +429,27 @@ class SpotterEngine {
     }
 
     const now = performance.now();
+
+    // #2 Quiet in Qualy Hotlap: suppress non-critical chatter (P3-P5) during qualifying flying laps
+    if (
+      !force &&
+      cfg?.quietInFastCorners &&
+      this.inQualyHotlap &&
+      def.priority >= 3 &&
+      def.folder !== "Gomas en Ventana"
+    ) {
+      return;
+    }
+
+    // #10 Quiet in Fast Corners: defer non-urgent calls (P3-P5) while cornering hard or heavy braking
+    if (!force && cfg?.quietInFastCorners && this.inFastCorner && def.priority >= 3) {
+      this.deferredCornerQueue = this.deferredCornerQueue.filter(
+        (q) => q.event.folder !== def.folder && now - q.enqueuedAt < 12000,
+      );
+      this.deferredCornerQueue.push({ event: def, enqueuedAt: now, context });
+      if (this.deferredCornerQueue.length > 2) this.deferredCornerQueue.shift();
+      return;
+    }
 
     // If currently playing something:
     if (this.playing && this.currentPriority != null) {
@@ -393,38 +495,51 @@ class SpotterEngine {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
+    aiEngineer.stopSpeaking();
     this.playing = false;
     this.currentPriority = null;
     this.currentTransmission = null;
     this.broadcastState();
   }
 
-  private playNextInQueue() {
+  private pruneQueue() {
     const now = performance.now();
-    while (this.queue.length > 0) {
-      const next = this.queue.shift()!;
-      if (now - next.enqueuedAt <= 3200) {
-        this.playNow(next.event, next.context);
-        return;
-      }
-    }
+    this.queue = this.queue.filter((item) => {
+      const maxAge = item.event.priority === 1 ? 2500 : 7500;
+      return now - item.enqueuedAt <= maxAge;
+    });
   }
 
-  private playNow(def: SpotterEventDef, context?: { place?: number; classPlace?: number; sector?: number }) {
+  private playNextInQueue(): boolean {
+    this.pruneQueue();
+    if (this.queue.length === 0) return false;
+    const next = this.queue.shift()!;
+    this.playNow(next.event, next.context);
+    return true;
+  }
+
+  private playNow(def: SpotterEventDef, context?: SpotterEventContext) {
+    if (this.closeRadioTimer) {
+      clearTimeout(this.closeRadioTimer);
+      this.closeRadioTimer = null;
+    }
+
     const cfg = config.value.spotter;
     const profile = cfg?.profile || "Sara";
     const volume = Math.max(0, Math.min(1, cfg?.volume ?? 0.85));
     const useRadio = cfg?.radioEffect ?? true;
 
-    // Substitute dynamic tokens in default TTS string
-    let ttsText = def.ttsDefault;
-    const pos = context?.classPlace || context?.place;
-    if (pos) {
-      ttsText = ttsText.replace(/\{place\}/g, String(pos));
-    }
-    if (context?.sector != null) {
-      ttsText = ttsText.replace(/\{sector\}/g, String(context.sector));
-    }
+    // Pick a varied phrase tailored to the active AI engineer personality (built-in or custom)
+    const personality = config.value.aiEngineer?.personality ?? "wec_pro";
+    const ttsText = pickSpotterPhrase(
+      def.folder,
+      personality,
+      def.ttsDefault,
+      context,
+      config.value.aiEngineer?.customPersonalities,
+      cfg?.driverName,
+      cfg?.driverNameFrequency ?? 0.35,
+    );
 
     this.lastEvent = `${profile}: ${def.folder}`;
     this.playing = true;
@@ -438,8 +553,11 @@ class SpotterEngine {
       profile,
       category: def.category,
       startedAt: this.currentStartedAt,
+      speaker: "engineer",
     };
-    this.broadcastState();
+    if (!this.isAiSpotterActive()) {
+      this.broadcastState();
+    }
 
     const gen = ++this.playGen;
 
@@ -468,6 +586,7 @@ class SpotterEngine {
           resolve();
         };
         const beep = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
+        applyOutputSink(beep);
         beep.volume = beepsVol;
         this.currentBeepAudio = beep;
         // Safety fallback so a broken/long clip never blocks the voice indefinitely
@@ -486,18 +605,79 @@ class SpotterEngine {
         return;
       }
       const audio = new Audio(`/Sound/Spotter%20alert/${encodeURIComponent(s)}?t=${Date.now()}`);
+      applyOutputSink(audio);
       audio.volume = beepsVol;
       audio.play().catch(() => {});
     };
 
+    // Realistic open radio channel: only play opening beep when the channel was closed
+    const ensureRadioOpen = (): Promise<void> => {
+      if (this.radioChannelOpen) {
+        return new Promise((resolve) => setTimeout(resolve, 110));
+      }
+      this.radioChannelOpen = true;
+      return playStartBeep();
+    };
+
     const finishTransmission = () => {
       setTimeout(() => {
-        if (!this.playing) {
+        if (!this.playing && !this.radioChannelOpen) {
           this.currentTransmission = null;
           this.broadcastState();
         }
       }, 1200);
     };
+
+    // Realistic closing: if more messages are queued (or arrive within 260ms), keep the radio open and speak back-to-back!
+    const onClipFinished = () => {
+      if (gen !== this.playGen) return;
+      this.pruneQueue();
+      if (this.queue.length > 0) {
+        // Keep radioChannelOpen = true and chain the next instruction seamlessly
+        this.playing = false;
+        this.currentPriority = null;
+        this.playNextInQueue();
+        return;
+      }
+
+      this.playing = false;
+      this.currentPriority = null;
+      this.broadcastState();
+      if (this.closeRadioTimer) clearTimeout(this.closeRadioTimer);
+      this.closeRadioTimer = setTimeout(() => {
+        this.closeRadioTimer = null;
+        if (this.playing) return;
+        if (this.playNextInQueue()) return;
+        if (this.radioChannelOpen) {
+          this.radioChannelOpen = false;
+          playEndBeep();
+        }
+        finishTransmission();
+      }, 260);
+    };
+
+    // If AI Engineer with Piper .onnx or Qwen3-TTS is enabled for on-track Spotter events:
+    // Pre-synthesize audio FIRST so the Team Radio card & opening beep NEVER appear with dead silence!
+    if (this.isAiSpotterActive()) {
+      void aiEngineer
+        .prepareAudio(ttsText)
+        .then(async (wavReady) => {
+          if (gen !== this.playGen || !wavReady) return;
+          this.broadcastState();
+          await ensureRadioOpen();
+          if (gen !== this.playGen) return;
+          await aiEngineer.speakWithRadio(ttsText, {
+            skipStartBeep: true,
+            skipEndBeep: true,
+            skipBroadcast: true,
+          });
+        })
+        .catch(() => {})
+        .finally(() => {
+          onClipFinished();
+        });
+      return;
+    }
 
     const url = this.pickRandomUrl(profile, def.folder);
 
@@ -505,6 +685,7 @@ class SpotterEngine {
       // Preload voice clip while start beep plays so there is zero gap and zero overlap
       const buster = url.includes("?") ? `&t=${Date.now()}` : `?t=${Date.now()}`;
       const audio = new Audio(`${url}${buster}`);
+      applyOutputSink(audio);
       audio.crossOrigin = "anonymous";
       audio.preload = "auto";
       if (useRadio) this.applyRadioFilter(audio, volume);
@@ -512,13 +693,8 @@ class SpotterEngine {
       this.currentAudio = audio;
       const done = () => {
         if (this.currentAudio === audio) {
-          playEndBeep();
           this.currentAudio = null;
-          this.playing = false;
-          this.currentPriority = null;
-          this.broadcastState();
-          finishTransmission();
-          this.playNextInQueue();
+          onClipFinished();
         }
       };
       audio.onended = done;
@@ -527,7 +703,7 @@ class SpotterEngine {
         if (cfg?.ttsFallback) this.speakFallback(ttsText, profile, volume, done);
         else done();
       };
-      void playStartBeep().then(() => {
+      void ensureRadioOpen().then(() => {
         if (gen !== this.playGen || this.currentAudio !== audio) return;
         audio.play().catch(() => {
           if (gen !== this.playGen) return;
@@ -540,16 +716,10 @@ class SpotterEngine {
 
     // No hay archivos de audio para este evento en el perfil -> Fallback a TTS o fin
     const fallbackDone = () => {
-      if (gen !== this.playGen) return;
-      playEndBeep();
-      this.playing = false;
-      this.currentPriority = null;
-      this.broadcastState();
-      finishTransmission();
-      this.playNextInQueue();
+      onClipFinished();
     };
 
-    void playStartBeep().then(() => {
+    void ensureRadioOpen().then(() => {
       if (gen !== this.playGen) return;
       if (cfg?.ttsFallback ?? true) {
         this.speakFallback(ttsText, profile, volume, fallbackDone);
@@ -593,7 +763,8 @@ class SpotterEngine {
   /** Evaluates a live telemetry snapshot and triggers appropriate spotter calls without looping. */
   update(snap: Snapshot | null) {
     const cfg = config.value.spotter;
-    if (!cfg?.enabled || !snap?.player) {
+    const active = Boolean(cfg?.enabled || this.isAiSpotterActive());
+    if (!active || !snap?.player) {
       this.lateralState = "clear";
       this.wasDriving = false;
       return;
@@ -627,6 +798,27 @@ class SpotterEngine {
       return;
     }
 
+    // #2 Track qualifying flying lap for silent-mode filtering
+    this.inQualyHotlap = s.kind === "qualifying" && !p.inPits && p.speed > 25 && !p.lapInvalidated;
+
+    // #10 Track whether driver is in a fast corner / heavy braking zone and flush deferred messages on straights
+    const heavyCornerOrBrake = !p.inPits && p.speed > 18 && (Math.abs(p.gLat ?? 0) > 1.2 || (p.brake ?? 0) > 0.65);
+    const straightAndCalm = p.inPits || (Math.abs(p.gLat ?? 0) < 0.85 && (p.brake ?? 0) < 0.25);
+    if (heavyCornerOrBrake) {
+      this.inFastCorner = true;
+    } else if (straightAndCalm) {
+      this.inFastCorner = false;
+      if (this.deferredCornerQueue.length > 0 && !this.playing) {
+        while (this.deferredCornerQueue.length > 0) {
+          const item = this.deferredCornerQueue.shift()!;
+          if (now - item.enqueuedAt <= 14000) {
+            this.playNow(item.event, item.context);
+            break;
+          }
+        }
+      }
+    }
+
     // Start of driving stint / leaving garage into the game
     const isDriving = Boolean(p.speed > 1.2);
     if (isDriving && !this.wasDriving) {
@@ -651,12 +843,15 @@ class SpotterEngine {
         if (distSq > 64) continue;
         const cos = Math.cos(p.yaw);
         const sin = Math.sin(p.yaw);
+        // LMU / rFactor 2 uses a left-handed coordinate system:
+        // +X = left side of the car, +Y = up, +Z = rear of the car (forward = -Z).
+        // Therefore dx = wx * cos(yaw) - wz * sin(yaw) is positive to the LEFT and negative to the RIGHT.
         const dx = wx * cos - wz * sin;
         const dz = -wx * sin - wz * cos;
 
         if (Math.abs(dz) <= enterLon && Math.abs(dx) <= enterLat) {
-          if (dx < -0.4) hasLeft = true;
-          else if (dx > 0.4) hasRight = true;
+          if (dx > 0.4) hasLeft = true;
+          else if (dx < -0.4) hasRight = true;
         }
       }
 
@@ -762,6 +957,11 @@ class SpotterEngine {
         }
         this.lastPitExitTime = now;
         this.wasRecentlyInPits = true;
+        this.tyresWereCold = true;
+        this.prevLapAheadId = null;
+        this.prevLapAheadGap = null;
+        this.prevLapBehindId = null;
+        this.prevLapBehindGap = null;
         setTimeout(() => {
           this.wasRecentlyInPits = false;
         }, 15000);
@@ -798,6 +998,7 @@ class SpotterEngine {
     if (p.inPits) {
       this.warnedFuelLow = false;
       this.warnedBoxNow = false;
+      this.warnedVeLow = false;
     } else if (st.samples > 0 && st.lapsOfFuel > 0) {
       const lapsRem = st.lapsOfVe > 0 ? Math.min(st.lapsOfFuel, st.lapsOfVe) : st.lapsOfFuel;
       if (lapsRem < 1.2 && !this.warnedBoxNow) {
@@ -807,11 +1008,31 @@ class SpotterEngine {
       } else if (lapsRem < 2.5 && !this.warnedFuelLow) {
         this.warnedFuelLow = true;
         this.trigger("Combustible Bajo");
+      } else if (p.virtualEnergy > 0 && p.virtualEnergy < 0.18 && st.lapsOfVe > 0 && st.lapsOfVe < 2.5 && !this.warnedVeLow) {
+        this.warnedVeLow = true;
+        this.trigger("Energia Virtual Baja", false, { laps: st.lapsOfVe.toFixed(1) });
       }
     }
 
+    // Track limits warning (close to drive-through / time penalty)
+    if (p.trackLimitsStepsPerPenalty > 0 && !p.inPits) {
+      const ratio = p.trackLimitsSteps / p.trackLimitsStepsPerPenalty;
+      if (ratio >= 0.65 && !this.warnedTrackLimits) {
+        this.warnedTrackLimits = true;
+        this.trigger("Aviso Limites Pista");
+      } else if (ratio < 0.35) {
+        this.warnedTrackLimits = false;
+      }
+    }
+
+    // Engine overheating warning
+    if (p.overheating && !this.lastOverheating && !p.inPits) {
+      this.trigger("Motor Caliente");
+    }
+    this.lastOverheating = Boolean(p.overheating);
+
     // -------------------------------------------------------------------------
-    // 4. PRIORITY 4: Car Damage, DNF & Tyre Temps
+    // 4. PRIORITY 4: Car Damage, DNF, Brakes, Wear & Tyre Temps
     // -------------------------------------------------------------------------
     const maxDent = Math.max(0, ...p.dents);
     const hasNewDamage = maxDent > this.lastDentsMax || (p.detached && !this.lastDetached);
@@ -836,48 +1057,197 @@ class SpotterEngine {
         p.wheels.reduce((acc, w) => acc + (w.surfaceTemp[0] + w.surfaceTemp[1] + w.surfaceTemp[2]) / 3, 0) / 4;
       if (avgTemp > 112) {
         this.trigger("Neumaticos Calientes");
-      } else if (avgTemp > 10 && avgTemp < 52 && p.lapDist < 1200) {
-        this.trigger("Neumaticos Frios");
+      } else if (avgTemp > 10 && avgTemp < 65) {
+        this.tyresWereCold = true;
+        if (avgTemp < 52 && p.lapDist < 1200) {
+          this.trigger("Neumaticos Frios");
+        }
+      } else if (this.tyresWereCold && avgTemp >= 74 && avgTemp < 104) {
+        this.tyresWereCold = false;
+        this.trigger("Gomas en Ventana");
+      }
+
+      // Brake overheat warning (>780°C)
+      const maxBrake = Math.round(Math.max(...p.wheels.map((w) => w.brakeTemp)));
+      if (maxBrake > 780) {
+        this.trigger("Frenos Calientes", false, { temp: maxBrake });
+      }
+
+      // Critical tyre wear warning (<35% on worst corner)
+      const wheelNames = ["delantera izquierda", "delantera derecha", "trasera izquierda", "trasera derecha"];
+      const minIdx = p.wheels.reduce((mi, w, i, arr) => (w.wear < arr[mi].wear ? i : mi), 0);
+      const minWearPct = Math.round(p.wheels[minIdx].wear * 100);
+      if (minWearPct > 0 && minWearPct <= 35) {
+        this.trigger("Desgaste Neumaticos", false, { wheel: wheelNames[minIdx], wear: minWearPct });
+      }
+
+      // #5 Real-time Brake Lockup Coaching: detect repeated front/rear wheel lockups & advise Brake Bias tweak
+      const surfTemps: [number, number, number, number] = [
+        (p.wheels[0].surfaceTemp[0] + p.wheels[0].surfaceTemp[1] + p.wheels[0].surfaceTemp[2]) / 3,
+        (p.wheels[1].surfaceTemp[0] + p.wheels[1].surfaceTemp[1] + p.wheels[1].surfaceTemp[2]) / 3,
+        (p.wheels[2].surfaceTemp[0] + p.wheels[2].surfaceTemp[1] + p.wheels[2].surfaceTemp[2]) / 3,
+        (p.wheels[3].surfaceTemp[0] + p.wheels[3].surfaceTemp[1] + p.wheels[3].surfaceTemp[2]) / 3,
+      ];
+      if (p.brake > 0.38 && p.speed > 18 && now - this.lastLockupAt > 9000) {
+        const frontSpike =
+          (this.prevWheelSurfTemp[0] > 20 && surfTemps[0] - this.prevWheelSurfTemp[0] > 5.5) ||
+          (this.prevWheelSurfTemp[1] > 20 && surfTemps[1] - this.prevWheelSurfTemp[1] > 5.5) ||
+          p.wheels[0].flat ||
+          p.wheels[1].flat;
+        const rearSpike =
+          (this.prevWheelSurfTemp[2] > 20 && surfTemps[2] - this.prevWheelSurfTemp[2] > 5.5) ||
+          (this.prevWheelSurfTemp[3] > 20 && surfTemps[3] - this.prevWheelSurfTemp[3] > 5.5) ||
+          p.wheels[2].flat ||
+          p.wheels[3].flat;
+        if (frontSpike) {
+          this.lastLockupAt = now;
+          this.frontLockupCount += 1;
+          if (this.frontLockupCount >= 2) {
+            this.frontLockupCount = 0;
+            this.trigger("Bloqueo Repetido", false, { advice: "mueve el reparto de frenada medio punto atrás" });
+          }
+        } else if (rearSpike) {
+          this.lastLockupAt = now;
+          this.rearLockupCount += 1;
+          if (this.rearLockupCount >= 2) {
+            this.rearLockupCount = 0;
+            this.trigger("Bloqueo Repetido", false, { advice: "sube el reparto de frenada medio punto delante" });
+          }
+        }
+      }
+      this.prevWheelSurfTemp = surfTemps;
+
+      // #5 Automatic Lift & Coast Coaching: when saving 0.2..1.3 laps avoids a full extra pit stop!
+      if (s.kind === "race" && st.samples >= 2 && st.lapsRemaining > 1.5 && !this.advisedLiftCoast) {
+        const minRem = p.virtualEnergy > 0 && st.lapsOfVe > 0 ? Math.min(st.lapsOfFuel, st.lapsOfVe) : st.lapsOfFuel;
+        const deficit = st.lapsRemaining - minRem;
+        if (minRem > 1.2 && deficit >= 0.2 && deficit <= 1.3) {
+          this.advisedLiftCoast = true;
+          this.trigger("Lift And Coast", false, { laps: deficit.toFixed(1) });
+        }
       }
     }
 
-    // Lucha directa y presión
+    // Lucha directa, presión y rival de delante entrando a boxes (Overcut!)
     if (s.kind === "race" && me && !p.inPits && p.speed > 35) {
-      // Rival ahead within 0.8s
-      if (me.timeBehindNext > 0.05 && me.timeBehindNext <= 0.8) {
+      const rivalAhead = snap.vehicles.find((v) => v.place === me.place - 1);
+      const shortName = (full: string) => {
+        const parts = full.trim().split(/\s+/);
+        return parts.length > 1 ? parts[parts.length - 1] : full.trim() || "el rival";
+      };
+
+      // Detect if the rival directly ahead just pitted!
+      if (this.lastAheadId != null) {
+        const tracked = snap.vehicles.find((v) => v.id === this.lastAheadId);
+        if (tracked && tracked.inPits && !this.lastAheadInPits && p.lapNumber >= 2) {
+          this.trigger("Rival Boxes", false, { driver: shortName(this.lastAheadDriver) });
+        }
+        this.lastAheadInPits = Boolean(tracked?.inPits);
+      }
+      if (rivalAhead && !rivalAhead.inPits) {
+        this.lastAheadId = rivalAhead.id;
+        this.lastAheadDriver = rivalAhead.driver;
+        this.lastAheadInPits = false;
+      }
+
+      // Rival ahead within 0.8s (with real driver name + exact gap!)
+      if (me.timeBehindNext > 0.05 && me.timeBehindNext <= 0.8 && rivalAhead && !rivalAhead.inPits) {
         this.aheadCloseTicks = (this.aheadCloseTicks ?? 0) + 1;
         if (this.aheadCloseTicks >= 40) {
-          this.trigger("Coche Delante Cerca");
+          this.trigger("Coche Delante Cerca", false, {
+            driver: shortName(rivalAhead.driver),
+            gap: me.timeBehindNext.toFixed(1),
+          });
           this.aheadCloseTicks = 0;
         }
       } else {
         this.aheadCloseTicks = 0;
       }
 
-      // Rival behind within 0.65s
+      // Rival behind within 0.65s (with real driver name + exact gap!)
       const rivalBehind = snap.vehicles.find((v) => v.place === me.place + 1);
       if (rivalBehind && !rivalBehind.inPits) {
         const gapBehind = rivalBehind.timeBehindLeader - me.timeBehindLeader;
         if (gapBehind > 0.05 && gapBehind <= 0.65) {
           this.behindCloseTicks = (this.behindCloseTicks ?? 0) + 1;
           if (this.behindCloseTicks >= 40) {
-            this.trigger("Presion Detras");
+            this.trigger("Presion Detras", false, {
+              driver: shortName(rivalBehind.driver),
+              gap: gapBehind.toFixed(1),
+            });
             this.behindCloseTicks = 0;
           }
         } else {
           this.behindCloseTicks = 0;
         }
+
+        // Encouragement #3: Successful defense (held rival <= 0.75s for >= 18s, then pulled gap >= 1.35s)
+        if (gapBehind > 0.05 && gapBehind <= 0.75) {
+          if (this.defendingRivalId !== rivalBehind.id) {
+            this.defendingRivalId = rivalBehind.id;
+            this.defendingRivalName = shortName(rivalBehind.driver);
+            this.defendingSince = now;
+          }
+        } else if (
+          this.defendingRivalId === rivalBehind.id &&
+          gapBehind >= 1.35 &&
+          now - this.defendingSince >= 18000
+        ) {
+          const defended = this.defendingRivalName || shortName(rivalBehind.driver);
+          this.defendingRivalId = null;
+          this.defendingSince = 0;
+          this.trigger("Animo Defensa Exitosa", false, { driver: defended });
+        } else if (this.defendingRivalId != null && this.defendingRivalId !== rivalBehind.id && gapBehind > 1.2) {
+          this.defendingRivalId = null;
+          this.defendingSince = 0;
+        }
       } else {
         this.behindCloseTicks = 0;
+        this.defendingRivalId = null;
+        this.defendingSince = 0;
+      }
+
+      // Encouragement #5: Final push in closing minutes/laps while in a live battle
+      if (!this.calledFinalPush && p.lapNumber >= 3) {
+        const nearTimeEnd = s.timeRemaining > 30 && s.timeRemaining <= 240 && s.endEt >= 420;
+        const nearLapEnd = s.maxLaps > 5 && s.maxLaps - (me.totalLaps ?? p.lapNumber) <= 3 && s.maxLaps - (me.totalLaps ?? p.lapNumber) >= 1;
+        const inBattleAhead = Boolean(rivalAhead && !rivalAhead.inPits && me.timeBehindNext > 0.1 && me.timeBehindNext <= 2.5);
+        const behindGapNow = rivalBehind && !rivalBehind.inPits ? rivalBehind.timeBehindLeader - me.timeBehindLeader : 99;
+        const inBattleBehind = behindGapNow > 0.1 && behindGapNow <= 1.8;
+        if ((nearTimeEnd || nearLapEnd) && (inBattleAhead || inBattleBehind)) {
+          this.calledFinalPush = true;
+          this.trigger("Animo Tramo Final");
+        }
+      }
+
+      // Encouragement #4: Comeback in progress (>= 3 positions gained from race start)
+      if (this.raceStartPlace != null && p.lapNumber >= 2 && !this.wasRecentlyInPits && now - this.lastPitExitTime > 20000) {
+        const curPos = me.classPlace && me.classPlace > 0 ? me.classPlace : me.place;
+        const gained = this.raceStartPlace - curPos;
+        if (gained >= 3 && gained >= this.calledRemontadaAtGained + 3) {
+          this.calledRemontadaAtGained = gained;
+          this.trigger("Animo Remontada", false, { gained, place: curPos, classPlace: curPos });
+        }
       }
 
       // Traffic ahead from different class or lapped
-      const rivalAhead = snap.vehicles.find((v) => v.place === me.place - 1);
       if (rivalAhead && !rivalAhead.inPits && me.timeBehindNext > 0.05 && me.timeBehindNext < 1.4) {
         const isDifferentClass = rivalAhead.class && me.class && rivalAhead.class !== me.class;
         const isLapped = rivalAhead.totalLaps < me.totalLaps;
         if (isDifferentClass || isLapped) {
           this.trigger("Trafico Delante");
+        }
+      }
+
+      // Timed race milestones (15, 10, 5, 2 minutes remaining)
+      if (s.timeRemaining > 60 && s.endEt >= 600) {
+        const minsLeft = Math.ceil(s.timeRemaining / 60);
+        for (const m of [15, 10, 5, 2]) {
+          if (minsLeft === m && s.timeRemaining <= m * 60 && s.timeRemaining > m * 60 - 15 && !this.calledTimeMilestones.has(m)) {
+            this.calledTimeMilestones.add(m);
+            this.trigger("Tiempo Restante", false, { mins: m });
+            break;
+          }
         }
       }
     }
@@ -888,11 +1258,153 @@ class SpotterEngine {
     const completedLaps = me?.totalLaps ?? p.lapNumber;
     const pb = snap.timing.personalBest;
 
+    // Encouragement #2: Recovery morale boost after an off-track / spin / sudden speed drop
+    if (!p.inPits && s.phase === 5 && !this.hadFcy && p.lapNumber >= 1) {
+      if (p.speed > 38) {
+        this.highSpeedSeenAt = now;
+      } else if (p.speed < 12 && this.highSpeedSeenAt > 0 && now - this.highSpeedSeenAt < 8000 && !this.wasRecentlyInPits) {
+        this.incidentDetectedAt = now;
+        this.currentLapHadIncident = true;
+        this.highSpeedSeenAt = 0;
+      }
+      if (this.incidentDetectedAt > 0 && p.speed > 32 && now - this.incidentDetectedAt >= 4500 && now - this.incidentDetectedAt <= 25000) {
+        this.incidentDetectedAt = 0;
+        this.trigger("Animo Tras Error");
+      } else if (this.incidentDetectedAt > 0 && now - this.incidentDetectedAt > 25000) {
+        this.incidentDetectedAt = 0;
+      }
+    }
+
     // Lap milestone checks
     if (this.lastCompletedLaps >= 0 && completedLaps > this.lastCompletedLaps) {
+      let triggeredBattleCall = false;
+
+      // Encouragement #1 (Metronome consistency) & #6 (Clean stint streak)
+      const finishedLapTime = snap.timing.lastLapTime;
+      const wasCleanLap = !this.lastLapInvalidated && !this.currentLapHadIncident && !p.inPits && !this.wasRecentlyInPits && finishedLapTime > 20;
+      if (wasCleanLap) {
+        this.cleanLapStreak += 1;
+        this.recentCleanLapTimes.push(finishedLapTime);
+        if (this.recentCleanLapTimes.length > 4) this.recentCleanLapTimes.shift();
+
+        if (this.cleanLapStreak >= 10 && this.cleanLapStreak % 10 === 0) {
+          triggeredBattleCall = true;
+          this.trigger("Animo Stint Limpio", false, { laps: String(this.cleanLapStreak) });
+        } else if (this.recentCleanLapTimes.length === 4) {
+          const minT = Math.min(...this.recentCleanLapTimes);
+          const maxT = Math.max(...this.recentCleanLapTimes);
+          if (maxT - minT <= 0.45) {
+            this.recentCleanLapTimes = [];
+            triggeredBattleCall = true;
+            this.trigger("Animo Metronomo", false, { laps: "4" });
+          }
+        }
+      } else {
+        this.cleanLapStreak = 0;
+        this.recentCleanLapTimes = [];
+      }
+      this.currentLapHadIncident = false;
+
+      // #3 Predicción de Caza / Defensa (lap-by-lap closing rate to rival ahead & behind)
+      if (s.kind === "race" && me && !p.inPits && completedLaps >= 2) {
+        const shortSurname = (full: string) => {
+          const parts = full.trim().split(/\s+/);
+          return parts.length > 1 ? parts[parts.length - 1] : full.trim() || "el rival";
+        };
+        const formatClosing = (sec: number) =>
+          sec >= 1 ? `${sec.toFixed(1)} segundos` : `${Math.round(sec * 10)} décimas`;
+        const formatLaps = (n: number) => (n === 1 ? "una vuelta" : `${n} vueltas`);
+
+        const aheadCar = snap.vehicles.find((v) => v.place === me.place - 1);
+        if (aheadCar && !aheadCar.inPits && me.timeBehindNext > 0.2 && me.timeBehindNext < 40) {
+          const gapAhead = me.timeBehindNext;
+          if (
+            this.prevLapAheadId === aheadCar.id &&
+            this.prevLapAheadGap != null &&
+            !this.wasRecentlyInPits
+          ) {
+            const closing = this.prevLapAheadGap - gapAhead;
+            if (
+              closing >= 0.35 &&
+              closing < 8 &&
+              gapAhead >= 0.8 &&
+              gapAhead <= 7.0 &&
+              completedLaps - this.lastChaseCallLap >= 2
+            ) {
+              const estLaps = Math.max(1, Math.min(9, Math.round(gapAhead / closing)));
+              this.lastChaseCallLap = completedLaps;
+              triggeredBattleCall = true;
+              this.trigger("Caza Rival", false, {
+                driver: shortSurname(aheadCar.driver),
+                delta: formatClosing(closing),
+                laps: formatLaps(estLaps),
+              });
+            }
+          }
+          this.prevLapAheadId = aheadCar.id;
+          this.prevLapAheadGap = gapAhead;
+        } else {
+          this.prevLapAheadId = null;
+          this.prevLapAheadGap = null;
+        }
+
+        const behindCar = snap.vehicles.find((v) => v.place === me.place + 1);
+        if (behindCar && !behindCar.inPits) {
+          const gapBehind = behindCar.timeBehindLeader - me.timeBehindLeader;
+          if (gapBehind > 0.2 && gapBehind < 40) {
+            if (
+              !triggeredBattleCall &&
+              this.prevLapBehindId === behindCar.id &&
+              this.prevLapBehindGap != null &&
+              !this.wasRecentlyInPits
+            ) {
+              const closingBehind = this.prevLapBehindGap - gapBehind;
+              if (
+                closingBehind >= 0.35 &&
+                closingBehind < 8 &&
+                gapBehind >= 0.7 &&
+                gapBehind <= 6.0 &&
+                completedLaps - this.lastDefendCallLap >= 2
+              ) {
+                const estLaps = Math.max(1, Math.min(9, Math.round(gapBehind / closingBehind)));
+                this.lastDefendCallLap = completedLaps;
+                triggeredBattleCall = true;
+                this.trigger("Defensa Rival", false, {
+                  driver: shortSurname(behindCar.driver),
+                  delta: formatClosing(closingBehind),
+                  laps: formatLaps(estLaps),
+                });
+              }
+            }
+            this.prevLapBehindId = behindCar.id;
+            this.prevLapBehindGap = gapBehind;
+          } else {
+            this.prevLapBehindId = null;
+            this.prevLapBehindGap = null;
+          }
+        } else {
+          this.prevLapBehindId = null;
+          this.prevLapBehindGap = null;
+        }
+      }
+
       if (pb > 0 && (this.lastBestLap === 0 || pb < this.lastBestLap - 0.001)) {
         this.lastBestLap = pb;
         this.trigger("Mejor Vuelta");
+      } else if (!triggeredBattleCall && s.kind === "race" && me && completedLaps >= 3 && completedLaps - this.lastSummaryLap >= 4) {
+        // Periodic race pace/gap check every ~4 laps when not already celebrating a PB
+        const aheadCar = snap.vehicles.find((v) => v.place === me.place - 1);
+        if (aheadCar && me.timeBehindNext > 0.5 && me.timeBehindNext < 30) {
+          const parts = aheadCar.driver.trim().split(/\s+/);
+          const drv = parts.length > 1 ? parts[parts.length - 1] : aheadCar.driver.trim() || "el de delante";
+          this.lastSummaryLap = completedLaps;
+          this.trigger("Resumen Vuelta", false, {
+            place: me.classPlace || me.place,
+            classPlace: me.classPlace || me.place,
+            driver: drv,
+            gap: me.timeBehindNext.toFixed(1),
+          });
+        }
       }
       if (s.maxLaps > 0 && completedLaps === s.maxLaps - 1 && !this.calledLastLap) {
         this.calledLastLap = true;
@@ -903,6 +1415,38 @@ class SpotterEngine {
     if (pb > 0 && this.lastBestLap === 0) this.lastBestLap = pb;
 
     // Sector completion check (PB Green & Session Best Purple)
+    const curSessionKey = `${snap.source}|${s.track}|${s.code}`;
+    if (curSessionKey !== this.sectorSessionKey) {
+      this.sectorSessionKey = curSessionKey;
+      this.mySessionBestSectors = [0, 0, 0];
+      this.calledTimeMilestones.clear();
+      this.lastSummaryLap = 0;
+      this.lastAheadId = null;
+      this.warnedTrackLimits = false;
+      this.warnedVeLow = false;
+      this.frontLockupCount = 0;
+      this.rearLockupCount = 0;
+      this.advisedLiftCoast = false;
+      this.raceStartPlace = null;
+      this.tyresWereCold = false;
+      this.prevLapAheadId = null;
+      this.prevLapAheadGap = null;
+      this.prevLapBehindId = null;
+      this.prevLapBehindGap = null;
+      this.lastChaseCallLap = 0;
+      this.lastDefendCallLap = 0;
+      this.recentCleanLapTimes = [];
+      this.cleanLapStreak = 0;
+      this.currentLapHadIncident = false;
+      this.highSpeedSeenAt = 0;
+      this.incidentDetectedAt = 0;
+      this.defendingRivalId = null;
+      this.defendingRivalName = "";
+      this.defendingSince = 0;
+      this.calledRemontadaAtGained = 0;
+      this.calledFinalPush = false;
+    }
+
     const curSector = p.sector;
     if (this.lastSector != null && this.lastSector !== curSector && !p.inPits && !p.lapInvalidated && p.speed > 25) {
       let completedSectorIdx = -1;
@@ -920,14 +1464,50 @@ class SpotterEngine {
       }
 
       if (completedSectorIdx >= 0 && sectorTime > 0.5) {
-        const sb = snap.timing.sessionBestSectors[completedSectorIdx];
-        const pb = snap.timing.personalBestSectors[completedSectorIdx];
         const sectorNum = completedSectorIdx + 1;
+        const prevMySessionBest = this.mySessionBestSectors[completedSectorIdx];
+        const prevPb = snap.timing.personalBestSectors[completedSectorIdx];
 
-        if (sb > 0 && sectorTime <= sb + 0.002) {
+        // Compute the fastest individual sector time among OTHER vehicles in the same class (or all others if no class)
+        const myClass = me?.class || p.vehicleClass || "";
+        let bestRivalSector = Infinity;
+        for (const v of snap.vehicles) {
+          if (v.isPlayer || v.id === p.id) continue;
+          if (myClass && v.class && v.class !== myClass) continue;
+          const candidates: number[] = [];
+          if (completedSectorIdx === 0) {
+            if (v.bestS1 > 0.5) candidates.push(v.bestS1);
+            if (v.lastS1 > 0.5) candidates.push(v.lastS1);
+            if (v.curS1 > 0.5) candidates.push(v.curS1);
+          } else if (completedSectorIdx === 1) {
+            if (v.bestS2 > v.bestS1 && v.bestS1 > 0.5) candidates.push(v.bestS2 - v.bestS1);
+            if (v.lastS2 > v.lastS1 && v.lastS1 > 0.5) candidates.push(v.lastS2 - v.lastS1);
+            if (v.curS2 > v.curS1 && v.curS1 > 0.5) candidates.push(v.curS2 - v.curS1);
+          } else if (completedSectorIdx === 2) {
+            if (v.bestLap > v.bestS2 && v.bestS2 > 0.5) candidates.push(v.bestLap - v.bestS2);
+            if (v.lastLap > v.lastS2 && v.lastS2 > 0.5) candidates.push(v.lastLap - v.lastS2);
+          }
+          for (const c of candidates) {
+            if (c > 0.5 && c < bestRivalSector) bestRivalSector = c;
+          }
+        }
+
+        const hasRivalRef = Number.isFinite(bestRivalSector);
+        const beatOwnSession = prevMySessionBest === 0 || sectorTime < prevMySessionBest - 0.002;
+        const beatOwnPrevious =
+          (prevMySessionBest > 0 && sectorTime < prevMySessionBest - 0.002) ||
+          (prevPb > 0 && sectorTime < prevPb - 0.002);
+
+        if (hasRivalRef && beatOwnSession && sectorTime < bestRivalSector - 0.002) {
+          // Fastest sector of the entire session (among class rivals) -> PURPLE
           this.trigger("Sector Purpura", false, { sector: sectorNum });
-        } else if (pb > 0 && sectorTime <= pb + 0.002) {
+        } else if (beatOwnPrevious) {
+          // Improved personal sector time, but NOT faster than the class/session benchmark -> GREEN
           this.trigger("Sector Verde", false, { sector: sectorNum });
+        }
+
+        if (prevMySessionBest === 0 || sectorTime < prevMySessionBest) {
+          this.mySessionBestSectors[completedSectorIdx] = sectorTime;
         }
       }
     }
@@ -971,21 +1551,33 @@ class SpotterEngine {
       this.lastTrackPlace = curPlace;
     }
 
-    // Contextual Finish according to position
+    // Capture starting class position at race start (Lap 0/1) to measure positions gained/lost at finish
+    if (s.kind === "race" && me && this.raceStartPlace == null && p.lapNumber <= 1) {
+      const startPos = me.classPlace && me.classPlace > 0 ? me.classPlace : me.place;
+      if (startPos > 0) this.raceStartPlace = startPos;
+    }
+
+    // Contextual Finish according to position AND positions gained/lost since grid start!
     const isCheckered = s.phase === 8 || (me?.finishStatus != null && me.finishStatus === 1);
     if (isCheckered && !this.calledFinish) {
       this.calledFinish = true;
       const finalPos = me?.classPlace && me.classPlace > 0 ? me.classPlace : (me?.place ?? 1);
-      const ctx = { place: me?.place ?? finalPos, classPlace: finalPos };
+      const gained = this.raceStartPlace != null ? this.raceStartPlace - finalPos : 0;
+      const lost = gained < 0 ? Math.abs(gained) : 0;
+      const ctx = { place: me?.place ?? finalPos, classPlace: finalPos, gained: Math.max(0, gained), lost };
 
       if (finalPos === 1) {
         this.trigger("Victoria", false, ctx);
       } else if (finalPos <= 3) {
         this.trigger("Podio", false, ctx);
+      } else if (gained >= 2) {
+        this.trigger("Final Remontada", false, ctx);
+      } else if (lost >= 2) {
+        this.trigger("Final Pesimista", false, ctx);
       } else if (finalPos <= 10) {
         this.trigger("Top 10", false, ctx);
       } else {
-        this.trigger("Final Dificil", false, ctx);
+        this.trigger("Final Pesimista", false, { ...ctx, lost: Math.max(1, lost) });
       }
     } else if (!isCheckered && s.phase < 7) {
       this.calledFinish = false;

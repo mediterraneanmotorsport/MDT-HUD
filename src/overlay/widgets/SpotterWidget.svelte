@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
   import { fly } from "svelte/transition";
   import { config, type Units } from "../../lib/config.svelte";
   import { useLive } from "../../lib/live.svelte";
@@ -7,6 +8,39 @@
   const live = useLive();
 
   let { opts, edit }: { opts: Record<string, any>; units: Units; edit: boolean } = $props();
+
+  // #7 Real-time live microphone RMS waveform when driver holds PTT
+  let liveMicLevel = $state(0);
+  let micPhase = $state(0);
+  let micCh: BroadcastChannel | null = null;
+
+  onMount(() => {
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        micCh = new BroadcastChannel("mdt-mic-level");
+        micCh.onmessage = (ev) => {
+          const lvl = Number(ev.data?.level ?? 0);
+          liveMicLevel = Number.isFinite(lvl) ? Math.max(0, Math.min(1, lvl)) : 0;
+          micPhase = (micPhase + 1) % 60;
+        };
+      } catch {}
+    }
+  });
+
+  onDestroy(() => {
+    try {
+      micCh?.close();
+    } catch {}
+  });
+
+  const liveWaveformEnabled = $derived(config.value.general.animations?.liveMicWaveform ?? true);
+  function liveBarPx(idx: number, total: number): number {
+    const center = (total - 1) / 2;
+    const dist = Math.abs(idx - center) / Math.max(1, center);
+    const wave = 0.72 + 0.28 * Math.sin(micPhase * 0.75 + idx * 1.45);
+    const shaped = liveMicLevel * (1 - dist * 0.42) * wave;
+    return Math.round(3 + Math.min(1, shaped) * 13);
+  }
 
   const style = $derived(opts.style ?? "wec");
   const showText = $derived(opts.showText ?? true);
@@ -53,8 +87,18 @@
   const isPreview = $derived(edit || !isLiveOverlay);
   const active = $derived(spotter.currentTransmission ?? (isPreview ? previewTransmission : null));
   const isTransmitting = $derived(spotter.playing || (isPreview && !spotter.currentTransmission));
+  const isDriver = $derived(active?.speaker === "driver");
+  const useLiveMicBars = $derived(isDriver && isTransmitting && liveWaveformEnabled);
 
   function getBadgeColor(ev: ActiveSpotterTransmission): { bg: string; text: string; border: string; glow: string } {
+    if (ev.speaker === "driver") {
+      return {
+        bg: "bg-amber-900/70",
+        text: "text-amber-300",
+        border: "border-amber-500/70",
+        glow: "shadow-[0_0_20px_rgba(245,158,11,0.45)]",
+      };
+    }
     if (ev.folder.includes("Purpura")) {
       return {
         bg: "bg-purple-900/60",
@@ -120,29 +164,53 @@
       ]}
     >
       <!-- TV Broadcast Radio Badge (Exact replica de la gráfica televisiva F1 con logo MDT) -->
-      <div class="relative overflow-hidden rounded-xl border border-blue-500/30 bg-[#070e1c]/95 p-3.5 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.85)]">
+      <div
+        class={[
+          "relative overflow-hidden rounded-xl border p-3.5 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.85)] transition-colors duration-200",
+          isDriver
+            ? "border-amber-500/60 bg-[#1a1004]/95 shadow-[0_0_28px_rgba(245,158,11,0.35)]"
+            : "border-blue-500/30 bg-[#070e1c]/95",
+        ]}
+      >
         <!-- Main Badge Header Row -->
         <div class="flex items-center justify-between gap-4">
           <!-- Left: Big Number + (Driver Surname / RADIO) -->
           <div class="flex items-center gap-3.5">
-            <!-- Big Electric Blue Car Number -->
+            <!-- Big Car Number (Amber for Driver PTT, Electric Blue for Engineer) -->
             <div class="flex items-center justify-center min-w-[38px]">
-              <span class="font-display text-4xl md:text-5xl font-black text-[#1e75ff] leading-none drop-shadow-[0_2px_10px_rgba(30,117,255,0.45)]">
+              <span
+                class={[
+                  "font-display text-4xl md:text-5xl font-black leading-none",
+                  isDriver
+                    ? "text-amber-400 drop-shadow-[0_2px_10px_rgba(245,158,11,0.55)]"
+                    : "text-[#1e75ff] drop-shadow-[0_2px_10px_rgba(30,117,255,0.45)]",
+                ]}
+              >
                 {carNumber}
               </span>
             </div>
 
-            <!-- Driver Surname & RADIO -->
+            <!-- Driver Surname & RADIO / PILOTO PTT -->
             <div class="flex flex-col justify-center">
-              <span class="font-display text-base font-black tracking-wider text-[#1e75ff] uppercase leading-tight drop-shadow-sm">
-                {driverLastName}
+              <span
+                class={[
+                  "font-display text-base font-black tracking-wider uppercase leading-tight drop-shadow-sm",
+                  isDriver ? "text-amber-400" : "text-[#1e75ff]",
+                ]}
+              >
+                {isDriver ? driverLastName : `${driverLastName} · ${active.profile}`}
               </span>
               <div class="flex items-center gap-2 mt-0.5">
                 <span class="font-display text-lg font-black tracking-widest text-white uppercase leading-none">
-                  RADIO
+                  {isDriver ? "PILOTO · PTT" : "INGENIERO RADIO"}
                 </span>
                 {#if isTransmitting}
-                  <span class="inline-flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
+                  <span
+                    class={[
+                      "inline-flex h-2 w-2 rounded-full animate-ping",
+                      isDriver ? "bg-amber-400" : "bg-red-500",
+                    ]}
+                  ></span>
                 {/if}
               </div>
             </div>
@@ -151,12 +219,17 @@
           <!-- Right: Audio Wave Equalizer (Top) + MDT Logo (Bottom) -->
           <div class="flex flex-col items-end justify-between self-stretch shrink-0 min-h-[46px]">
             {#if showEqualizer}
-              <div class="flex items-end gap-1 h-3.5 pt-0.5">
-                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
-                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-2" : "h-1.5 opacity-40"]}></div>
-                <div class={["w-1 rounded-sm bg-white", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
-                <div class={["w-1 rounded-sm bg-[#1e75ff]", isTransmitting ? "eq-bar-4" : "h-1 opacity-40"]}></div>
-                <div class={["w-1 rounded-sm bg-white", isTransmitting ? "eq-bar-5" : "h-2.5 opacity-40"]}></div>
+              <div class="flex items-end gap-1 h-4 pt-0.5">
+                {#each [0, 1, 2, 3, 4] as idx}
+                  <div
+                    class={[
+                      "w-1 rounded-sm transition-[height] duration-75",
+                      idx === 2 || idx === 4 ? "bg-white" : isDriver ? "bg-amber-400" : "bg-[#1e75ff]",
+                      !useLiveMicBars && (isTransmitting ? `eq-bar-${idx + 1}` : "h-1.5 opacity-40"),
+                    ]}
+                    style:height={useLiveMicBars ? `${liveBarPx(idx, 5)}px` : undefined}
+                  ></div>
+                {/each}
               </div>
             {:else}
               <div></div>
@@ -173,7 +246,7 @@
         {#if showCategoryBadge}
           <div class="mt-2.5 flex items-center justify-between border-t border-white/10 pt-1.5">
             <span class={["inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-display text-[10px] font-black tracking-wider uppercase border", colors.bg, colors.text, colors.border]}>
-              {active.folder}
+              {isDriver ? "🎙️" : "🎧"} {active.folder}
             </span>
             {#if edit}
               <span class="text-[9px] font-mono text-muted uppercase tracking-widest">(VISTA PREVIA)</span>
@@ -183,7 +256,15 @@
 
         <!-- Radio Transcription Text Subtitle -->
         {#if showText && active.text}
-          <div class={["mt-2 rounded bg-black/50 border border-white/10 p-2 font-sans text-[12.5px] font-bold leading-snug text-white tracking-wide uppercase italic", animate && "mdt-anim-radio-subtitle"]}>
+          <div
+            class={[
+              "mt-2 rounded border p-2 font-sans text-[12.5px] font-bold leading-snug tracking-wide uppercase italic",
+              isDriver
+                ? "bg-amber-950/50 border-amber-500/30 text-amber-100"
+                : "bg-black/50 border-white/10 text-white",
+              animate && "mdt-anim-radio-subtitle",
+            ]}
+          >
             "{active.text}"
           </div>
         {/if}
@@ -194,24 +275,29 @@
   {:else if style === "compact"}
     <div
       class={[
-        "hud select-none transition-all duration-300 flex items-center gap-3 rounded-full border border-white/20 bg-black/90 px-4 py-2 shadow-xl backdrop-blur-md",
+        "hud select-none transition-all duration-300 flex items-center gap-3 rounded-full border px-4 py-2 shadow-xl backdrop-blur-md",
+        isDriver ? "border-amber-400/60 bg-[#1a1004]/95" : "border-white/20 bg-black/90",
         colors.glow,
-        isTransmitting ? "scale-100 opacity-100 ring-1 ring-cyan-400/50" : "scale-[0.98] opacity-90",
+        isTransmitting
+          ? isDriver
+            ? "scale-100 opacity-100 ring-1 ring-amber-400/70"
+            : "scale-100 opacity-100 ring-1 ring-cyan-400/50"
+          : "scale-[0.98] opacity-90",
       ]}
     >
       <!-- Pulsing Dot -->
       <div class="relative flex items-center justify-center shrink-0">
-        <span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+        <span class={["h-2.5 w-2.5 rounded-full", isDriver ? "bg-amber-400" : "bg-red-500"]}></span>
         {#if isTransmitting}
-          <span class="absolute h-4 w-4 rounded-full bg-red-500/50 animate-ping"></span>
+          <span class={["absolute h-4 w-4 rounded-full animate-ping", isDriver ? "bg-amber-400/60" : "bg-red-500/50"]}></span>
         {/if}
       </div>
 
       <!-- Profile & Message -->
       <div class="flex flex-col min-w-0 pr-1">
         <div class="flex items-center gap-2">
-          <span class="font-mono text-[10px] font-black text-cyan-300 uppercase tracking-wider">
-            {active.profile}
+          <span class={["font-mono text-[10px] font-black uppercase tracking-wider", isDriver ? "text-amber-300" : "text-cyan-300"]}>
+            {isDriver ? `🎙️ ${driverLastName} · PILOTO` : `🎧 ${active.profile}`}
           </span>
           {#if showCategoryBadge}
             <span class={["rounded px-1.5 py-0.2 text-[9px] font-bold uppercase", colors.text]}>
@@ -228,10 +314,17 @@
 
       <!-- Equalizer -->
       {#if showEqualizer}
-        <div class="flex items-end gap-1 h-3.5 pl-1 shrink-0">
-          <div class={["w-0.5 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
-          <div class={["w-0.5 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
-          <div class={["w-0.5 rounded-full bg-cyan-300", isTransmitting ? "eq-bar-5" : "h-1 opacity-40"]}></div>
+        <div class="flex items-end gap-1 h-4 pl-1 shrink-0">
+          {#each [0, 1, 2] as idx}
+            <div
+              class={[
+                "w-0.5 rounded-full transition-[height] duration-75",
+                idx === 2 ? (isDriver ? "bg-amber-300" : "bg-cyan-300") : isDriver ? "bg-amber-400" : "bg-cyan-400",
+                !useLiveMicBars && (isTransmitting ? `eq-bar-${idx * 2 + 1}` : "h-1.5 opacity-40"),
+              ]}
+              style:height={useLiveMicBars ? `${liveBarPx(idx, 3)}px` : undefined}
+            ></div>
+          {/each}
         </div>
       {/if}
     </div>
@@ -240,23 +333,35 @@
   {:else if style === "cyber"}
     <div
       class={[
-        "hud select-none transition-all duration-300 min-w-[320px] max-w-[420px] rounded-sm border-2 border-cyan-500/60 bg-[#020b14]/95 p-2.5 shadow-[0_0_20px_rgba(6,182,212,0.35)] backdrop-blur-md",
+        "hud select-none transition-all duration-300 min-w-[320px] max-w-[420px] rounded-sm border-2 p-2.5 backdrop-blur-md",
+        isDriver
+          ? "border-amber-500/75 bg-[#160e03]/95 shadow-[0_0_22px_rgba(245,158,11,0.4)]"
+          : "border-cyan-500/60 bg-[#020b14]/95 shadow-[0_0_20px_rgba(6,182,212,0.35)]",
         isTransmitting ? "scale-100 opacity-100" : "scale-[0.98] opacity-90",
       ]}
     >
       <!-- Tactical Header: Monospace Frequency & Channel -->
-      <div class="flex items-center justify-between border-b border-cyan-500/30 pb-1 font-mono text-[9px] text-cyan-400/80">
+      <div
+        class={[
+          "flex items-center justify-between border-b pb-1 font-mono text-[9px]",
+          isDriver ? "border-amber-500/40 text-amber-400/90" : "border-cyan-500/30 text-cyan-400/80",
+        ]}
+      >
         <div class="flex items-center gap-2">
-          <span class="font-black text-cyan-300">[COMMS 454.025 MHz]</span>
-          <span>CH-01</span>
+          <span class={["font-black", isDriver ? "text-amber-300" : "text-cyan-300"]}>
+            {isDriver ? "[PILOT PTT 454.025 MHz]" : "[COMMS 454.025 MHz]"}
+          </span>
+          <span>{isDriver ? "MIC" : "CH-01"}</span>
         </div>
         <div class="flex items-center gap-1.5 font-bold">
           {#if isTransmitting}
-            <span class="text-red-400 animate-pulse">● TX ON</span>
+            <span class={["animate-pulse", isDriver ? "text-amber-300" : "text-red-400"]}>
+              {isDriver ? "● MIC OPEN" : "● TX ON"}
+            </span>
           {:else}
             <span class="text-muted">STANDBY</span>
           {/if}
-          <span>// {active.profile.toUpperCase()}</span>
+          <span>// {isDriver ? driverLastName : active.profile.toUpperCase()}</span>
         </div>
       </div>
 
@@ -264,26 +369,36 @@
       <div class="mt-2 flex items-center justify-between">
         {#if showCategoryBadge}
           <div class="flex items-center gap-1.5 font-mono text-[10px] font-bold text-amber-300 uppercase tracking-wider">
-            <span>&gt; EVT:</span>
+            <span>{isDriver ? "> PTT:" : "> EVT:"}</span>
             <span class="bg-amber-950/70 border border-amber-500/40 px-1.5 py-0.5 rounded text-amber-200">
               {active.folder}
             </span>
           </div>
         {/if}
         {#if showEqualizer}
-          <div class="flex items-end gap-1 h-3.5">
-            <div class={["w-1 bg-cyan-400", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
-            <div class={["w-1 bg-cyan-300", isTransmitting ? "eq-bar-2" : "h-1.5 opacity-40"]}></div>
-            <div class={["w-1 bg-cyan-400", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
-            <div class={["w-1 bg-cyan-300", isTransmitting ? "eq-bar-4" : "h-1 opacity-40"]}></div>
-            <div class={["w-1 bg-cyan-400", isTransmitting ? "eq-bar-5" : "h-2.5 opacity-40"]}></div>
+          <div class="flex items-end gap-1 h-4">
+            {#each [0, 1, 2, 3, 4] as idx}
+              <div
+                class={[
+                  "w-1 transition-[height] duration-75",
+                  idx % 2 === 1 ? (isDriver ? "bg-amber-300" : "bg-cyan-300") : isDriver ? "bg-amber-400" : "bg-cyan-400",
+                  !useLiveMicBars && (isTransmitting ? `eq-bar-${idx + 1}` : "h-1.5 opacity-40"),
+                ]}
+                style:height={useLiveMicBars ? `${liveBarPx(idx, 5)}px` : undefined}
+              ></div>
+            {/each}
           </div>
         {/if}
       </div>
 
       <!-- Tactical Text Subtitle -->
       {#if showText && active.text}
-        <div class="mt-2 rounded bg-black/60 border border-cyan-900/60 p-2 font-mono text-[12px] font-semibold text-cyan-100 leading-snug">
+        <div
+          class={[
+            "mt-2 rounded bg-black/60 border p-2 font-mono text-[12px] font-semibold leading-snug",
+            isDriver ? "border-amber-800/70 text-amber-100" : "border-cyan-900/60 text-cyan-100",
+          ]}
+        >
           "{active.text}"
         </div>
       {/if}
@@ -293,42 +408,57 @@
   {:else}
     <div
       class={[
-        "hud select-none transition-all duration-300 min-w-[340px] max-w-[460px] rounded-xl border border-white/20 bg-[#060e1a]/95 p-3 shadow-2xl backdrop-blur-md",
+        "hud select-none transition-all duration-300 min-w-[340px] max-w-[460px] rounded-xl border p-3 shadow-2xl backdrop-blur-md",
+        isDriver ? "border-amber-500/60 bg-[#1a1004]/95" : "border-white/20 bg-[#060e1a]/95",
         colors.glow,
         isTransmitting ? "scale-100 opacity-100" : "scale-[0.98] opacity-90",
       ]}
     >
       <!-- Top Header: Team Radio bar + Profile + Equalizer waves -->
-      <div class="flex items-center justify-between border-b border-white/10 pb-1.5">
+      <div class={["flex items-center justify-between border-b pb-1.5", isDriver ? "border-amber-500/25" : "border-white/10"]}>
         <!-- Left: Radio Icon + Status + Profile -->
         <div class="flex items-center gap-2">
-          <!-- Radio Headset Icon with Live Pulse -->
+          <!-- Microphone Icon for Driver PTT, Headset Icon for Engineer -->
           <div class="relative flex items-center justify-center">
-            <svg class="h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 18v-6a9 9 0 0 1 18 0v6" />
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-            </svg>
+            {#if isDriver}
+              <svg class="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="2" width="6" height="12" rx="3" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" />
+              </svg>
+            {:else}
+              <svg class="h-4 w-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 18v-6a9 9 0 0 1 18 0v6" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+              </svg>
+            {/if}
             {#if isTransmitting}
-              <span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
-              <span class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500"></span>
+              <span class={["absolute -top-1 -right-1 h-2 w-2 rounded-full animate-ping", isDriver ? "bg-amber-400" : "bg-red-500"]}></span>
+              <span class={["absolute -top-1 -right-1 h-2 w-2 rounded-full", isDriver ? "bg-amber-400" : "bg-red-500"]}></span>
             {/if}
           </div>
 
           <div class="flex flex-col">
             <div class="flex items-center gap-1.5">
-              <span class="font-mono text-[10px] font-black tracking-wider uppercase text-white/90">
-                TEAM RADIO
+              <span class={["font-mono text-[10px] font-black tracking-wider uppercase", isDriver ? "text-amber-300" : "text-white/90"]}>
+                {isDriver ? "DRIVER RADIO" : "TEAM RADIO"}
               </span>
               {#if isTransmitting}
-                <span class="rounded bg-red-500/25 border border-red-500/40 px-1 py-0.2 text-[8px] font-black tracking-widest text-red-400 uppercase animate-pulse">
-                  ON AIR
+                <span
+                  class={[
+                    "rounded px-1 py-0.2 text-[8px] font-black tracking-widest uppercase animate-pulse border",
+                    isDriver
+                      ? "bg-amber-500/25 border-amber-400/50 text-amber-300"
+                      : "bg-red-500/25 border-red-500/40 text-red-400",
+                  ]}
+                >
+                  {isDriver ? "MIC LIVE" : "ON AIR"}
                 </span>
               {/if}
             </div>
 
             {#if showProfile}
-              <span class="text-[9px] font-bold text-white/60 uppercase tracking-wider">
-                {active.profile} · Spotter
+              <span class={["text-[9px] font-bold uppercase tracking-wider", isDriver ? "text-amber-200/80" : "text-white/60"]}>
+                {isDriver ? `${driverLastName} · Piloto` : `${active.profile} · Ingeniero`}
               </span>
             {/if}
           </div>
@@ -337,12 +467,16 @@
         <!-- Right: Animated Sound Wave / Equalizer Bars -->
         {#if showEqualizer}
           <div class="flex items-end gap-1 h-4 px-1" title="Señal de audio en transmisión">
-            <div class={["w-1 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-1" : "h-1 opacity-40"]}></div>
-            <div class={["w-1 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-2" : "h-1.5 opacity-40"]}></div>
-            <div class={["w-1 rounded-full bg-cyan-300", isTransmitting ? "eq-bar-3" : "h-2 opacity-40"]}></div>
-            <div class={["w-1 rounded-full bg-cyan-300", isTransmitting ? "eq-bar-4" : "h-1 opacity-40"]}></div>
-            <div class={["w-1 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-5" : "h-2.5 opacity-40"]}></div>
-            <div class={["w-1 rounded-full bg-cyan-400", isTransmitting ? "eq-bar-6" : "h-1 opacity-40"]}></div>
+            {#each [0, 1, 2, 3, 4, 5] as idx}
+              <div
+                class={[
+                  "w-1 rounded-full transition-[height] duration-75",
+                  idx === 2 || idx === 3 ? (isDriver ? "bg-amber-300" : "bg-cyan-300") : isDriver ? "bg-amber-400" : "bg-cyan-400",
+                  !useLiveMicBars && (isTransmitting ? `eq-bar-${idx + 1}` : "h-1.5 opacity-40"),
+                ]}
+                style:height={useLiveMicBars ? `${liveBarPx(idx, 6)}px` : undefined}
+              ></div>
+            {/each}
           </div>
         {/if}
       </div>
